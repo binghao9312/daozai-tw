@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
-  - name: 想接入新服务或做个人定制？先看插件进展
-    url: https://github.com/Renly1994/xiaotang-daozai/issues/138
-    about: 接入特定服务、显示个人关心的数据这类需求，会优先交给插件实现，进展和讨论都在这里。
+  - name: 想接入新服务或做个人定制？先到 Issues 討論
+    url: https://github.com/binghao9312/daozai-tw/issues
+    about: 接入特定服務、顯示個人關心的資料這類需求，請在本倉庫 Issues 提出，進展與討論都在這裡。

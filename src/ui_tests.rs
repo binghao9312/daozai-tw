@@ -5993,45 +5993,6 @@ fn settings_theme_follows_system_and_preserves_island_style() {
     }
 }
 
-#[test]
-#[ignore = "按需匯出關於頁支援作者預覽"]
-fn about_support_preview() {
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let dest=std::path::PathBuf::from(std::env::var_os("DAOZAI_SUPPORT_PREVIEW_DIR").expect("需指定預覽目錄"));
-    std::fs::create_dir_all(&dest).unwrap();
-    let mut h=H::new();h.app.open_settings();h.app.settings_tab=9;h.ctx.set_embed_viewports(false);
-    let output=std::sync::Arc::new(std::sync::Mutex::new(None));let capture=output.clone();
-    egui::Context::set_immediate_viewport_renderer(move|ctx,mut viewport|{
-        let id=viewport.ids.this;
-        let raw=egui::RawInput{viewport_id:id,screen_rect:Some(Rect::from_min_size(Pos2::ZERO,egui::vec2(690.0,560.0))),
-            viewports:std::iter::once((id,egui::ViewportInfo{native_pixels_per_point:Some(1.0),..Default::default()})).collect(),..Default::default()};
-        *capture.lock().unwrap()=Some(ctx.run(raw,|ctx|(viewport.viewport_ui_cb)(ctx)));
-    });
-    let mut raster=crate::preview_raster::Raster::new(690,560);
-    for dark in [true,false] { for open in [false,true] {
-        h.app.settings.settings_theme=if dark{crate::settings_theme::SettingsTheme::Dark}else{crate::settings_theme::SettingsTheme::Light};
-        h.ctx.data_mut(|data|data.insert_temp(egui::Id::new("support-author-open"),open));
-        for frame in 0..4 {
-            let root=h.ctx.run(Default::default(),|ctx|h.app.settings_ui(ctx,false));
-            let child=output.lock().unwrap().take().unwrap();
-            raster.update_textures(&root.textures_delta);raster.update_textures(&child.textures_delta);
-            if frame==3 {
-                let has_wechat=child.shapes.iter().any(|shape|matches!(&shape.shape,egui::Shape::Text(text) if text.galley.text()=="微信支付"));
-                assert_eq!(has_wechat,open);
-                for label in [if open{"返回"}else{"請喝咖啡 · 支援作者"},"完全自願 · 感謝每一份支援 · 不影響功能使用"] {
-                    let shape=child.shapes.iter().find(|shape|matches!(&shape.shape,egui::Shape::Text(text) if text.galley.text()==label)).expect("按鈕和說明必須可見");
-                    assert!(shape.clip_rect.contains_rect(shape.shape.visual_bounding_rect()),"預設視窗中內容不能被裁切：{label}");
-                }
-                raster.buf.fill([0.0,0.0,0.0,1.0]);
-                raster.draw(&h.ctx.tessellate(child.shapes,child.pixels_per_point),child.pixels_per_point);
-                let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);
-                image::save_buffer(dest.join(format!("about-{}-{}.png",if dark{"dark"}else{"light"},if open{"open"}else{"closed"})),&rgba,690,560,image::ColorType::Rgba8).unwrap();
-            }
-            raster.free_textures(&root.textures_delta);raster.free_textures(&child.textures_delta);
-        }
-    } }
-}
-
 
 #[test]
 fn mail_report_open_settings_matrix() {
@@ -7054,7 +7015,7 @@ fn feature_gallery(){
     let mut h=H::new();let mut r=feature_raster();h.app.show_page(3);h.app.shelf_tab=1;
     shoot_feature(&mut h,&mut r,&dest,"clip-empty",60,Some(H::local(120.0,60.0)),today);
     {let mut hist=h.app.clipboard.lock();hist.items.clear();
-        for (i,t) in ["https://github.com/Renly1994/xiaotang-daozai/releases","會議紀要：\n1. 週三前確認島仔豎版方案\n2. 剪貼簿記錄上線","13800138000","SELECT * FROM todo WHERE repeat > 0 ORDER BY due;","驗證碼 482913"].iter().enumerate(){hist.push(t,&format!("09:{:02}",30+i));}
+        for (i,t) in ["https://github.com/binghao9312/daozai-tw/releases","會議紀要：\n1. 週三前確認島仔豎版方案\n2. 剪貼簿記錄上線","13800138000","SELECT * FROM todo WHERE repeat > 0 ORDER BY due;","驗證碼 482913"].iter().enumerate(){hist.push(t,&format!("09:{:02}",30+i));}
         hist.items[3].pinned=true;}
     shoot_feature(&mut h,&mut r,&dest,"clip-list",30,Some(H::local(200.0,66.0)),today);
     h.app.shelf_tab=0;
