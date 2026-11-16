@@ -4,9 +4,9 @@
 #[path="apple_music.rs"]
 mod apple_music;
 #[cfg(windows)]
-#[path="netease_timeline.rs"]
-mod netease_timeline;
 #[cfg(windows)]
+// NetEase 私有日志读取已移出音源流程；播放控制仍使用 control()，其余保留以便日后回退。
+#[allow(dead_code)]
 #[path="netease_playback.rs"]
 mod netease_playback;
 #[cfg(windows)]
@@ -16,8 +16,6 @@ pub(crate) mod bodian;
 #[path="kuwo.rs"]
 pub(crate) mod kuwo;
 #[cfg(windows)]
-#[path="kugou_metadata.rs"]
-mod kugou_metadata;
 #[cfg(windows)]
 #[path="kugou_control.rs"]
 mod kugou_control;
@@ -80,11 +78,12 @@ impl NowPlaying {
             return MediaKind::Video;
         }
         let source=self.source.to_lowercase();
-        if (matches!(source.as_str(),"spotify"|"spotify.exe"|"ytm-rs.exe"|"youtube music desktop app"|"pear desktop") || is_ytmusic(&source) || is_qqmusic(&source) || apple_music::is_source(&source)) && self.playback_type==MediaKind::Music{return MediaKind::Music;}
+        if (matches!(source.as_str(),"spotify"|"spotify.exe") || is_ytmusic(&source) || is_qqmusic(&source) || apple_music::is_source(&source)) && self.playback_type==MediaKind::Music{return MediaKind::Music;}
         if ["chrome","msedge","firefox","brave","opera"].iter().any(|name|source.contains(name)) {
             let album=self.album.trim().to_lowercase();
             if ["bilibili","抖音","哔哩哔哩"].contains(&album.as_str()){return MediaKind::Video;}
-            if album.contains("youtube music") || source.contains("youtube") {
+            // YouTube Music 网页版的自动生成歌手频道以 " - Topic" 结尾，与普通视频作者区分开。
+            if album.contains("youtube music") || source.contains("youtube") || (is_ytmusic_source(&source) && self.artist.trim().to_lowercase().ends_with(" - topic")) {
                 return MediaKind::Music;
             }
             // 视频作者也可能被放进 Artist；浏览器缺少专辑信息时不自动认作歌曲。
@@ -116,7 +115,6 @@ impl ArtworkWorker {
 #[derive(Default)]
 struct ArtworkCache {
     #[cfg(windows)]
-    kugou:kugou_metadata::Cache,
     #[cfg(windows)]
     system:Option<(NowPlaying,std::time::Instant)>,
     #[cfg(windows)]
@@ -249,6 +247,15 @@ fn read_artwork(props:&windows::Media::Control::GlobalSystemMediaTransportContro
     Some(bytes)
 }
 
+/// YouTube Music 常见的 SourceAppUserModelId：Chrome / Edge / Brave 的 PWA 与分页，以及原生或第三方客户端。
+pub(crate) const YTMUSIC_SOURCE_IDS:&[&str]=&["chrome.exe","msedge.exe","brave.exe","ytm-rs.exe","youtube music desktop app","pear desktop"];
+
+/// 是否属于 YouTube Music 的音源（含浏览器）。浏览器只凭来源名不足以判定歌曲，调用方还需看标题与歌手。
+pub(crate) fn is_ytmusic_source(source:&str)->bool {
+    let s=source.to_ascii_lowercase();
+    YTMUSIC_SOURCE_IDS.contains(&s.as_str()) || is_ytmusic(&s)
+}
+
 pub(crate) fn is_ytmusic(source:&str)->bool {
     let s=source.to_ascii_lowercase();
     s.contains("ytm-rs") || s.contains("youtube music") || s.contains("peardesktop") || s.contains("pear desktop")
@@ -350,7 +357,7 @@ fn media_text(value:windows::core::Result<windows::core::HSTRING>)->Option<Strin
 }
 
 #[cfg(windows)]
-fn read_session(session:&windows::Media::Control::GlobalSystemMediaTransportControlsSession,artwork:&mut ArtworkCache)->Option<NowPlaying>{
+fn read_session(session:&windows::Media::Control::GlobalSystemMediaTransportControlsSession,_artwork:&mut ArtworkCache)->Option<NowPlaying>{
     let props=media_result(||session.TryGetMediaPropertiesAsync())?;
     let raw_title = media_text(props.Title())?;
     let title = crate::lyrics::clean_ytmusic_title(&raw_title);
@@ -395,20 +402,6 @@ fn read_session(session:&windows::Media::Control::GlobalSystemMediaTransportCont
     }
     let source=media_text(session.SourceAppUserModelId())?;
     let mut has_position=position>0.0 || duration>0.0 || event_time_ms.is_some();
-    if source.eq_ignore_ascii_case("cloudmusic.exe") && duration<=0.0 {
-        if let Some((current,total))=netease_timeline::timeline() {
-            position=current;duration=total;sampled_at=Some(std::time::Instant::now());has_position=true;
-        }
-    }
-    if source.to_ascii_lowercase().contains("kugou") {
-        if let Some((singer,total))=artwork.kugou.get(&title,&artist,duration<=0.0) {
-            artist=singer;
-            if duration<=0.0{duration=total;}
-        }
-        if let Some(current)=netease_timeline::kugou_position() {
-            position=current;sampled_at=Some(std::time::Instant::now());has_position=true;
-        }
-    }
     let mut album=media_text(props.AlbumTitle())?;
     if apple_music::is_source(&source){
         (artist,album)=apple_music::metadata(artist,album);
@@ -810,8 +803,6 @@ pub fn spawn_poller(state: Shared,ctx:eframe::egui::Context)->Poller {
         let mut selected_source=String::new();
         let mut volume=crate::music_volume::Reader::default();
         #[cfg(windows)]
-        let mut netease=netease_playback::Reader::default();
-        #[cfg(windows)]
         let mut bodian=bodian::Reader::default();
         #[cfg(windows)]
         let mut kuwo=kuwo::Reader::default();
@@ -823,15 +814,15 @@ pub fn spawn_poller(state: Shared,ctx:eframe::egui::Context)->Poller {
             if stopped.load(std::sync::atomic::Ordering::Acquire) || Arc::strong_count(&state)==1{break;}
             if !active.load(std::sync::atomic::Ordering::Relaxed){
                 artwork.clear(false);playback_clock=PlaybackClock::default();memory=MediaMemory::default();selected_source.clear();
-                #[cfg(windows)] {netease=netease_playback::Reader::default();bodian=bodian::Reader::default();kuwo=kuwo::Reader::default();}
+                #[cfg(windows)] {bodian=bodian::Reader::default();kuwo=kuwo::Reader::default();}
                 if let Ok(mut current)=state.lock(){if !current.title.is_empty(){*current=NowPlaying::default();ctx.request_repaint();}}
                 std::thread::park_timeout(Duration::from_millis(250));continue;
             }
             let system=query(&mut artwork);
             #[cfg(windows)]
-            let native=netease.poll().into_iter().chain(bodian.poll()).chain(kuwo.poll()).min_by_key(media_rank);
+            let native=bodian.poll().into_iter().chain(kuwo.poll()).min_by_key(media_rank);
             #[cfg(windows)]
-            let native_pending=netease.pending();
+            let native_pending=false;
             #[cfg(not(windows))]
             let native=None;
             #[cfg(not(windows))]
@@ -840,8 +831,6 @@ pub fn spawn_poller(state: Shared,ctx:eframe::egui::Context)->Poller {
             memory.update(&mut np,std::time::Instant::now());
             np.volume=volume.poll(&np.source);
             if !np.source.is_empty(){selected_source=np.source.clone();}
-            #[cfg(windows)]
-            netease.fill_artwork(&mut np);
             // 播放器没给封面（缺系统缩略图、电台 / FM 等模式）时按歌名在线找一张。
             #[cfg(windows)]
             if np.artwork.is_none(){np.artwork=cover_search.fill(&np,std::time::Instant::now());}
@@ -869,6 +858,22 @@ pub fn spawn_poller(state: Shared,ctx:eframe::egui::Context)->Poller {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn ytmusic_sources_are_recognised_including_browsers() {
+        for source in YTMUSIC_SOURCE_IDS.iter().copied().chain(["YouTube Music Desktop App","Pear Desktop","MSEDGE.EXE"]) {
+            assert!(is_ytmusic_source(source),"{source}");
+        }
+        for source in ["Spotify.exe","cloudmusic.exe","QQMusic.exe","firefox.exe"] {assert!(!is_ytmusic_source(source),"{source}");}
+    }
+
+    #[test]
+    fn browser_topic_channel_is_music_but_plain_browser_media_is_not() {
+        let topic=NowPlaying{source:"chrome.exe".into(),title:"Song".into(),artist:"Artist - Topic".into(),playback_type:MediaKind::Music,..Default::default()};
+        assert_eq!(topic.kind(),MediaKind::Music);
+        let plain=NowPlaying{source:"chrome.exe".into(),title:"Clip".into(),artist:"Creator".into(),playback_type:MediaKind::Music,..Default::default()};
+        assert_eq!(plain.kind(),MediaKind::Unknown,"没有专辑信息的浏览器媒体不自动认作歌曲");
+    }
+
     #[test]
     fn qqmusic_is_recognised_by_old_and_new_session_names(){
         for source in ["QQMusic.exe","qqmusic","Tencent.QQMusic"] {
@@ -1356,11 +1361,10 @@ mod tests {
                 let song=media.clone();
                 std::thread::spawn(move ||{let _=tx.send(crate::lyrics::fetch_for_source(&song.source,&song.title,&song.artist,song.duration,song.song_id));});
             }
-            let native=crate::lyrics::read_native(&media.source,&media.title,&media.artist,media.duration);
             if let Some(outcome)=result.as_ref().and_then(|rx|rx.try_recv().ok()) {
                 match outcome {Ok(lyrics)=>fetched=Some(lyrics),Err(error)=>println!("取词结果：{error:?}")}
             }
-            let lyrics=native.or_else(||fetched.clone());
+            let lyrics=fetched.clone();
             if media.source==first.source && media.title!=first.title && stable_since.elapsed()>Duration::from_secs(2) && media.artwork.is_some() && lyrics.as_ref().is_some_and(|l|l.synced) {
                 println!("连续切歌后 {:.2}s：客户端={} 歌曲={} 封面已就绪 歌词={}行",start.elapsed().as_secs_f64(),media.source,media.title,lyrics.unwrap().lines.len());
                 break;
@@ -1484,24 +1488,6 @@ mod tests {
         }
     }
 
-    #[cfg(windows)]
-    #[test]
-    #[ignore="只读验证当前酷狗歌曲的补全信息和进度"]
-    fn live_kugou_complete_timeline(){
-        let _apartment=init_winrt();let mut cache=ArtworkCache::default();
-        let start=std::time::Instant::now();
-        let first=query(&mut cache).expect("需要正在播放的酷狗会话");
-        println!("歌曲={} 歌手={} 曲长={} 进度={} 播放={} 读取耗时={:?}",first.title,first.artist,first.duration,first.position,first.playing,start.elapsed());
-        assert!(first.source.eq_ignore_ascii_case("kugou") && first.is_music());
-        assert!(first.duration>0.0 && first.position<=first.duration);
-        if let Ok(expected)=std::env::var("DAOZAI_EXPECT_DURATION"){assert!((first.duration-expected.parse::<f64>().unwrap()).abs()<1.0);}
-        std::thread::sleep(Duration::from_secs(3));
-        let next=query(&mut cache).unwrap();assert_eq!(next.title,first.title);
-        assert_eq!(next.duration,first.duration);
-        if first.playing && next.playing {assert!(next.position>first.position+1.0,"播放进度必须递增");}
-        else if !first.playing && !next.playing {assert!((next.position-first.position).abs()<0.2,"暂停不能继续计时");}
-        println!("三秒后：进度={} 播放={}",next.position,next.playing);
-    }
 
     #[cfg(windows)]
     #[test]
@@ -1518,7 +1504,7 @@ mod tests {
                 let media=query(&mut cache).unwrap();
                 assert_eq!(media.title,first.title);
                 if (media.position-target).abs()<2.5 {
-                    let lyrics=crate::lyrics::read_native(&media.source,&media.title,&media.artist,media.duration).unwrap();
+                    let lyrics=crate::lyrics::fetch_for_source(&media.source,&media.title,&media.artist,media.duration,media.song_id).unwrap();
                     assert!(lyrics.synced);println!("跳转 {target:.0}s，实际 {:.2}s，歌词 {} 行",media.position,lyrics.lines.len());break;
                 }
                 assert!(start.elapsed()<Duration::from_secs(4),"酷狗未执行跳转：目标={target}，实际={}",media.position);
@@ -1527,32 +1513,6 @@ mod tests {
         }
     }
 
-    #[cfg(windows)]
-    #[test]
-    #[ignore="将当前酷狗歌曲跳至尾声，验证真实单曲循环后仍有原生歌词"]
-    fn live_kugou_repeat_retains_lyrics(){
-        let _apartment=init_winrt();let mut cache=ArtworkCache::default();
-        let first=query(&mut cache).unwrap();assert_eq!(first.source,"kugou");assert!(first.playing && first.duration>5.0);
-        assert!(crate::lyrics::read_native(&first.source,&first.title,&first.artist,first.duration).is_some());
-        control(Transport::Seek(first.duration-3.0),&first.source);
-        std::thread::sleep(Duration::from_millis(500));
-        let mut previous=query(&mut cache).unwrap().position;
-        println!("尾声：{} / {}，进度={previous}，曲长={}",first.title,first.artist,first.duration);
-        if previous<=first.duration-5.0{println!("酷狗未接受跳转，等待歌曲自然循环");}
-        let start=std::time::Instant::now();let mut wrapped=None;
-        loop {
-            std::thread::sleep(Duration::from_millis(250));
-            let media=query(&mut cache).unwrap();
-            assert_eq!((&media.title,&media.artist),(&first.title,&first.artist),"循环前后歌曲身份必须一致");
-            assert_eq!(media.duration,first.duration);
-            let lyrics=crate::lyrics::read_native(&media.source,&media.title,&media.artist,media.duration).expect("循环前后原生歌词不能消失");
-            if media.position+1.0<previous {wrapped=Some(std::time::Instant::now());println!("已循环到开头：进度={}",media.position);}
-            if wrapped.is_some_and(|at|at.elapsed()>Duration::from_secs(8)) {
-                println!("第二遍：进度={}，歌词={}行，当前={:?}",media.position,lyrics.lines.len(),lyrics.index_at(media.position as f32).map(|i|&lyrics.lines[i].text));break;
-            }
-            previous=media.position;assert!(start.elapsed().as_secs_f64()<first.duration+30.0,"未观察到单曲循环");
-        }
-    }
 
     #[cfg(windows)]
     #[test]
@@ -1651,14 +1611,4 @@ mod read_cost {
         println!("当前：{} · {} 时长{:.1}",media.source,media.title,media.duration);
         for (name,total) in ["系统会话(含酷狗/网易云补全)","网易云日志","波点","酷我"].iter().zip(cost){println!("{name}: 平均 {:?}/轮",total/rounds);}
     }
-}
-#[cfg(all(test,windows))]
-#[test]
-#[ignore="本机实测：一次进程快照、一次波点/酷我发现各要多久"]
-fn live_discovery_cost(){
-    let t=std::time::Instant::now();for _ in 0..20{let _=player_process::pids_named("bodian_pc.exe");}println!("进程快照: {:?}/次",t.elapsed()/20);
-    let t=std::time::Instant::now();let n=netease_timeline::kugou_position();println!("酷狗进度(含首次发现): {:?} {:?}",t.elapsed(),n);
-    let t=std::time::Instant::now();for _ in 0..20{let _=netease_timeline::kugou_position();}println!("酷狗进度: {:?}/次",t.elapsed()/20);
-    let mut cache=kugou_metadata::Cache::default();
-    let t=std::time::Instant::now();for _ in 0..20{let _=cache.get("x","y",false);}println!("酷狗窗口核对: {:?}/次",t.elapsed()/20);
 }

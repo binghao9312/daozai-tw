@@ -141,6 +141,7 @@ impl Reader {
         media.artwork=self.cover.get_with(&media.song_id?.to_string(),fetch_cover);Some(media)
     }
 }
+#[allow(dead_code)]
 fn lyric_directory()->Option<PathBuf>{
     use std::os::windows::ffi::OsStrExt;
     let file=PathBuf::from(std::env::var_os("PROGRAMDATA")?).join("kuwodata/kwmusic2013/Conf/user/config.ini");
@@ -148,12 +149,14 @@ fn lyric_directory()->Option<PathBuf>{
     let len=unsafe{GetPrivateProfileStringW(w!("lyric").as_ptr(),w!("LrcSavePath").as_ptr(),w!("").as_ptr(),path.as_mut_ptr(),path.len() as u32,file.as_ptr())} as usize;
     (len>0 && len<path.len()-1).then(||PathBuf::from(String::from_utf16_lossy(&path[..len])))
 }
+#[allow(dead_code)]
 fn parse_lyrics(bytes:&[u8])->Option<crate::lyrics::Lyrics>{
     if bytes.len()>1024*1024{return None;}let raw=decode(bytes)?;let mut lyrics=crate::lyrics::parse_lrc(&raw);
     let offset=raw.lines().find_map(|line|line.strip_prefix("[offset:")?.strip_suffix(']')?.parse::<i32>().ok()).unwrap_or_default() as f32/1000.0;
     for line in &mut lyrics.lines{line.t=(line.t+offset).max(0.0);}
     lyrics.synced.then_some(lyrics)
 }
+#[allow(dead_code)]
 pub(crate) fn read_lyrics(title:&str,artist:&str)->Option<crate::lyrics::Lyrics>{
     if title.is_empty() || artist.is_empty() || title.contains(['\\','/',':','*','?','"','<','>','|']) || artist.contains(['\\','/',':','*','?','"','<','>','|']){return None;}
     let file=std::fs::File::open(lyric_directory()?.join(format!("{artist}-{title}.lrc"))).ok()?;

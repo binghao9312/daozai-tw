@@ -1586,7 +1586,7 @@ fn web_video_is_hidden_without_changing_music_preferences(){
     assert!(h.app.media.title.is_empty() && !h.app.media.playing,"视频标题和播放状态不应进入岛内音乐页面");
     assert!(h.app.ly.key.is_empty(),"视频不应建立歌曲取词任务");
     assert!(h.app.ly.lyrics.is_none() && h.app.ly.error.is_none(),"切到视频应清除上一首歌词和歌词错误");
-    assert!(tx.send(Ok((crate::lyrics::parse_lrc("[00:01.00]late song"),false))).is_err(),"视频不能接收旧歌曲迟到的查询结果");
+    assert!(tx.send(Ok(crate::lyrics::parse_lrc("[00:01.00]late song"))).is_err(),"视频不能接收旧歌曲迟到的查询结果");
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
     h.click(H::local(74.0,118.0));
     assert!(h.app.show_lyrics,"视频页面的标签不应切换用户的歌曲歌词偏好");
@@ -1871,66 +1871,13 @@ fn disabling_lyrics_disconnects_pending_workers(){
     h.app.show_lyrics=false;h.app.settings.island_lyrics=false;
     h.app.ly.key="测试歌曲|歌手|0".into();h.app.ly.loading=true;
     let (network,rx)=std::sync::mpsc::channel();h.app.ly.rx=Some(rx);
-    let (native,rx)=std::sync::mpsc::channel();h.app.ly.native_rx=Some(rx);
     h.frame(vec![]);
-    assert!(native.send(None).is_err(),"关闭歌词后应停止本机轮询");
     assert!(network.send(Err(crate::lyrics::FetchError::NotFound)).is_err());
     assert!(h.app.ly.key.is_empty(),"再次开启时应能重新加载歌词");
 }
 
-#[test]
-fn late_native_lyrics_bypass_pending_network_for_both_clients(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for source in ["KuGou.exe","SodaMusic.exe"] {
-        let mut h=H::new();
-        h.media=crate::smtc::NowPlaying{source:source.into(),title:"测试歌曲".into(),artist:"歌手".into(),..Default::default()};
-        h.frame(vec![]);h.app.opts.fetch_lyrics=true;h.app.show_lyrics=true;
-        h.app.ly.key="测试歌曲|歌手|0".into();h.app.ly.loading=true;
-        let (network,rx)=std::sync::mpsc::channel();h.app.ly.rx=Some(rx);
-        let (native,rx)=std::sync::mpsc::channel();h.app.ly.native_rx=Some(rx);
-        native.send(Some(crate::lyrics::parse_lrc("[00:01.00]本机歌词"))).unwrap();h.frame(vec![]);
-        assert!(!h.app.ly.loading,"本机歌词不能等待在线请求结束");
-        assert_eq!(h.app.ly.lyrics.as_ref().unwrap().lines[0].text,"本机歌词");
-        assert!(network.send(Err(crate::lyrics::FetchError::NotFound)).is_err(),"迟到的网络结果必须丢弃");
-    }
-}
 
-#[test]
-fn kugou_fallback_waits_for_late_native_lyrics(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.media=crate::smtc::NowPlaying{source:"kugou".into(),title:"测试歌曲".into(),artist:"歌手".into(),position:22.8,..Default::default()};
-    h.frame(vec![]);h.app.opts.fetch_lyrics=true;h.app.show_lyrics=true;h.app.ly.key="测试歌曲|歌手|0".into();
-    let (tx,rx)=std::sync::mpsc::channel();h.app.ly.rx=Some(rx);
-    tx.send(Ok((crate::lyrics::parse_lrc("[00:23.930]测试歌词"),true))).unwrap();h.frame(vec![]);
-    assert!(h.app.ly.retry_at.is_some(),"临时通用歌词必须继续等待迟到的酷狗原生歌词");
-    h.t=h.app.ly.retry_at.unwrap()+0.1;h.frame(vec![]);
-    assert_eq!(h.app.ly.lyrics.as_ref().unwrap().lines[0].t,23.930,"接回原生歌词期间不能清空现有歌词");assert!(!h.app.ly.loading);
-    let (tx,rx)=std::sync::mpsc::channel();h.app.ly.rx=Some(rx);
-    tx.send(Ok((crate::lyrics::parse_lrc("[00:22.991]测试歌词"),false))).unwrap();h.frame(vec![]);
-    assert!((h.app.ly.lyrics.as_ref().unwrap().lines[0].t-22.991).abs()<0.001);assert!(h.app.ly.retry_at.is_none(),"接回原生歌词后应停止重查");
-}
 
-#[test]
-fn kugou_missing_lyrics_rechecks_late_cache_without_flashing_loading() {
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.media=crate::smtc::NowPlaying{source:"kugou".into(),title:"不存在的测试歌曲".into(),artist:"测试歌手".into(),duration:120.0,..Default::default()};
-    h.frame(vec![]);h.app.opts.fetch_lyrics=true;h.app.show_lyrics=true;
-    h.app.ly.key="不存在的测试歌曲|测试歌手|120".into();
-    let (tx,rx)=std::sync::mpsc::channel();h.app.ly.rx=Some(rx);
-    tx.send(Err(crate::lyrics::FetchError::NotFound)).unwrap();h.frame(vec![]);
-    let retry=h.app.ly.retry_at.expect("酷狗尚未写入缓存时仍需自动检查");
-    assert!((retry-h.t-5.0).abs()<0.001);
-    // 歌词通道全进程只有 1 个名额，前面测试的歌词线程可能还在查网络；占着时这一帧会直接跳过。
-    let until=std::time::Instant::now()+std::time::Duration::from_secs(20);
-    while crate::resources::LYRICS.active()>0 && std::time::Instant::now()<until{std::thread::sleep(std::time::Duration::from_millis(10));}
-    assert_eq!(crate::resources::LYRICS.active(),0,"歌词名额被其他测试长期占用");
-    h.t=retry+0.1;h.frame(vec![]);
-    assert!(!h.app.ly.loading,"检查本机缓存不能反复闪出加载提示");
-    assert_eq!(h.app.ly.error,Some(crate::lyrics::FetchError::NotFound));
-    let (tx,rx)=std::sync::mpsc::channel();h.app.ly.rx=Some(rx);
-    tx.send(Ok((crate::lyrics::parse_lrc("[00:01.00]迟到的原生歌词"),false))).unwrap();h.frame(vec![]);
-    assert!(h.app.ly.lyrics.is_some());assert!(h.app.ly.error.is_none());assert!(h.app.ly.retry_at.is_none());
-}
 
 #[test]
 fn island_lyrics_pause_returns_to_resident_and_resume_follows_current_position(){
@@ -2308,7 +2255,7 @@ fn music_lyrics_keep_syncing_when_only_the_collapsed_lyrics_are_enabled() {
     h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:7.0,duration:120.0,playing:true,..Default::default()};
     let (tx,rx)=std::sync::mpsc::channel();
     h.app.ly.key="Track|Artist|120".into();h.app.ly.loading=true;h.app.ly.rx=Some(rx);
-    tx.send(Ok((crate::lyrics::parse_lrc("[00:05]当前歌词\n[00:10]下一句"),false))).unwrap();
+    tx.send(Ok(crate::lyrics::parse_lrc("[00:05]当前歌词\n[00:10]下一句"))).unwrap();
     h.frame(vec![]);
     assert!(!h.app.ly.loading);
     assert_eq!(h.app.island_lyric().map(|(_,line)|line),Some("当前歌词"));

@@ -456,7 +456,6 @@ pub(crate) struct Pomo {
 }
 
 /// 本地歌词（酷狗、汽水）每 5 秒复查，最多约 1 分钟；网络失败每 30 秒重试，最多约 5 分钟。手动点重试会重新计数。
-const NATIVE_RETRIES:u32=12;
 const NETWORK_RETRIES:u32=10;
 
 /// 与 `format!("{title}|{artist}|{duration:.0}")` 等价，但不分配内存：界面每帧要比较好几次。
@@ -518,8 +517,7 @@ fn song_change(previous:&LyricSong,media:&NowPlaying)->SongChange {
 
 /// 等待旧请求结束后再发起的在线查询（同一时间只保留一个网络线程）。
 pub(crate) struct LyricsJob {
-    source:String,title:String,artist:String,duration:f64,song_id:Option<u64>,
-    cached:Option<lyrics::Lyrics>,native_only:bool,manual:bool,
+    source:String,title:String,artist:String,duration:f64,song_id:Option<u64>,manual:bool,
 }
 
 #[derive(Default)]
@@ -541,8 +539,7 @@ pub(crate) struct LyricsState {
     /// 用户点了「重试」：下一次查询跳过近期「没有歌词」的记录。
     pub manual_retry: bool,
     pub lyrics: Option<lyrics::Lyrics>,
-    pub rx: Option<std::sync::mpsc::Receiver<Result<(lyrics::Lyrics,bool), lyrics::FetchError>>>,
-    pub native_rx: Option<std::sync::mpsc::Receiver<Option<lyrics::Lyrics>>>,
+    pub rx: Option<std::sync::mpsc::Receiver<Result<lyrics::Lyrics, lyrics::FetchError>>>,
 }
 
 /// v0.5.5：邮件面板与设置表单的界面状态。正文只在内存里过一次，不落盘。
@@ -3296,29 +3293,17 @@ impl App {
             self.start_lyrics(key,None,true);
         }
         self.spawn_lyrics_job();
-        if let Some(rx)=&self.ly.native_rx {
-            let mut found=None;
-            while let Ok(result)=rx.try_recv(){if result.is_some(){found=result;}}
-            if let Some(lyrics)=found {
-                self.ly.lyrics=Some(lyrics);self.ly.loading=false;self.ly.error=None;
-                // 本机歌词已到：排队中的在线查询不再需要，进行中的结果也丢弃。
-                self.ly.retry_at=None;self.ly.rx=None;self.ly.native_rx=None;self.ly.pending=None;
-            }
-        }
         if let Some(rx) = &self.ly.rx {
             if let Ok(r) = rx.try_recv() {
                 self.ly.loading = false;
                 match r {
-                    Ok((l,waiting_native)) => {
-                        self.ly.error=None;
-                        self.ly.retry_at=None;
-                        if (waiting_native || lyrics::is_soda(&self.media.source) && !l.synced) && self.ly.attempts<NATIVE_RETRIES {self.ly.retry_at=Some(self.t+5.0);}
+                    Ok(l) => {
+                        self.ly.error = None;
+                        self.ly.retry_at = None;
                         self.ly.lyrics = Some(l);
                     },
                     Err(error) => {
-                        let native=lyrics::is_soda(&self.media.source) || self.media.source.to_ascii_lowercase().contains("kugou") && error==lyrics::FetchError::NotFound;
-                        if native {if self.ly.attempts<NATIVE_RETRIES{self.ly.retry_at=Some(self.t+5.0);}}
-                        else if matches!(error,lyrics::FetchError::Unavailable(_)|lyrics::FetchError::InvalidResponse(_)) && self.ly.attempts<NETWORK_RETRIES {self.ly.retry_at=Some(self.t+30.0);}
+                        if matches!(error, lyrics::FetchError::Unavailable(_)|lyrics::FetchError::InvalidResponse(_)) && self.ly.attempts<NETWORK_RETRIES {self.ly.retry_at=Some(self.t+30.0);}
                         self.ly.error = Some(error);
                     },
                 }
@@ -3327,53 +3312,19 @@ impl App {
         }
     }
 
-    /// 为当前歌曲建立新的歌词状态：本机歌词轮询立即开始，在线查询交给 `spawn_lyrics_job`。
+    /// 为当前歌曲建立新的歌词状态，在线查询交给 `spawn_lyrics_job`（仅 LRCLIB）。
     /// `keep`：同一首歌信息补全时继续显示的歌词；`retry`：同一首歌的定时重试或补到歌曲 ID。
     fn start_lyrics(&mut self,key:String,keep:Option<lyrics::Lyrics>,retry:bool) {
         let np=&self.media;
-        let kugou=np.source.to_ascii_lowercase().contains("kugou");
-        let native_only=retry && kugou && self.ly.error==Some(lyrics::FetchError::NotFound);
-        let cached=if retry && kugou {self.ly.lyrics.take()}else{None};
         let attempts=if retry {self.ly.attempts.saturating_add(1)}else{0};
         let manual=self.ly.manual_retry;
-        let shown=cached.clone().or(keep);
-        self.ly = LyricsState { key, loading: shown.is_none() && !native_only, lyrics:shown,
-            error:native_only.then_some(lyrics::FetchError::NotFound), song_id:np.song_id, attempts,
+        let shown=keep;
+        self.ly = LyricsState { key, loading: shown.is_none(), lyrics:shown,
+            error:None, song_id:np.song_id, attempts,
             song:Some(LyricSong::of(np)), ..Default::default() };
         let (source, title, artist, dur) = (np.source.clone(), np.title.clone(), np.artist.clone(), np.duration);
         let song_id=np.song_id;
-        if kugou || lyrics::is_soda(&source) {
-            let (tx,rx)=std::sync::mpsc::sync_channel(1);self.ly.native_rx=Some(rx);
-            let (source,title,artist)=(source.clone(),title.clone(),artist.clone());
-            let native=crate::resources::NATIVE_LYRICS.spawn(move ||{
-                // 客户端通常在开播几秒内写好歌词：先密后疏（0.5s 起，最长 5s 一次），最多等 90 秒。
-                // 汽水的缓存文件可达 32MB，修改时间和大小都没变时不重复整份读取，但每 15 秒仍完整核对一次。
-                let started=std::time::Instant::now();
-                let mut wait=std::time::Duration::from_millis(500);
-                let mut last:Option<((std::time::SystemTime,u64),std::time::Instant)>=None;
-                let mut miss="未读取";
-                loop {
-                    let print=lyrics::native_fingerprint(&source);
-                    let unchanged=print.is_some_and(|print|last.is_some_and(|(seen,at)|seen==print && at.elapsed()<std::time::Duration::from_secs(15)));
-                    let found=if unchanged {None}else{
-                        if let Some(print)=print {last=Some((print,std::time::Instant::now()));}
-                        lyrics::read_native_detail(&source,&title,&artist,dur).map_err(|reason|miss=reason).ok()
-                    };
-                    // 找到歌词时等界面取走再结束（换歌或关闭歌词后通道断开会立即返回），不因通道暂满丢掉结果。
-                    if found.is_some() {
-                        if tx.send(found).is_ok(){lyrics::log_native(&source,&title,&artist,"命中",started.elapsed());}
-                        break;
-                    }
-                    if let Err(std::sync::mpsc::TrySendError::Disconnected(_))=tx.try_send(None){break;}
-                    if started.elapsed()>=std::time::Duration::from_secs(90){lyrics::log_native(&source,&title,&artist,&format!("放弃:{miss}"),started.elapsed());break;}
-                    std::thread::sleep(wait);
-                    wait=(wait*2).min(std::time::Duration::from_secs(5));
-                }
-            });
-            // 快速切歌时本机轮询线程已满：不留空通道，之后的定时重试会再次启动。
-            if native.is_none(){self.ly.native_rx=None;}
-        }
-        self.ly.pending=Some(LyricsJob{source,title,artist,duration:dur,song_id,cached,native_only,manual});
+        self.ly.pending=Some(LyricsJob{source,title,artist,duration:dur,song_id,manual});
     }
 
     /// 旧请求结束后再发起排队的在线查询：歌曲信息抖动或快速切歌时不会叠加网络线程，
@@ -3385,10 +3336,8 @@ impl App {
         let (tx, rx) = std::sync::mpsc::channel();
         self.ly.rx = Some(rx);
         self.ly_worker=lease.spawn(move || {
-            let LyricsJob{source,title,artist,duration,song_id,cached,native_only,manual}=job;
-            let result=if native_only {
-                lyrics::kugou_cache::read(&title,&artist,duration).map(|lyrics|(lyrics,false)).ok_or(lyrics::FetchError::NotFound)
-            }else{lyrics::fetch_for_display_with(&source, &title, &artist, duration, song_id, cached, manual)};
+            let LyricsJob{source,title,artist,duration,song_id,manual}=job;
+            let result=lyrics::fetch_for_display_with(&source,&title,&artist,duration,song_id,manual);
             let _ = tx.send(result);
         });
         if self.ly_worker.is_none(){self.ly.rx=None;self.ly.loading=false;self.ly.key.clear();}
