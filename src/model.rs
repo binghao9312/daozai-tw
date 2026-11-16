@@ -545,7 +545,7 @@ pub fn repeat_tag(mask: u8) -> String {
         REPEAT_ALL => "每天".into(),
         REPEAT_WORKDAYS => "工作日".into(),
         REPEAT_WEEKEND => "週末".into(),
-        mask => format!("周{}", (0..7).filter(|i| mask & (1 << i) != 0).map(|i| WEEKDAY_NAMES[i]).collect::<String>()),
+        mask => format!("週{}", (0..7).filter(|i| mask & (1 << i) != 0).map(|i| WEEKDAY_NAMES[i]).collect::<String>()),
     }
 }
 

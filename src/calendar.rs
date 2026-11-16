@@ -58,7 +58,7 @@ impl Provider {
 
     pub fn label(self) -> &'static str {
         match self {
-            Provider::Google => "Google 日曆",
+            Provider::Google => "Google 日曆 (CalDAV / iCal)",
             Provider::Feishu => "飛書",
             Provider::DingTalk => "釘釘",
             Provider::WeCom => "企業微信",
@@ -1880,7 +1880,7 @@ mod tests {
     #[test]
     fn basic_auth_is_rfc7617() {
         assert_eq!(basic_auth("Aladdin", "open sesame"), "Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==");
-        assert_eq!(basic_auth("使用者", "密碼"), "Basic 55So5oi3OuWvhueggQ==");
+        assert_eq!(basic_auth("使用者", "密碼"), "Basic 5L2/55So6ICFOuWvhueivA==");
     }
 
     #[test]
@@ -2051,6 +2051,9 @@ mod icloud_and_ics_tests {
     #[test]
     fn new_providers_round_trip_and_custom_server_is_validated() {
         for p in Provider::ALL { assert_eq!(Provider::parse(p.key()), p); }
+        assert_eq!(Provider::ALL[0], Provider::Google);
+        assert_eq!(Provider::Google.label(), "Google 日曆 (CalDAV / iCal)");
+        assert!(!Provider::ALL.iter().any(|p| matches!(p, Provider::Feishu | Provider::DingTalk | Provider::WeCom)));
         assert!(Provider::ICloud.all_calendars() && !Provider::Feishu.all_calendars());
         assert_eq!(normalize_server("cloud.example.com/remote.php/dav").as_deref(), Some("https://cloud.example.com/remote.php/dav"));
         assert_eq!(normalize_server("webcal://p01-caldav.icloud.com/x").as_deref(), Some("https://p01-caldav.icloud.com/x"));

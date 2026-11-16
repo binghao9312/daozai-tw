@@ -380,7 +380,7 @@ fn download(release: &Release, tx: &mpsc::Sender<Event>, cancel: &AtomicBool) ->
     std::fs::create_dir_all(&work).map_err(|_| "無法建立更新快取")?;
     let result = (|| {
         let response = http_agent()?
-            .get(&package.url).call().map_err(|_| "連線下載伺服器失敗，請檢查網路或代理，或使用網盤下載")?;
+            .get(&package.url).call().map_err(|_| "連線下載伺服器失敗，請檢查網路或代理，或至發布頁手動下載")?;
         if !response.get_url().starts_with("https://") { return Err("更新下載未使用安全連線".into()); }
         let mut input = response.into_reader();
         let mut output = std::fs::File::create(work.join("update.zip")).map_err(|_| "無法儲存更新包")?;
@@ -400,7 +400,7 @@ fn transfer(input: &mut impl Read, output: &mut impl Write, package: &Package, c
     let mut buffer = [0u8; 65536]; let mut total = 0u64;
     loop {
         if cancel.load(Ordering::Relaxed) { return Err("下載已取消".into()); }
-        let length = input.read(&mut buffer).map_err(|_| "下載中斷或等待超時，請重試或使用網盤下載")?;
+        let length = input.read(&mut buffer).map_err(|_| "下載中斷或等待超時，請重試或至發布頁手動下載")?;
         if length == 0 { break; }
         total += length as u64;
         if total > package.size { return Err("更新包大小不符，請重新下載".into()); }
@@ -737,7 +737,7 @@ mod tests {
             ("update-dialog", None, ""),
             ("update-connecting", Some(0.0), ""),
             ("update-downloading", Some(0.42), ""),
-            ("update-failed", None, "連線下載伺服器失敗，請檢查網路或代理，或使用網盤下載"),
+            ("update-failed", None, "連線下載伺服器失敗，請檢查網路或代理，或至發布頁手動下載"),
         ] {
         app.updates.cancel = progress.map(|_| Arc::new(AtomicBool::new(false)));
         app.updates.progress = progress.unwrap_or_default();

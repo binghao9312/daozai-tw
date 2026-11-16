@@ -155,7 +155,7 @@ fn parse_minimax(v: &Value, s: &mut Snapshot) -> Result<(), String> {
         if let Some(mut p) = minimax_percent(row, prefix) {
             if prefix == "current_weekly" && !row["weekly_boost_permille"].is_null() {
                 let boost = number(&row["weekly_boost_permille"]).filter(|n| *n > 0.0 && *n <= 10000.0)
-                    .ok_or("MiniMax 周額度倍率無效")?;
+                    .ok_or("MiniMax 週額度倍率無效")?;
                 p *= (boost / 1000.0) as f32;
             }
             let reset = millis(&row[end]);

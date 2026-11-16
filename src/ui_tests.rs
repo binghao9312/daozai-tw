@@ -3862,7 +3862,7 @@ fn minimal_island_hides_messenger_notices_until_expanded(){
         match source {
             Messenger::Wechat=>h.app.receive_wechat_reminder_from(4242,0x1234),
             Messenger::Qq=>h.app.receive_notification("QQ".into(),"QQ".into(),"QQ · 新訊息".into()),
-            Messenger::WeCom|Messenger::Feishu|Messenger::DingTalk=>h.app.receive_messenger_reminder(crate::app::Unread::of(source)),
+            Messenger::WeCom|Messenger::Feishu|Messenger::DingTalk|Messenger::Discord=>h.app.receive_messenger_reminder(crate::app::Unread::of(source)),
         }
         for _ in 0..30 {h.frame(vec![]);}
         assert!(h.app.notice.as_ref().and_then(|a|a.messenger())==Some(source),"{source:?} {shape:?}：極簡劉海照常彈橫幅");
@@ -7607,7 +7607,7 @@ fn messenger_window_replacement_removes_stale_banner_targets_without_clearing_ot
         let mut h=H::new();h.app.settings.read_notifications=true;h.app.settings.wechat_notifications=true;h.app.settings.wecom_notifications=true;h.app.settings.feishu_notifications=true;h.app.settings.dingtalk_notifications=true;
         let old=Unread{source,pid:100,window:11};let other=Unread{source,pid:200,window:22};let current=Unread{window:33,..old};
         let receive=|app:&mut App,unread:Unread|match source{
-            Messenger::Wechat|Messenger::WeCom|Messenger::Feishu|Messenger::DingTalk=>app.receive_messenger_reminder(unread),
+            Messenger::Wechat|Messenger::WeCom|Messenger::Feishu|Messenger::DingTalk|Messenger::Discord=>app.receive_messenger_reminder(unread),
             Messenger::Qq=>app.receive_notification_from("QQ".into(),"QQ".into(),"有新訊息".into(),Some(unread)),
         };
         receive(&mut h.app,old);h.frame(vec![]);receive(&mut h.app,other);receive(&mut h.app,current);

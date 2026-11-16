@@ -205,7 +205,7 @@ pub fn decode_accounts(raw: &[u8]) -> Vec<Account> {
             }
             Some(Account {
                 custom:a.get("custom").and_then(|c|Some(CustomImap{host:c.get("host")?.as_str()?.into(),port:u16::try_from(c.get("port")?.as_u64()?).ok()?,username:c.get("username").and_then(|u|u.as_str()).unwrap_or("").into()})),
-                provider: Provider::parse(a.get("provider").and_then(|p| p.as_str()).unwrap_or("qq")),
+                provider: Provider::parse(a.get("provider").and_then(|p| p.as_str()).unwrap_or("gmail")),
                 enabled: a.get("enabled").and_then(|e| e.as_bool()).unwrap_or(true),
                 email,
             })
@@ -1570,8 +1570,10 @@ Content-Type: multipart/alternative; boundary=\"b\"\r\n\r\n\
     }
 
     #[test]
-    fn provider_presets_cover_six_kinds() {
-        assert_eq!(Provider::ALL.len(), 8);
+    fn provider_presets_are_gmail_icloud_custom_with_gmail_default() {
+        assert_eq!(Provider::ALL, [Provider::Gmail, Provider::ICloud, Provider::Custom]);
+        assert_eq!(Provider::default(), Provider::Gmail);
+        assert_eq!(Provider::parse("qq"), Provider::Qq, "已保存的 QQ 帳號仍可讀取，但不再出現在預設列表");
         assert_eq!(Provider::parse("gmail"), Provider::Gmail);
         assert_eq!(Provider::Gmail.host(), "imap.gmail.com");
         assert_eq!(Provider::Gmail.port(), 993);
