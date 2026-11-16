@@ -1,4 +1,4 @@
-//! 邮件列表整理状态与服务器操作反馈。
+//! 郵件列表整理狀態與伺服器操作反饋。
 use crate::{app::{App,Cmd},mail::{Account,Item},mail_manage::{Action,Folder,Request,Snapshot,Completed}};
 use std::collections::{HashMap,HashSet};
 #[derive(Clone,Default,serde::Serialize,serde::Deserialize)]

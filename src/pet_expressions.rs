@@ -1,5 +1,5 @@
-//! 岛仔表情：按场景播放，隐藏时暂停，日常动作之间留出安静时间。
-//! 每个表情单独一张 144×1440 的序列图（16 帧 × 3 倍密度），只解码、上传正在播放的那一张，播完即释放。
+//! 島仔表情：按場景播放，隱藏時暫停，日常動作之間留出安靜時間。
+//! 每個表情單獨一張 144×1440 的序列圖（16 幀 × 3 倍密度），只解碼、上傳正在播放的那一張，播完即釋放。
 use crate::pet::PetState;
 use crate::paint::Card;
 use crate::skin_paint::Palette;
@@ -19,7 +19,7 @@ impl Expression {
         else {[0.35,0.12,0.12,0.12,0.13,0.13,0.14,0.40,0.18,0.14,0.12,0.12,0.12,0.14,0.14,0.45]}
     }
     pub fn duration(self)->f32 {self.times().iter().sum()}
-    /// 由 `assets/pet/expressions.png` 按列拆出，顺序与 `ALL` 一致。
+    /// 由 `assets/pet/expressions.png` 按列拆出，順序與 `ALL` 一致。
     fn sheet(self)->&'static [u8] {
         const SHEETS:[&[u8];12]=[
             include_bytes!("../assets/pet/expressions/00-wink.png"),include_bytes!("../assets/pet/expressions/01-smug.png"),
@@ -44,7 +44,7 @@ pub(crate) struct Expressions {
     cooldown:f32,
     hovered:bool,
     next:[usize;4],
-    /// 正在播放的表情序列图；换表情或换皮肤时原地替换内容，播完释放。
+    /// 正在播放的表情序列圖；換表情或換皮膚時原地替換內容，播完釋放。
     sheet:Option<(Expression,Option<Palette>,TextureHandle)>,
 }
 

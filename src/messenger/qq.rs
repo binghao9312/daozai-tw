@@ -1,4 +1,4 @@
-//! QQ 的安装位置、主窗口和托盘规则。
+//! QQ 的安裝位置、主視窗和系統匣規則。
 use super::{Messenger,OpenError,Target,Unread};
 use super::windows::*;
 use windows::{core::{w,PCWSTR},Win32::{Foundation::{HWND,LPARAM,WPARAM},System::{Registry::{HKEY_CLASSES_ROOT,HKEY_CURRENT_USER},Threading::{OpenProcess,PROCESS_QUERY_LIMITED_INFORMATION}},UI::WindowsAndMessaging::*}};
@@ -41,7 +41,7 @@ fn paths()->Vec<String>{
             }
         }
     }
-    // QQ NT 的协议处理器在版本子目录中，主程序在安装根目录。
+    // QQ NT 的協議處理器在版本子目錄中，主程式在安裝根目錄。
     if let Some(command)=registry_string(HKEY_CLASSES_ROOT,w!("tencent\\shell\\open\\command"),PCWSTR::null()){
         let helper=command.trim().trim_start_matches('"').split('"').next().unwrap_or("");
         let helper=std::path::Path::new(helper);
@@ -83,11 +83,11 @@ pub(crate) fn accounts(paths:&[String])->Option<Vec<Target>>{unsafe{
     for &host in &search.hosts{if host_icons(&[(window_pid(host),host)],window_pid(host)).len()!=1{return None;}}
     let owners:Vec<_>=search.hosts.iter().map(|&hwnd|window_pid(hwnd)).collect();
     let parents=parent_processes();let mut windows=search.hosts;let mut main_pids=std::collections::HashSet::new();
-    // 已由唯一托盘图标确认的账号，其主窗口和隐藏辅助窗口不再重复计数。
+    // 已由唯一系統匣圖示確認的帳號，其主視窗和隱藏輔助視窗不再重複計數。
     for main in search.mains{
         let pid=window_pid(main);
         if account_tray_pid(pid,&owners,&parents).is_none(){
-            // 有相关宿主却无法唯一归属时，不把公共主进程再猜成一个账号。
+            // 有相關宿主卻無法唯一歸屬時，不把公共主程序再猜成一個帳號。
             if owners.iter().any(|owner|ancestors(*owner,&parents).contains(&pid)){return None;}
             if !main_pids.insert(pid){return None;}
             if !windows.iter().any(|&hwnd|window_pid(hwnd)==pid){windows.push(main);}

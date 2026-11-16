@@ -1,10 +1,10 @@
-//! 邮件全文阅读窗口：完整正文、收件账号和网页链接。
+//! 郵件全文閱讀視窗：完整正文、收件帳號和網頁連結。
 use crate::app::{App,Cmd};
 use crate::mail_format::{self,Kind};
 use eframe::egui::{self,Color32};
 
-/// `**...**` 内的片段用粗体（HTML 的 strong/b），其余常规字重。
-/// 没有标记时走普通 Label，保持原有换行与字形。
+/// `**...**` 內的片段用粗體（HTML 的 strong/b），其餘常規字重。
+/// 沒有標記時走普通 Label，保持原有換行與字形。
 fn rich_label(ui:&mut egui::Ui,text:&str,size:f32,color:Color32,strong:bool,formatted:bool){
     if !formatted||!text.contains("**") {
         let mut label=egui::RichText::new(text.to_owned()).size(size).color(color);
@@ -25,7 +25,7 @@ fn rich_label(ui:&mut egui::Ui,text:&str,size:f32,color:Color32,strong:bool,form
     ui.add(egui::Label::new(job).selectable(true).wrap());
 }
 
-/// 正文按块渲染：标题加粗放大、列表带符号缩进、引用变灰、分隔线画细线。
+/// 正文按塊渲染：標題加粗放大、列表帶符號縮排、引用變灰、分隔線畫細線。
 pub(crate) fn body_ui(ui:&mut egui::Ui,lines:&[mail_format::Line],base:f32){
     let scale=base/14.0;
     ui.spacing_mut().item_spacing.y=2.0*scale;
@@ -47,7 +47,7 @@ pub(crate) fn body_ui(ui:&mut egui::Ui,lines:&[mail_format::Line],base:f32){
                 });
             },
             Kind::Numbered=>{
-                // 序号已经在正文里，缩进对齐即可。
+                // 序號已經在正文裡，縮排對齊即可。
                 ui.indent(("mail-numbered",index),|ui|{
                     rich_label(ui,&line.text,base,Color32::from_gray(232),false,line.rich);
                 });

@@ -1,16 +1,16 @@
-//! 歌词：按播放器与歌曲信息匹配 QQ 音乐、网易云及 LRCLIB，同步歌词成功后缓存。
+//! 歌詞：按播放器與歌曲訊息匹配 QQ 音樂、網易雲及 LRCLIB，同步歌詞成功後快取。
 
 const MAX_TEXT:usize=1024*1024;
 const MAX_LINES:usize=5000;
 const MAX_LINE_TEXT:usize=8192;
 fn rejected_lyrics()->Lyrics{crate::resources::REJECTED_DATA.fetch_add(1,std::sync::atomic::Ordering::Relaxed);Lyrics::default()}
 
-/// 确认「所有来源都没有同步歌词」后记住 7 天，期间不再联网；网络失败不会写入。
+/// 確認「所有來源都沒有同步歌詞」後記住 7 天，期間不再聯網；網路失敗不會寫入。
 const NEGATIVE_TTL:std::time::Duration=std::time::Duration::from_secs(7*24*3600);
 const TRACE_LIMIT:usize=24;
 
 thread_local!{static TRACE:std::cell::RefCell<Vec<String>>=const{std::cell::RefCell::new(Vec::new())};}
-/// 记录本次查词经过的步骤，只写本机诊断日志，便于定位「为什么没词」。
+/// 記錄本次查詞經過的步驟，只寫本機診斷日誌，便於定位「為什麼沒詞」。
 fn trace(step:impl FnOnce()->String){
     TRACE.with(|trace|{let mut trace=trace.borrow_mut();if trace.len()<TRACE_LIMIT{trace.push(step());}});
 }
@@ -24,12 +24,12 @@ fn outcome(result:&Result<Lyrics,FetchError>)->String{
 }
 
 fn is_native_script(c:char)->bool {
-    // 韩文音节与字母、日文假名：这类歌名对应的歌词正文应以同一种文字为主。
+    // 韓文音節與字母、日文假名：這類歌名對應的歌詞正文應以同一種文字為主。
     matches!(c,'\u{AC00}'..='\u{D7A3}'|'\u{1100}'..='\u{11FF}'|'\u{3130}'..='\u{318F}'|'\u{3040}'..='\u{30FF}')
 }
 
-/// 歌名是韩文或日文假名，歌词正文却几乎全是拉丁字母：判定为罗马音（音译）版本。
-/// 只看歌名不看歌手：韩国歌手唱英文歌（歌名是英文）时歌词本来就是英文，不能误判。
+/// 歌名是韓文或日文假名，歌詞正文卻幾乎全是拉丁字母：判定為羅馬音（音譯）版本。
+/// 只看歌名不看歌手：韓國歌手唱英文歌（歌名是英文）時歌詞本來就是英文，不能誤判。
 pub(crate) fn romanized(track:&str,lyrics:&Lyrics)->bool {
     if !track.chars().any(is_native_script){return false;}
     let (mut native,mut latin)=(0usize,0usize);
@@ -43,8 +43,8 @@ pub(crate) fn romanized(track:&str,lyrics:&Lyrics)->bool {
 
 fn negative_path(path:&std::path::Path)->std::path::PathBuf {path.with_extension("none")}
 thread_local!{static SKIP_NEGATIVE:std::cell::Cell<bool>=const{std::cell::Cell::new(false)};}
-/// 用户手动点「重试」时，本线程的这次查询跳过「近期已确认没有歌词」的记录，真正重新联网。
-/// 查询结束（含提前返回）后自动恢复，不影响之后的自动查询。
+/// 使用者手動點「重試」時，本執行緒的這次查詢跳過「近期已確認沒有歌詞」的記錄，真正重新聯網。
+/// 查詢結束（含提前返回）後自動恢復，不影響之後的自動查詢。
 struct SkipNegative(bool);
 impl SkipNegative {fn set(on:bool)->Self {Self(SKIP_NEGATIVE.with(|skip|skip.replace(on)))}}
 impl Drop for SkipNegative {fn drop(&mut self){SKIP_NEGATIVE.with(|skip|skip.set(self.0));}}
@@ -97,7 +97,7 @@ impl FetchError {
 }
 
 impl Lyrics {
-    /// 返回当前时间点应显示的行号。
+    /// 返回當前時間點應顯示的行號。
     pub fn index_at(&self, secs: f32) -> Option<usize> {
         self.lines.iter().rposition(|line|line.t<=secs)
     }
@@ -154,7 +154,7 @@ fn quality_lyrics_keep_brackets_in_the_actual_text() {
     assert_eq!(parsed.lines.len(),3);
 }
 
-/// 纯文本没有同步时间，保留正文但不伪造逐行时间戳。
+/// 純文字沒有同步時間，保留正文但不偽造逐行時間戳。
 pub fn from_plain(raw: &str) -> Lyrics {
     if raw.len()>MAX_TEXT || raw.lines().count()>MAX_LINES || raw.lines().any(|line|line.len()>MAX_LINE_TEXT){return rejected_lyrics();}
     let lines: Vec<LyricsLine> = raw
@@ -165,8 +165,8 @@ pub fn from_plain(raw: &str) -> Lyrics {
     Lyrics { lines, synced: false }
 }
 
-/// 歌词只来自 LRCLIB；网易云、QQ 音乐、酷狗、汽水的私有歌词接口与本机歌词缓存已移除。
-/// `manual`：用户手动重试，跳过近期「没有歌词」的记录。网络失败仍不会被记成没有歌词。
+/// 歌詞只來自 LRCLIB；網易雲、QQ 音樂、酷狗、汽水的私有歌詞介面與本機歌詞快取已移除。
+/// `manual`：使用者手動重試，跳過近期「沒有歌詞」的記錄。網路失敗仍不會被記成沒有歌詞。
 pub fn fetch_for_display_with(source:&str,track:&str,artist:&str,duration:f64,song_id:Option<u64>,manual:bool)->Result<Lyrics,FetchError>{
     take_trace();
     let _skip=SkipNegative::set(manual);
@@ -177,7 +177,7 @@ pub fn fetch_for_display_with(source:&str,track:&str,artist:&str,duration:f64,so
     let line=format!("{} {source} · {track} - {artist}{id} → {} → 结果:{summary} 用时{}ms\n",
         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs(),
         take_trace().join(" → "),started.elapsed().as_millis());
-    // 测试时不写，免得把模拟数据混进用户的真实诊断日志。
+    // 測試時不寫，免得把模擬資料混進使用者的真實診斷日誌。
     if !cfg!(test) {crate::resources::append_log(&crate::model::config_dir().join("diagnostics"),"lyrics.log",&line);}
     result
 }
@@ -223,13 +223,13 @@ pub fn fetch_for_source(_source:&str,track:&str,artist:&str,duration:f64,_song_i
 
 
 
-/// LRCLIB 默认查询地址。
+/// LRCLIB 預設查詢地址。
 const LRCLIB_BASE:&str="https://lrclib.net";
 
-/// LRCLIB 要求带可识别的 User-Agent。
+/// LRCLIB 要求帶可識別的 User-Agent。
 const LRCLIB_USER_AGENT:&str=concat!("daozai-tw/",env!("CARGO_PKG_VERSION")," (https://github.com/binghao9312/daozai-tw)");
 
-/// 单次 LRCLIB 查询（/api/get → /api/search）。第二个返回值：是否因网络或响应异常失败。
+/// 單次 LRCLIB 查詢（/api/get → /api/search）。第二個返回值：是否因網路或響應異常失敗。
 fn fetch_lrclib_once(base:&str,track:&str,artist:&str,duration:f64)->(Result<Lyrics,FetchError>,bool) {
     match fetch_from_lrclib(base,track,artist,duration) {
         Ok(lyrics)=>(Ok(lyrics),false),
@@ -238,8 +238,8 @@ fn fetch_lrclib_once(base:&str,track:&str,artist:&str,duration:f64)->(Result<Lyr
     }
 }
 
-/// 歌手为空时从标题拆出歌手（两种顺序），再去掉节目 / 版本标注（只在有时长时，靠时长校验避免套错版本）。
-/// 有来源断网或响应异常时立即停止，免得一首歌放大成多倍请求。
+/// 歌手為空時從標題拆出歌手（兩種順序），再去掉節目 / 版本標註（只在有時長時，靠時長校驗避免套錯版本）。
+/// 有來源斷網或響應異常時立即停止，免得一首歌放大成多倍請求。
 fn fetch_lrclib_with_fallbacks(base:&str,track:&str,artist:&str,duration:f64)->(Result<Lyrics,FetchError>,bool) {
     let mut attempts=vec![(track.to_owned(),artist.to_owned())];
     if artist.trim().is_empty() {
@@ -252,7 +252,7 @@ fn fetch_lrclib_with_fallbacks(base:&str,track:&str,artist:&str,duration:f64)->(
         if index>0 {trace(||format!("兜底:{title} - {}",if singer.is_empty(){"（无歌手）"}else{&singer}));}
         let (result,failed)=fetch_lrclib_once(base,&title,&singer,duration);
         if failed || result.as_ref().is_ok_and(|lyrics|lyrics.synced) {return (result,failed);}
-        // 纯文本先留着，继续找同步版本；都没有时用第一份纯文本。
+        // 純文字先留著，繼續找同步版本；都沒有時用第一份純文字。
         if best.as_ref().is_none_or(|kept|kept.is_err() && result.is_ok()) {best=Some(result);}
     }
     (best.unwrap_or(Err(FetchError::NotFound)),false)
@@ -283,7 +283,7 @@ fn write_cache(path:&std::path::Path,lyrics:&Lyrics) {
 }
 
 
-/// 电台、DJ、部分网页播放器把「歌名 - 歌手」整个放进标题、歌手栏留空：拆成两半，只拆唯一的一个分隔符。
+/// 電臺、DJ、部分網頁播放器把「歌名 - 歌手」整個放進標題、歌手欄留空：拆成兩半，只拆唯一的一個分隔符。
 pub(crate) fn split_title_artist(title:&str)->Option<(String,String)> {
     for separator in [" - "," – "," — "] {
         if title.matches(separator).count()!=1 {continue;}
@@ -294,7 +294,7 @@ pub(crate) fn split_title_artist(title:&str)->Option<(String,String)> {
     None
 }
 
-/// 去掉开头的节目标注（【电台】、[DJ]）和结尾的版本标注（(DJ版)、（伴奏）、【现场】），只留歌名本体。
+/// 去掉開頭的節目標註（【電臺】、[DJ]）和結尾的版本標註（(DJ版)、（伴奏）、【現場】），只留歌名本體。
 pub(crate) fn bare_title(title:&str)->String {
     static LEADING:std::sync::OnceLock<regex::Regex>=std::sync::OnceLock::new();
     static TRAILING:std::sync::OnceLock<regex::Regex>=std::sync::OnceLock::new();
@@ -310,14 +310,14 @@ pub(crate) fn bare_title(title:&str)->String {
 
 
 
-/// 播放器两路来源（SMTC 与网易云日志）的歌名、歌手写法可能不同：统一规范化后再比较是否同一首。
+/// 播放器兩路來源（SMTC 與網易雲日誌）的歌名、歌手寫法可能不同：統一規範化後再比較是否同一首。
 pub(crate) fn same_song(title:&str,artist:&str,other_title:&str,other_artist:&str)->bool {
     let (a,b)=(song_identity(title,artist),song_identity(other_title,other_artist));
     !a.0.is_empty() && a.0==b.0 && (a.1.is_empty() || b.1.is_empty() || a.1==b.1)
 }
 
-/// 同一会话里前后两次歌曲信息的关系：`Some(true)` 同一首（歌手相同或一方为空），
-/// `Some(false)` 同一首但署名有补全（如单人署名补全为合唱），`None` 不同歌曲。
+/// 同一會話裡前後兩次歌曲訊息的關係：`Some(true)` 同一首（歌手相同或一方為空），
+/// `Some(false)` 同一首但署名有補全（如單人署名補全為合唱），`None` 不同歌曲。
 pub(crate) fn song_relation(title:&str,artist:&str,other_title:&str,other_artist:&str)->Option<bool> {
     if same_song(title,artist,other_title,other_artist){return Some(true);}
     let (a,b)=(song_identity(title,artist),song_identity(other_title,other_artist));
@@ -326,7 +326,7 @@ pub(crate) fn song_relation(title:&str,artist:&str,other_title:&str,other_artist
     (within(&a.1,&b.1) || within(&b.1,&a.1)).then_some(false)
 }
 
-/// 歌词中的署名行（作词、作曲等），不计入正文。
+/// 歌詞中的署名行（作詞、作曲等），不計入正文。
 fn is_credit(text:&str)->bool {
     static CREDIT:std::sync::OnceLock<regex::Regex>=std::sync::OnceLock::new();
     CREDIT.get_or_init(||regex::Regex::new(r"^\s*(?:作词|作曲|编曲|词|曲|演唱|原唱|制作人|监制|混音|母带|和声|吉他|贝斯|鼓|弦乐|录音|出品|发行|OP|SP|Lyrics?|Lyricist|Composer|Arranger|Producer)\s*[:：]").unwrap()).is_match(text)
@@ -356,7 +356,7 @@ fn split_feature(text:&str)->(&str,&str) {
     }
 }
 
-/// 合唱署名可能位于歌名或歌手字段；只移动明确的署名，保留 Live、Remix 等版本信息。
+/// 合唱署名可能位於歌名或歌手欄位；只移動明確的署名，保留 Live、Remix 等版本訊息。
 fn song_identity(title:&str,artist:&str)->(String,Vec<String>) {
     let cleaned=clean_title(title);
     let (title,guests)=split_feature(&cleaned);
@@ -452,7 +452,7 @@ fn search(base:&str,track:&str,artist:&str)->Result<Vec<serde_json::Value>,Fetch
 }
 
 fn lyrics_from_items(items:&[serde_json::Value],track:&str,duration_secs:f64)->Result<Lyrics,FetchError> {
-    // LRCLIB 同一首韩文、日文歌常同时有原文和罗马音版本：原文优先，其次时长更接近。
+    // LRCLIB 同一首韓文、日文歌常同時有原文和羅馬音版本：原文優先，其次時長更接近。
     let mut synced:Option<(Lyrics,(bool,f64))>=None;
     let mut plain:Option<(Lyrics,f64)>=None;
     for it in items {
@@ -636,13 +636,13 @@ mod tests {
 
     #[test]
     fn http_search_and_network_errors_are_distinct_from_missing_lyrics() {
-        // 命中 /api/get 的同步歌词：只需一次请求。
+        // 命中 /api/get 的同步歌詞：只需一次請求。
         let (base,worker)=serve(vec![("200 OK",r#"{"trackName":"Track Name","artistName":"Artist","duration":120,"syncedLyrics":"[00:01.00]first"}"#.into())]);
         assert!(fetch_from_lrclib(&base,"Track Name","Artist",120.0).unwrap().synced);worker.join().unwrap();
-        // 三个接口都确认没有：视为没有歌词，可以缓存。
+        // 三個介面都確認沒有：視為沒有歌詞，可以快取。
         let (base,worker)=serve(vec![("404 Not Found","{}".into()),("200 OK","[]".into()),("200 OK","[]".into())]);
         assert_eq!(fetch_from_lrclib(&base,"Track Name","Artist",120.0).unwrap_err(),FetchError::NotFound);worker.join().unwrap();
-        // 服务器错误不是没有歌词，不能被当作确认缺失。
+        // 伺服器錯誤不是沒有歌詞，不能被當作確認缺失。
         let (base,worker)=serve(vec![("502 Bad Gateway","".into())]);
         let (result,failed)=fetch_lrclib_with_fallbacks(&base,"Track Name","Artist",120.0);
         worker.join().unwrap();
@@ -707,14 +707,14 @@ mod tests {
         let roman=r#"[{"trackName":"눈,코,입 (EYES,NOSE,LIPS)","artistName":"TAEYANG","duration":229,"syncedLyrics":"[00:01.00]Hoksi ireon na ttaeme himdeureonni\n[00:04.00]Amu daedap eomneun neo\n[00:07.00]Babocheoreom wae neoreul jiuji mothae"}]"#;
         let both=r#"[{"trackName":"눈,코,입 (EYES,NOSE,LIPS)","artistName":"TAEYANG","duration":229,"syncedLyrics":"[00:01.00]Hoksi ireon na ttaeme himdeureonni\n[00:04.00]Amu daedap eomneun neo\n[00:07.00]Babocheoreom wae neoreul jiuji mothae"},
             {"trackName":"눈,코,입 (EYES,NOSE,LIPS)","artistName":"TAEYANG","duration":235,"syncedLyrics":"[00:01.00]혹시 이런 나 땜에 힘들었니\n[00:04.00]아무 대답 없는 너"}]"#;
-        // 同一来源里原文优先，即使罗马音版本时长更接近。
+        // 同一來源裡原文優先，即使羅馬音版本時長更接近。
         let (base,worker)=serve(vec![("200 OK",both.into()),("200 OK",both.into())]);
         assert_eq!(fetch_from_lrclib(&base,title,"TAEYANG",229.0).unwrap().lines[0].text,"혹시 이런 나 땜에 힘들었니");worker.join().unwrap();
-        // 只有罗马音时仍可显示，作为最后的备选。
+        // 只有羅馬音時仍可顯示，作為最後的備選。
         let (base,worker)=serve(vec![("200 OK",roman.into()),("200 OK",roman.into())]);
         let (result,_)=fetch_lrclib_with_fallbacks(&base,title,"TAEYANG",229.0);
         assert!(romanized(title,&result.unwrap()));worker.join().unwrap();
-        // 已缓存的罗马音版本会被忽略。
+        // 已快取的羅馬音版本會被忽略。
         let path=std::env::temp_dir().join(format!("daozai-roman-{}.lrc",std::process::id()));
         write_cache(&path,&parse_lrc("[00:01.00]Hoksi ireon na ttaeme himdeureonni\n[00:04.00]Amu daedap eomneun neo\n[00:07.00]Babocheoreom wae neoreul jiuji mothae"));
         assert!(read_cache(&path).filter(|lyrics|!romanized(title,lyrics)).is_none());std::fs::remove_file(path).unwrap();

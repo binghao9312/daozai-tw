@@ -1,15 +1,15 @@
-//! 配色、字体与字号。
+//! 配色、字型與字號。
 //!
-//! 字体：拉丁/数字用 Segoe UI（Windows 原生 UI 字体，与原版 DirectWrite 渲染同源），
-//! 中文回退到微软雅黑 UI，韩文回退到 Malgun Gothic。三档字重：常规 / 半粗 / 粗。
-//! 非 Windows（开发机、录屏）按 `DAOZAI_FONT_DIR` → 常见系统路径依次查找
-//! 度量兼容的 Selawik 与 Noto Sans SC。
+//! 字型：拉丁/數字用 Segoe UI（Windows 原生 UI 字型，與原版 DirectWrite 渲染同源），
+//! 中文回退到微軟雅黑 UI，韓文回退到 Malgun Gothic。三檔字重：常規 / 半粗 / 粗。
+//! 非 Windows（開發機、錄屏）按 `DAOZAI_FONT_DIR` → 常見系統路徑依次查詢
+//! 度量相容的 Selawik 與 Noto Sans SC。
 
 use eframe::egui::{self, Color32, FontData, FontDefinitions, FontFamily, FontId};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-// ---------- 颜色（原版逐像素取色，少量为审美微调） ----------
+// ---------- 顏色（原版逐畫素取色，少量為審美微調） ----------
 pub const RED: Color32 = Color32::from_rgb(242, 48, 70);
 pub const RED_TOP: Color32 = Color32::from_rgb(253, 104, 92);
 pub const BLUE: Color32 = Color32::from_rgb(62, 172, 248);
@@ -17,7 +17,7 @@ pub const BLUE_DEEP: Color32 = Color32::from_rgb(13, 69, 128);
 pub const CYAN: Color32 = Color32::from_rgb(102, 219, 255);
 pub const SOFT_GREEN: Color32 = Color32::from_rgb(118, 196, 151);
 pub const GREEN: Color32 = Color32::from_rgb(48, 209, 88);
-/// 健康页「久坐」模式的主色（与喝水的蓝成对）。
+/// 健康頁「久坐」模式的主色（與喝水的藍成對）。
 pub const SIT_GREEN: Color32 = Color32::from_rgb(70, 200, 125);
 pub const CHARGE: Color32 = Color32::from_rgb(33, 235, 84);
 pub const WHITE: Color32 = Color32::WHITE;
@@ -35,7 +35,7 @@ pub fn alpha_blue(a: f32) -> Color32 {
     Color32::from_rgba_unmultiplied(BLUE.r(), BLUE.g(), BLUE.b(), (255.0 * a) as u8)
 }
 
-/// 字重档位。
+/// 字重檔位。
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum W {
     Regular,
@@ -51,17 +51,17 @@ pub fn font(size: f32, w: W) -> FontId {
     }
 }
 
-/// 字号表（逻辑点）。汉字天然比拉丁字母「显大」，中文字号单独一套，
-/// 让两种文字的视觉重量一致，而不是硬把墨高压到拉丁大写高度。
+/// 字號表（邏輯點）。漢字天然比拉丁字母「顯大」，中文字號單獨一套，
+/// 讓兩種文字的視覺重量一致，而不是硬把墨高壓到拉丁大寫高度。
 pub mod size {
-    pub const TITLE: f32 = 14.5; // 页标题（中文）
-    pub const DATE: f32 = 11.0; // 顶栏日期
-    pub const CLOCK: f32 = 12.5; // 顶栏时钟
-    pub const PILL_CLOCK: f32 = 15.5; // 药丸时钟
-    pub const HERO: f32 = 29.0; // 大数字（25:00 / 0.1 / 0/0）
-    pub const BODY: f32 = 11.5; // 正文、按钮
-    pub const SMALL: f32 = 11.0; // 说明
-    pub const TINY: f32 = 10.0; // 脚注、坐标轴
+    pub const TITLE: f32 = 14.5; // 頁標題（中文）
+    pub const DATE: f32 = 11.0; // 頂欄日期
+    pub const CLOCK: f32 = 12.5; // 頂欄時鐘
+    pub const PILL_CLOCK: f32 = 15.5; // 藥丸時鐘
+    pub const HERO: f32 = 29.0; // 大數字（25:00 / 0.1 / 0/0）
+    pub const BODY: f32 = 11.5; // 正文、按鈕
+    pub const SMALL: f32 = 11.0; // 說明
+    pub const TINY: f32 = 10.0; // 腳註、座標軸
 }
 
 struct Face {
@@ -109,7 +109,7 @@ fn font_dirs() -> Vec<PathBuf> {
     v
 }
 
-/// 装载三档字重。每档 = 拉丁字体 + 中文回退 + 韩文回退；缺哪个就跳过，最后兜底 egui 内置字体。
+/// 裝載三檔字重。每檔 = 拉丁字型 + 中文回退 + 韓文回退；缺哪個就跳過，最後兜底 egui 內建字型。
 pub fn load_fonts(ctx: &egui::Context) {
     ctx.set_fonts(shared_fonts().clone());
 }
@@ -129,7 +129,7 @@ struct MappedFont {
 impl MappedFont {
     fn open(path:&Path)->std::io::Result<Self>{
         use std::os::windows::fs::OpenOptionsExt;
-        // 保留文件句柄并禁止原地写入；允许系统以替换文件的方式更新字体。
+        // 保留檔案控制代碼並禁止原地寫入；允許系統以替換檔案的方式更新字型。
         let source=std::fs::OpenOptions::new().read(true).share_mode(0x1|0x4).open(path)?;
         let bytes=unsafe{memmap2::Mmap::map(&source)?};
         Ok(Self{_source:source,bytes})
@@ -139,7 +139,7 @@ impl MappedFont {
 fn font_bytes(path:&Path)->Option<&'static [u8]>{
     #[cfg(windows)]
     if let Ok(mapped)=MappedFont::open(path){
-        // 所有字体由进程级 OnceLock 持有，映射和只读句柄与排版器同寿命。
+        // 所有字型由程序級 OnceLock 持有，對映和只讀控制代碼與排版器同壽命。
         let mapped=Box::leak(Box::new(mapped));return Some(&mapped.bytes);
     }
     Some(Box::leak(std::fs::read(path).ok()?.into_boxed_slice()))
@@ -200,7 +200,7 @@ fn build_fonts()->FontDefinitions {
     fonts
 }
 
-/// 各个原生窗口统一使用岛仔品牌图标，避免回落到框架默认图标。
+/// 各個原生視窗統一使用島仔品牌圖示，避免回落到框架預設圖示。
 pub fn app_icon()->std::sync::Arc<eframe::egui::IconData>{
     static ICON:std::sync::OnceLock<std::sync::Arc<eframe::egui::IconData>>=std::sync::OnceLock::new();
     ICON.get_or_init(||{

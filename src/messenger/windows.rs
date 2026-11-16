@@ -1,4 +1,4 @@
-//! Windows 消息客户端的通用生命周期、窗口检查和后台唤起。
+//! Windows 訊息客戶端的通用生命週期、視窗檢查和後臺喚起。
 use super::{AccountHistory,Capture,Messenger,OpenError,Target,Unread};
 use crate::model::Settings;
 use std::{collections::HashMap,sync::mpsc,time::{Duration,Instant}};
@@ -32,11 +32,11 @@ pub(crate) fn frame_style(class:&str,style:u32,extended:u32)->bool{
 pub fn describe_foreground()->String{unsafe{let window=GetForegroundWindow();format!("{:#x} {} 进程 {}",window.0 as usize,class_name(window),window_pid(window))}}
 pub fn trace(line:impl AsRef<str>){crate::resources::append_log(&crate::model::config_dir().join("diagnostics"),"messenger-events",line.as_ref());}
 
-// 点岛上的提醒唤起客户端：各客户端把走过的步骤记在当前线程，结束时与结果合成一行写入
-// messenger-events.log。只记窗口句柄、类名、可见状态和进程号，不记窗口标题或消息内容。
+// 點島上的提醒喚起客戶端：各客戶端把走過的步驟記在當前執行緒，結束時與結果合成一行寫入
+// messenger-events.log。只記視窗控制代碼、類名、可見狀態和程序號，不記視窗標題或訊息內容。
 thread_local!{static WAKE_STEPS:std::cell::RefCell<Vec<String>>=const{std::cell::RefCell::new(Vec::new())};}
 pub(crate) fn wake_step(line:impl Into<String>){WAKE_STEPS.with(|steps|steps.borrow_mut().push(line.into()));}
-/// 窗口当时的状态：是否还在、类名、隐藏 / 最小化、所属进程。
+/// 視窗當時的狀態：是否還在、類名、隱藏 / 最小化、所屬程序。
 pub(crate) fn describe_window(window:HWND)->String{unsafe{
     if window.0.is_null() || !IsWindow(window).as_bool(){return format!("{:#x} 已不存在",window.0 as usize);}
     format!("{:#x} {}{}{} 进程 {}",window.0 as usize,class_name(window),
@@ -323,7 +323,7 @@ impl Runtime {
         }
         events
     }
-    /// 前台已确认查看该账号时同步重置监听端，避免遗漏激活事件后吞掉下一条消息。
+    /// 前臺已確認檢視該帳號時同步重置監聽端，避免遺漏啟用事件後吞掉下一條訊息。
     pub fn viewed_client(&self,client:Messenger,pid:u32){
         if pid==0{return;}
         for entry in &self.taskbar{if entry.client==client{if let Some(source)=&entry.source{source.forget(pid);}}}
@@ -403,7 +403,7 @@ impl OpenRequest {
         let steps=WAKE_STEPS.with(|steps|std::mem::take(&mut *steps.borrow_mut()));
         let line=wake_line(&head,&steps,&result,started.elapsed());
         #[cfg(test)] LAST_WAKE.with(|last|*last.borrow_mut()=line.clone());
-        // 测试时不写，免得把模拟数据混进用户的真实诊断日志。
+        // 測試時不寫，免得把模擬資料混進使用者的真實診斷日誌。
         if !cfg!(test){trace(line);}
         result
     }
@@ -415,7 +415,7 @@ impl OpenRequest {
             return Err(if self.unread.pid==0{OpenError::Unidentified}else{OpenError::Unavailable});
         };
         if target.unread!=self.unread{wake_step("登记的账号与提醒不一致");return Err(OpenError::Unavailable);}
-        // 句柄保留到整个唤起结束，不能因提醒被关闭而提前允许进程号复用。
+        // 控制代碼保留到整個喚起結束，不能因提醒被關閉而提前允許程序號複用。
         let process=check_target(target).inspect_err(|error|wake_step(format!("账号进程检查未通过 {error:?}")))?;
         let adapter=self.unread.source.adapter().native;
         if !(adapter.ready)(target){wake_step("客户端尚未就绪");return Err(OpenError::Unavailable);}

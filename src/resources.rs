@@ -1,4 +1,4 @@
-//! 媒体后台任务的进程级上限，以及有容量限制的本机资源记录。
+//! 媒體後臺任務的程序級上限，以及有容量限制的本機資源記錄。
 use std::{path::{Path,PathBuf},sync::{atomic::{AtomicUsize,Ordering},Mutex},time::{Duration,Instant}};
 
 pub struct Lane { pub name:&'static str, limit:usize, active:AtomicUsize, started:AtomicUsize, denied:AtomicUsize }
@@ -22,13 +22,13 @@ impl Lease {
 impl Drop for Lease {fn drop(&mut self){self.0.active.fetch_sub(1,Ordering::Release);}}
 
 pub static POLLER:Lane=Lane::new("daozai-media",1);
-// 允许旧实例正在退出与新实例短暂交接；阻塞任务跨缓存重建仍受此上限约束。
+// 允許舊例項正在退出與新例項短暫交接；阻塞任務跨快取重建仍受此上限約束。
 pub static ARTWORK:Lane=Lane::new("daozai-artwork",2);
 pub static COVER:Lane=Lane::new("daozai-cover",2);
 pub static LYRICS:Lane=Lane::new("daozai-lyrics",1);
 pub static NATIVE_LYRICS:Lane=Lane::new("daozai-native-lyrics",2);
 pub static CONTROL:Lane=Lane::new("daozai-control",1);
-/// 音量混合器读写；驱动卡住时最多占住这一个线程。
+/// 音量混合器讀寫；驅動卡住時最多佔住這一個執行緒。
 pub static VOLUME:Lane=Lane::new("daozai-volume",1);
 pub static ASYNC:Lane=Lane::new("winrt-request",4);
 pub static ASYNC_ARTWORK:Lane=Lane::new("winrt-artwork",2);
@@ -55,16 +55,16 @@ pub static PENDING:PendingRequests=PendingRequests::new();
 pub struct Snapshot {pub private_bytes:usize,pub working_bytes:usize,pub handles:u32,pub threads:u32}
 impl Snapshot {
     pub fn abnormal(&self)->bool{self.private_bytes>=512*1024*1024 || self.threads>=128 || self.handles>=4096}
-    /// 远超正常范围（正常约 20–40 线程、500–600 句柄、几百 MB）：继续运行会拖慢用户电脑。
+    /// 遠超正常範圍（正常約 20–40 執行緒、500–600 控制代碼、幾百 MB）：繼續執行會拖慢使用者電腦。
     pub fn severe(&self)->bool{self.private_bytes>=1536*1024*1024 || self.threads>=400 || self.handles>=16384}
 }
 
-/// 资源保护：连续两次采样都严重超标时「熔断」，由界面暂停音乐读取与歌词等后台任务。
-/// 只能触发一次，重启岛仔后恢复；单次尖峰不会触发。
+/// 資源保護：連續兩次取樣都嚴重超標時「熔斷」，由介面暫停音樂讀取與歌詞等後臺任務。
+/// 只能觸發一次，重啟島仔後恢復；單次尖峰不會觸發。
 pub struct Guard {strikes:AtomicUsize,tripped:std::sync::atomic::AtomicBool}
 impl Guard {
     pub const fn new()->Self{Self{strikes:AtomicUsize::new(0),tripped:std::sync::atomic::AtomicBool::new(false)}}
-    /// 返回 true 表示这次采样刚好触发熔断。
+    /// 返回 true 表示這次取樣剛好觸發熔斷。
     pub fn observe(&self,value:&Snapshot)->bool{
         if !value.severe(){self.strikes.store(0,Ordering::Relaxed);return false;}
         self.strikes.fetch_add(1,Ordering::Relaxed)+1>=2 && !self.tripped.swap(true,Ordering::AcqRel)
@@ -107,7 +107,7 @@ pub fn snapshot()->Option<Snapshot>{None}
 const LOG_LIMIT:u64=512*1024;
 fn append(directory:&Path,line:&str)->std::io::Result<()> {append_rotating(directory,"resources",LOG_LIMIT,line)}
 
-/// 追加到 `<name>.log`，超过上限时整份滚动为 `<name>.previous.log`，两份合计不超过 2 倍上限。
+/// 追加到 `<name>.log`，超過上限時整份滾動為 `<name>.previous.log`，兩份合計不超過 2 倍上限。
 fn append_rotating(directory:&Path,name:&str,limit:u64,line:&str)->std::io::Result<()> {
     use std::io::Write;
     if line.len()as u64>limit{return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput,"resource record too large"));}
@@ -121,7 +121,7 @@ fn append_rotating(directory:&Path,name:&str,limit:u64,line:&str)->std::io::Resu
     std::fs::OpenOptions::new().create(true).append(true).open(path)?.write_all(line.as_bytes())
 }
 
-/// 功能诊断日志（如歌词查找过程）：每份最多 256KB，写入失败不影响功能。
+/// 功能診斷日誌（如歌詞查詢過程）：每份最多 256KB，寫入失敗不影響功能。
 pub fn append_log(directory:&Path,file:&str,line:&str){
     let name=file.strip_suffix(".log").unwrap_or(file);
     let mut line:String=line.trim_end().chars().take(2048).collect();line.push('\n');
@@ -140,14 +140,14 @@ fn record(value:Snapshot)->String {
     line.push('\n');line
 }
 
-/// 持有期间每 30 秒采样；销毁后唤醒退出，不让界面等待后台线程。
+/// 持有期間每 30 秒取樣；銷燬後喚醒退出，不讓介面等待後臺執行緒。
 pub struct Monitor { _stop:std::sync::mpsc::Sender<()> }
 impl Monitor {
     pub fn start(directory:PathBuf)->Option<Self>{
         let (stop,rx)=std::sync::mpsc::channel();
         MONITOR.spawn(move||{
             loop {
-                // 正常时 30 秒采样一次；一旦异常改为 5 秒，尽早熔断，避免像线程每秒暴涨时那样拖到几十 GB。
+                // 正常時 30 秒取樣一次；一旦異常改為 5 秒，儘早熔斷，避免像執行緒每秒暴漲時那樣拖到幾十 GB。
                 let mut interval=Duration::from_secs(30);
                 if let Some(value)=snapshot(){
                     let line=record(value);
@@ -219,12 +219,12 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn sampling_does_not_leak_snapshot_handles(){
-        // 句柄数是整个测试进程的，并行的其他测试也会开关线程和连接；取三轮中增长最小的一轮判断。
-        // 真正的泄漏每次采样至少多一个句柄，100 次采样会多出上百个，三轮都会超标。
+        // 控制代碼數是整個測試程序的，並行的其他測試也會開關執行緒和連線；取三輪中增長最小的一輪判斷。
+        // 真正的洩漏每次取樣至少多一個控制代碼，100 次取樣會多出上百個，三輪都會超標。
         let growth=(0..3).map(|_|{
             let before=snapshot().unwrap();for _ in 0..100{let sample=snapshot().unwrap();assert!(sample.threads>0 && sample.private_bytes>0);}
             snapshot().unwrap().handles.saturating_sub(before.handles)
         }).min().unwrap();
-        assert!(growth<=8,"取樣 100 次後控制代碼增長 {growth} 個");
+        assert!(growth<=8,"取樣 100 次後控制程式碼增長 {growth} 個");
     }
 }

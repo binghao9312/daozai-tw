@@ -1,32 +1,32 @@
-//! OpenGL 初始化失败时使用独立的图形后端。
+//! OpenGL 初始化失敗時使用獨立的圖形後端。
 //!
-//! 典型场景：笔记本接扩展坞 / DisplayLink 外接屏、远程桌面、显卡驱动缺失时，窗口所在的显示设备
-//! 只有 Windows 自带的 OpenGL 1.1（GDI Generic），egui_glow 报「requires OpenGL 2.0+」。
-//! 这时改用 Direct3D 12 重新启动，不需要用户拔扩展坞。
+//! 典型場景：筆記本接擴充套件塢 / DisplayLink 外接屏、遠端桌面、顯示卡驅動缺失時，視窗所在的顯示裝置
+//! 只有 Windows 自帶的 OpenGL 1.1（GDI Generic），egui_glow 報「requires OpenGL 2.0+」。
+//! 這時改用 Direct3D 12 重新啟動，不需要使用者拔擴充套件塢。
 
-/// 兼容图形后端（低功耗显卡优先）：指定 Direct3D 12 或 Vulkan。
+/// 相容圖形後端（低功耗顯示卡優先）：指定 Direct3D 12 或 Vulkan。
 fn compatible(mut options:eframe::NativeOptions,backends:eframe::wgpu::Backends)->eframe::NativeOptions {
     options.renderer=eframe::Renderer::Wgpu;
     if let eframe::egui_wgpu::WgpuSetup::CreateNew(setup)=&mut options.wgpu_options.wgpu_setup {
         setup.instance_descriptor.backends=backends;
         setup.power_preference=eframe::wgpu::PowerPreference::LowPower;
-        // 默认的 Performance 让 DX12 分配器按 256MB 显存块 + 64MB 上传块预留。核显没有独立显存，
-        // 这些都算进岛仔进程内存（实测 60MB → 530MB）。岛仔的纹理只有几 MB，按小块分配即可。
+        // 預設的 Performance 讓 DX12 分配器按 256MB 視訊記憶體塊 + 64MB 上傳塊預留。核顯沒有獨立視訊記憶體，
+        // 這些都算進島仔程序記憶體（實測 60MB → 530MB）。島仔的紋理只有幾 MB，按小塊分配即可。
         let base=setup.device_descriptor.clone();
         setup.device_descriptor=std::sync::Arc::new(move|adapter|small_memory_blocks(base(adapter)));
     }
     options
 }
-/// 岛仔同时存在的纹理只有几十张。DX12 会按绑定上限预建整张描述符表：
-/// 默认 100 万项约 61MB，65536 项约 4MB，仍有上千倍余量。
+/// 島仔同時存在的紋理只有幾十張。DX12 會按繫結上限預建整張描述符表：
+/// 預設 100 萬項約 61MB，65536 項約 4MB，仍有上千倍餘量。
 const MAX_BINDINGS:u32=65_536;
 fn small_memory_blocks(descriptor:eframe::wgpu::DeviceDescriptor<'static>)->eframe::wgpu::DeviceDescriptor<'static>{
     let required_limits=eframe::wgpu::Limits{max_non_sampler_bindings:MAX_BINDINGS,..descriptor.required_limits.clone()};
     eframe::wgpu::DeviceDescriptor{memory_hints:eframe::wgpu::MemoryHints::MemoryUsage,required_limits,..descriptor}
 }
 
-/// 兼容渲染优先用 Direct3D 12（Windows 原生、睡眠唤醒与换屏处理最稳）；
-/// 设备不支持时再退到 Vulkan。两者都不经过显卡的 OpenGL 驱动。
+/// 相容渲染優先用 Direct3D 12（Windows 原生、睡眠喚醒與換屏處理最穩）；
+/// 裝置不支援時再退到 Vulkan。兩者都不經過顯示卡的 OpenGL 驅動。
 fn launch_compatible(options:eframe::NativeOptions,launch:&mut impl FnMut(eframe::NativeOptions)->eframe::Result<()>)->eframe::Result<()> {
     match launch(compatible(options.clone(),eframe::wgpu::Backends::DX12)) {
         Err(eframe::Error::Wgpu(_))=>launch(compatible(options,eframe::wgpu::Backends::VULKAN)),
@@ -34,14 +34,14 @@ fn launch_compatible(options:eframe::NativeOptions,launch:&mut impl FnMut(eframe
     }
 }
 
-/// 验收与排障：设置环境变量 `DAOZAI_RENDERER=wgpu` 直接使用兼容图形后端，
-/// 在正常电脑上也能检查 OpenGL 失败后用户会看到的画面。
+/// 驗收與排障：設定環境變數 `DAOZAI_RENDERER=wgpu` 直接使用相容圖形後端，
+/// 在正常電腦上也能檢查 OpenGL 失敗後使用者會看到的畫面。
 fn forced_compatible()->bool {
     std::env::var("DAOZAI_RENDERER").is_ok_and(|value|value.trim().eq_ignore_ascii_case("wgpu"))
 }
 
 pub fn run(options:eframe::NativeOptions,launch:impl FnMut(eframe::NativeOptions)->eframe::Result<()>)->eframe::Result<()> {
-    // 上次崩在显卡 OpenGL 驱动里时，崩溃处理留下的标记会在这里转成设置。
+    // 上次崩在顯示卡 OpenGL 驅動裡時，崩潰處理留下的標記會在這裡轉成設定。
     let _=daozai::renderer::apply_pending_fallback();
     run_with(forced_compatible() || daozai::renderer::compat_requested(),options,launch)
 }
@@ -50,8 +50,8 @@ fn opengl(mut options:eframe::NativeOptions)->eframe::NativeOptions { options.re
 
 fn run_with(compat_first:bool,options:eframe::NativeOptions,mut launch:impl FnMut(eframe::NativeOptions)->eframe::Result<()>)->eframe::Result<()> {
     if compat_first {
-        // 兼容渲染是被要求的（设置、崩溃标记或环境变量），但这台电脑可能根本没有 DX12 / Vulkan 设备
-        // （远程桌面、虚拟机、只有基本显示适配器、老显卡）。这时退回 OpenGL，不让用户每次都打不开。
+        // 相容渲染是被要求的（設定、崩潰標記或環境變數），但這臺電腦可能根本沒有 DX12 / Vulkan 裝置
+        // （遠端桌面、虛擬機器、只有基本顯示介面卡、老顯示卡）。這時退回 OpenGL，不讓使用者每次都打不開。
         daozai::renderer::set_compat_active(true);
         let error=match launch_compatible(options.clone(),&mut launch) {
             Err(error @ eframe::Error::Wgpu(_))=>error,
@@ -112,7 +112,7 @@ mod tests {
     fn compatible_rendering_uses_small_gpu_memory_blocks(){
         let base=eframe::wgpu::DeviceDescriptor{label:Some("egui wgpu device"),required_limits:eframe::wgpu::Limits{max_texture_dimension_2d:8192,..Default::default()},..Default::default()};
         let descriptor=small_memory_blocks(base);
-        assert!(matches!(descriptor.memory_hints,eframe::wgpu::MemoryHints::MemoryUsage),"核顯上預設分塊會讓程序多佔約 300MB");
+        assert!(matches!(descriptor.memory_hints,eframe::wgpu::MemoryHints::MemoryUsage),"核顯上預設分塊會讓程式多佔約 300MB");
         assert_eq!(descriptor.required_limits.max_texture_dimension_2d,8192,"保留 egui 的其他裝置要求");
         assert_eq!(descriptor.required_limits.max_non_sampler_bindings,MAX_BINDINGS,"預設 100 萬項的描述符表會多佔約 61MB");
     }

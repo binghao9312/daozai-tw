@@ -1,4 +1,4 @@
-//! 只读 Claude 本地用量；不解密登录令牌，不请求远程接口。
+//! 只讀 Claude 本地用量；不解密登入令牌，不請求遠端介面。
 use super::{Account,Snapshot,Window};
 use ring::digest;
 use serde_json::{json,Value};
@@ -32,7 +32,7 @@ fn read_json(path:&Path)->Result<Value,String>{
 }
 fn slot(owner:&str,org:&str)->String{digest::digest(&digest::SHA256,format!("{owner}|{org}").as_bytes()).as_ref().iter().map(|b|format!("{b:02x}")).collect()}
 fn desktop_identity(path:&Path)->Result<(String,i64),String>{
-    // 只反序列化账号标识，忽略同文件中的加密登录缓存。
+    // 只反序列化帳號標識，忽略同檔案中的加密登入快取。
     #[derive(serde::Deserialize)]
     struct Identity {#[serde(rename="lastKnownAccountUuid")] owner:String}
     use std::io::Read;
@@ -68,7 +68,7 @@ fn desktop_record(path:&Path,account:Option<&Account>,verified_cache:&Path)->Res
             snapshot.windows.push(Window{label:label.into(),seconds:Some(seconds),remaining:(100.0-used) as f32,reset:None,amount:None});
         }
     }
-    // 历史和浏览器缓存均按组织保存。账号配置较新时，只能回显岛仔已为该账号核验过的快照。
+    // 歷史和瀏覽器快取均按組織儲存。帳號配置較新時，只能回顯島仔已為該帳號核驗過的快照。
     if let Some(cached)=desktop_cache::read(&path.with_file_name("Cache").join("Cache_Data"),org,snapshot.at,now/1000)
         .filter(|s|s.at*1000>login_stamp){
         snapshot=cached;
@@ -170,7 +170,7 @@ mod tests {
         let saved=account(path.clone(),profiles(&path).unwrap().remove(0).slot);let before=fetch(&saved).unwrap();
         let cache=dir.join("verified.json");
         fs::write(&cache,json!({&saved.id:{"provider":"Claude","slot":saved.slot,"source":saved.source,"local_identity_checked":saved.cache_identity_marker(),"snapshot":before}}).to_string()).unwrap();
-        // 退出只保存窗口状态，账号标识没有变化。
+        // 退出只儲存視窗狀態，帳號標識沒有變化。
         fs::write(&path,json!({"lastKnownAccountUuid":"owner","windowBounds":{"width":1200}}).to_string()).unwrap();
         let (_,after)=desktop_record(&path,Some(&saved),&cache).expect("已繫結帳號退出後仍應顯示自己的歷史記錄");assert_eq!((after.at,&after.windows),(before.at,&before.windows));assert_eq!(fs::read_to_string(dir.join(HISTORY)).unwrap(),history);
         let (_,restored)=desktop_record(&path,Some(&saved.clone()),&cache).unwrap();assert_eq!((restored.at,&restored.windows),(before.at,&before.windows),"島仔重新啟動後也應保留歷史額度");

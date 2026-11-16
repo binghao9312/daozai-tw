@@ -1,4 +1,4 @@
-//! 岛内本机日程表单。
+//! 島內本機日程表單。
 use crate::{app::{App,Cmd,CALENDAR_PAGE},local_calendar::{self,Draft},paint::{self,Card,H},theme::{self,W}};
 use eframe::egui::{self,Color32};
 
@@ -31,14 +31,14 @@ impl App {
         })();
         if let Err(error)=result{draft.error=error;self.calendar.draft=Some(draft);}
     }
-    /// 导入 .ics 文件到本机日程：过去 30 天到未来一年，重复日程展开；同一日程再次导入会跳过。
+    /// 匯入 .ics 檔案到本機日程：過去 30 天到未來一年，重複日程展開；同一日程再次匯入會跳過。
     pub fn import_ics(&mut self,files:&[(String,String)])->String{
         if !self.calendar.local_error.is_empty(){return self.calendar.local_error.clone();}
         let now=chrono::Utc::now();
         let (lo,hi)=(now-chrono::Duration::days(30),now+chrono::Duration::days(366));
         let mut entries=self.calendar.local.clone();
         let mut known:std::collections::HashSet<_>=entries.iter().map(|entry|entry.event.uid.clone()).collect();
-        // 兼容旧版本对缺少 UID 的日程生成的标识，重新导入时保留已有本机记录。
+        // 相容舊版本對缺少 UID 的日程生成的標識，重新匯入時保留已有本機記錄。
         for entry in &entries{if entry.event.uid==format!("ics--{}",entry.event.start){known.insert(fallback_ics_uid(&entry.event));}}
         let (mut added,mut duplicates,mut capacity,mut errors)=(0usize,0usize,0usize,Vec::new());
         let mut report=crate::calendar::ReadReport::default();

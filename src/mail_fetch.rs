@@ -1,4 +1,4 @@
-//! 按 MIME 结构获取正文和日程，避免把图片、压缩包等附件下载到常驻进程。
+//! 按 MIME 結構獲取正文和日程，避免把圖片、壓縮包等附件下載到常駐程序。
 use super::{Account,Item,Parsed,parse_message,body_of,code_of,links_of,meeting_of};
 use imap_proto::{BodyStructure,MessageSection,SectionPath};
 use std::io::{Read,Write};
@@ -27,12 +27,12 @@ fn make_item(parsed:Parsed,fetch:&imap::types::Fetch,account:&Account)->Item{
         code:code_of(&parsed),summary:body_of(&parsed).into(),html:parsed.html.clone().into(),links:links_of(&parsed),meeting:meeting_of(&parsed.calendar),uid:fetch.uid.unwrap_or(0)}
 }
 
-/// 服务器明确拒绝了这条命令（NO / BAD）：连接仍然同步，可以换一种方式读这封信。
-/// 其他错误（超时、解析失败、连接中断）说明响应没读完，这条连接已经不能再用，
-/// 必须交给上层断开重连；继续发命令会读到上一条命令残留的响应。
+/// 伺服器明確拒絕了這條命令（NO / BAD）：連線仍然同步，可以換一種方式讀這封信。
+/// 其他錯誤（超時、解析失敗、連線中斷）說明響應沒讀完，這條連線已經不能再用，
+/// 必須交給上層斷開重連；繼續發命令會讀到上一條命令殘留的響應。
 fn rejected(error:&imap::Error)->bool{matches!(error,imap::Error::No(_)|imap::Error::Bad(_))}
 
-// 部分旧服务器没有 BODYSTRUCTURE 或 MIME 分段支持，继续使用原有完整读取路径。
+// 部分舊伺服器沒有 BODYSTRUCTURE 或 MIME 分段支援，繼續使用原有完整讀取路徑。
 fn legacy<S:Read+Write>(session:&mut imap::Session<S>,uid:u32,account:&Account)->Result<Option<Item>,()>{
     let fetched=match session.uid_fetch(uid.to_string(),"(UID INTERNALDATE BODY.PEEK[HEADER] BODY.PEEK[TEXT])"){
         Ok(fetched)=>fetched,Err(error) if rejected(&error)=>return Ok(None),Err(_)=>return Err(()),
@@ -101,7 +101,7 @@ mod tests {
     fn account()->Account{Account {custom: None, email:"test@example.com".into(),provider:super::super::Provider::Qq,enabled:true}}
     #[test]
     fn out_of_sync_response_reports_an_error_instead_of_crashing(){
-        // 用户崩溃日志：vendor\imap\src\client.rs:1369 的标签断言。a2 的位置收到上一条命令迟到的 a1 结束行。
+        // 使用者崩潰日誌：vendor\imap\src\client.rs:1369 的標籤斷言。a2 的位置收到上一條命令遲到的 a1 結束行。
         let (mut session,output)=wire("a1 OK late\r\n* 1 FETCH (UID 42 BODY[HEADER] {9}\r\nSubject:\n)\r\na2 OK fetch\r\n");
         assert!(item(&mut session,42,&account()).is_err(),"錯位的連線應交給上層重連");
         let commands=String::from_utf8(output.lock().unwrap().clone()).unwrap();

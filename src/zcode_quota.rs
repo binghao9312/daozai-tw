@@ -11,7 +11,7 @@ const CREDENTIAL_ERROR:&str="無法讀取當前 Windows 使用者的 ZCode 登�
 fn hash(bytes:&[u8])->String{digest::digest(&digest::SHA256,bytes).as_ref().iter().map(|b|format!("{b:02x}")).collect()}
 #[cfg(windows)]
 fn system_key(path:&Path)->Result<Vec<u8>,String>{
-    // ZCode 按绝对路径的 SHA-256 定位系统密钥，不解析符号链接或改变路径大小写。
+    // ZCode 按絕對路徑的 SHA-256 定位系統金鑰，不解析符號連結或改變路徑大小寫。
     let path=std::path::absolute(path).map_err(|_|CREDENTIAL_ERROR)?;
     let path=path.to_str().ok_or(CREDENTIAL_ERROR)?.replace('/',"\\");
     let path=if let Some(unc)=path.strip_prefix("\\\\?\\UNC\\"){format!("\\\\{unc}")}else{path.strip_prefix("\\\\?\\").unwrap_or(&path).to_owned()};
@@ -66,7 +66,7 @@ fn login(root:&Value,path:&Path)->Result<Login,String>{
     let payload=jwt.split('.').nth(1).and_then(|s|URL_SAFE_NO_PAD.decode(s).ok()).and_then(|s|serde_json::from_slice::<Value>(&s).ok()).ok_or("ZCode 帳號標識無效")?;
     let id=payload["sub"].as_str().or_else(||payload["user_id"].as_str()).ok_or("ZCode 未返回帳號標識")?;
     let slot=hash(format!("{family}/{id}").as_bytes());
-    // 国内新登录的套餐身份来自显式关联，ZCode JWT 的主体只用于识别本机账号。
+    // 國內新登入的套餐身份來自顯式關聯，ZCode JWT 的主體只用於識別本機帳號。
     let coding_subject=if provider=="zai_cn"{
         if root.get("oauth:linked_bigmodel").is_some(){
             let linked:Value=serde_json::from_str(&value(root,"oauth:linked_bigmodel",path)?).map_err(|_|"ZCode 關聯的 BigModel 帳號訊息無效")?;
@@ -135,7 +135,7 @@ pub(super) fn fetch(agent:&ureq::Agent,a:&Account)->Result<Snapshot,String>{
         no_coding_plan=true;
     }
     let mut url=url::Url::parse("https://zcode.z.ai/api/v1/zcode-plan/billing/balance").unwrap();
-    // 客户端按版本发布运行时，官网使用 app_version 判断体验套餐能力。
+    // 客戶端按版本釋出執行時，官網使用 app_version 判斷體驗套餐能力。
     if let Some(runtime)=a.source.parent().map(|p|p.join("runtime/provider/windows-x86_64")){
         let versions=std::fs::read_dir(runtime).into_iter().flatten().flatten().filter_map(|dir|{
             let name=dir.file_name().into_string().ok()?;
@@ -243,7 +243,7 @@ mod tests{
         assert_eq!(&config.accounts[..2],before.accounts.as_slice());assert_eq!(config.selected,before.selected);assert_eq!(config.accounts.len(),3);
         assert_eq!(std::fs::read_to_string(&path).unwrap(),raw);assert_eq!(cleanup.1.get_password().unwrap(),encoded);
         assert_eq!(system_key(Path::new(&path.to_string_lossy().replace('\\',"/"))).unwrap(),key);
-        // 只添加 Windows 扩展路径前缀，保留 ZCode 计算凭据标识时使用的短目录名。
+        // 只新增 Windows 擴充套件路徑字首，保留 ZCode 計算憑據標識時使用的短目錄名。
         let spelling=path.to_str().unwrap();
         let extended=if let Some(unc)=spelling.strip_prefix(r"\\"){format!(r"\\?\UNC\{unc}")}else{format!(r"\\?\{spelling}")};
         assert_eq!(system_key(Path::new(&extended)).unwrap(),key);

@@ -1,13 +1,13 @@
-//! Windows 的非激活窗口、形状区域与命中测试。
+//! Windows 的非啟用視窗、形狀區域與命中測試。
 //!
-//! 对齐原版实测（`BUILD-ORDER-v1.md` §1/§5）：
+//! 對齊原版實測（`BUILD-ORDER-v1.md` §1/§5）：
 //! - `WS_POPUP` + `WS_EX_TOPMOST|TOOLWINDOW|NOREDIRECTIONBITMAP|NOACTIVATE`；
-//! - `SetWindowRgn` 用三种矩形：收起 179×34@(230,0)、展开 512×186@(64,0)、
-//!   极简收起 112×14@(264,0)，坐标是 640×190 逻辑点；
-//! - 命中区与 region 分开：收起 143×22@(253,5)、展开 416×132@(110,5)，
-//!   命中区外 `HTTRANSPARENT`，真实点击落给下层窗口；
-//! - 前台窗口切走（`EVENT_SYSTEM_FOREGROUND`，且不是本进程）时通知主线程收起；
-//! - 原版没有可用的 Esc 收起入口（§2.5），这里也不注册键盘钩子。
+//! - `SetWindowRgn` 用三種矩形：收起 179×34@(230,0)、展開 512×186@(64,0)、
+//!   極簡收起 112×14@(264,0)，座標是 640×190 邏輯點；
+//! - 命中區與 region 分開：收起 143×22@(253,5)、展開 416×132@(110,5)，
+//!   命中區外 `HTTRANSPARENT`，真實點選落給下層視窗；
+//! - 前臺視窗切走（`EVENT_SYSTEM_FOREGROUND`，且不是本程序）時通知主執行緒收起；
+//! - 原版沒有可用的 Esc 收起入口（§2.5），這裡也不註冊鍵盤鉤子。
 
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -26,14 +26,14 @@ const SUBCLASS_ID: usize = 0x4E55_5341; // "DAOZAI"
 #[allow(dead_code)]
 const WS_EX_NOREDIRECTIONBITMAP: isize = 0x0020_0000;
 
-/// 命中区（物理像素，窗口坐标，left/top/right/bottom）。
+/// 命中區（物理畫素，視窗座標，left/top/right/bottom）。
 static HIT: OnceLock<Mutex<Vec<(i32, i32, i32, i32)>>> = OnceLock::new();
-/// 前台窗口切到别的进程时置位，由主线程消费。
+/// 前臺視窗切到別的程序時置位，由主執行緒消費。
 static FG_CHANGED: AtomicBool = AtomicBool::new(false);
 
-// `WS_EX_NOREDIRECTIONBITMAP` 只能在 CreateWindowEx 时设置（运行时 SetWindowLongPtrW
-// 会回 ERROR_INVALID_PARAMETER），本项目用 GL 合成窗口，加上这一位后画面上什么都
-// 看不到，因此不使用；具体见 `apply_style` 注释与交付说明。
+// `WS_EX_NOREDIRECTIONBITMAP` 只能在 CreateWindowEx 時設定（執行時 SetWindowLongPtrW
+// 會回 ERROR_INVALID_PARAMETER），本專案用 GL 合成視窗，加上這一位後畫面上什麼都
+// 看不到，因此不使用；具體見 `apply_style` 註釋與交付說明。
 
 fn hit() -> &'static Mutex<Vec<(i32, i32, i32, i32)>> {
     HIT.get_or_init(|| Mutex::new(Vec::new()))
@@ -65,16 +65,16 @@ impl DragCapture {
         let inside=|(x,y):(i32,i32)|zone.is_some_and(|(l,t,r,b)|x>=l && x<r && y>=t && y<b);
         let origin=*self.origin.get_or_insert(cursor);
         self.moved|=(cursor.0-origin.0).abs()>threshold.0 || (cursor.1-origin.1).abs()>threshold.1;
-        // 只接收从感应区外拖进来的文件：在岛下方的标签栏里按下（含连续点击、拖标签、选文字）
-        // 不能扩大窗口区域，否则 HTTRANSPARENT 拦不住跨进程点击，下层窗口会点不动。
+        // 只接收從感應區外拖進來的檔案：在島下方的標籤欄裡按下（含連續點選、拖標籤、選文字）
+        // 不能擴大視窗區域，否則 HTTRANSPARENT 攔不住跨程序點選，下層視窗會點不動。
         self.moved && !inside(origin) && inside(cursor)
     }
 }
 
-/// 拖文件进岛：拖放感应区只在每帧的 `update` 里检查，而岛静止时（没有吉祥物动画、
-/// 没有播放音乐，例如侧边停靠）一秒才画一帧，拖到岛上往往来不及扩大接收区域。
-/// 这里用一个几乎不占资源的小线程：每 80 ms 看一次鼠标键，只有按住且光标在岛的画布内时
-/// 才请求重绘，让感应区及时生效；平时不触发任何绘制。
+/// 拖檔案進島：拖放感應區只在每幀的 `update` 裡檢查，而島靜止時（沒有吉祥物動畫、
+/// 沒有播放音樂，例如側邊停靠）一秒才畫一幀，拖到島上往往來不及擴大接收區域。
+/// 這裡用一個幾乎不佔資源的小執行緒：每 80 ms 看一次滑鼠鍵，只有按住且游標在島的畫布內時
+/// 才請求重繪，讓感應區及時生效；平時不觸發任何繪製。
 fn watch_drag(hwnd:HWND,ctx:eframe::egui::Context){
     let raw=hwnd.0 as isize;
     let mut was_down=false;
@@ -84,7 +84,7 @@ fn watch_drag(hwnd:HWND,ctx:eframe::egui::Context){
             let hwnd=HWND(raw as *mut _);
             if !IsWindow(hwnd).as_bool(){return;}
             let down=GetAsyncKeyState(VK_LBUTTON.0 as i32)<0 || GetAsyncKeyState(VK_RBUTTON.0 as i32)<0;
-            // 松开后补一帧，让拖放状态及时复位；否则静止时一秒才画一帧，连续点击会沿用上次的按下位置。
+            // 鬆開後補一幀，讓拖放狀態及時復位；否則靜止時一秒才畫一幀，連續點選會沿用上次的按下位置。
             if was_down && !down {ctx.request_repaint();}
             was_down=down;
             if !down {continue;}
@@ -95,7 +95,7 @@ fn watch_drag(hwnd:HWND,ctx:eframe::egui::Context){
     });
 }
 
-// 图形上下文和原生样式就绪后重新启用逐像素合成；不能只依赖创建 HWND 时的请求。
+// 圖形上下文和原生樣式就緒後重新啟用逐畫素合成；不能只依賴建立 HWND 時的請求。
 fn enable_alpha_composition(hwnd:HWND)->windows::core::Result<()> {
     use windows::Win32::Graphics::Dwm::{DwmEnableBlurBehindWindow,DWM_BLURBEHIND,DWM_BB_ENABLE,DWM_BB_BLURREGION};
     unsafe {
@@ -108,11 +108,11 @@ fn enable_alpha_composition(hwnd:HWND)->windows::core::Result<()> {
     }
 }
 
-// ---------- 毛玻璃：窗口区域 ----------
+// ---------- 毛玻璃：視窗區域 ----------
 //
-// 兼容后端（无逐像素透明）按轮廓裁剪窗口区域；毛玻璃的实时模糊见 `composition.rs`。
+// 相容後端（無逐畫素透明）按輪廓裁剪視窗區域；毛玻璃的實時模糊見 `composition.rs`。
 
-/// Windows「透明效果」开关；读不到时返回 None。
+/// Windows「透明效果」開關；讀不到時返回 None。
 fn system_transparency() -> Option<bool> {
     use windows::{core::w, Win32::System::Registry::*};
     let mut value = 1u32; let mut size = 4u32;
@@ -120,9 +120,9 @@ fn system_transparency() -> Option<bool> {
     ok.then_some(value != 0)
 }
 
-/// 是否使用合成引擎的实时模糊。系统「透明效果」关闭时宿主背景画刷只会画出一块纯色，
-/// 却仍要合成器为这扇窗口持续工作；部分核显旧驱动在这种状态下会整机闪屏卡死，因此直接不用，
-/// 由岛体自己画半透明底色。注册表每 2 秒最多读一次；状态变化时写一条诊断。
+/// 是否使用合成引擎的實時模糊。系統「透明效果」關閉時宿主背景畫刷只會畫出一塊純色，
+/// 卻仍要合成器為這扇視窗持續工作；部分核顯舊驅動在這種狀態下會整機閃屏卡死，因此直接不用，
+/// 由島體自己畫半透明底色。登錄檔每 2 秒最多讀一次；狀態變化時寫一條診斷。
 fn compositor_blur_allowed() -> bool {
     use std::cell::Cell;
     thread_local! { static CACHE: Cell<(Option<std::time::Instant>, Option<bool>)> = const { Cell::new((None, None)) }; }
@@ -138,7 +138,7 @@ fn compositor_blur_allowed() -> bool {
     })
 }
 
-/// 毛玻璃诊断：写到数据目录的 glass-diagnostics.txt（只记录状态变化，不会持续增长）。
+/// 毛玻璃診斷：寫到資料目錄的 glass-diagnostics.txt（只記錄狀態變化，不會持續增長）。
 fn glass_diagnostic(message: &str) {
     use std::io::Write;
     let path = crate::model::config_dir().join("glass-diagnostics.txt");
@@ -151,7 +151,7 @@ fn glass_diagnostic(message: &str) {
     }
 }
 
-/// 把逻辑坐标的轮廓换算成物理像素，作为去重的键和区域的输入。
+/// 把邏輯座標的輪廓換算成物理畫素，作為去重的鍵和區域的輸入。
 fn glass_key(shapes: &[crate::app::GlassShape], ppp: f32) -> Vec<i32> {
     use crate::app::GlassShape;
     let px = |v: f32| (v * ppp).round() as i32;
@@ -172,7 +172,7 @@ fn glass_key(shapes: &[crate::app::GlassShape], ppp: f32) -> Vec<i32> {
     key
 }
 
-/// 按 `glass_key` 的结果合成窗口区域（多块轮廓取并集）。
+/// 按 `glass_key` 的結果合成視窗區域（多塊輪廓取並集）。
 unsafe fn glass_region(key: &[i32]) -> Option<HRGN> {
     let mut out: Option<HRGN> = None;
     let mut i = 0;
@@ -203,7 +203,7 @@ unsafe fn glass_region(key: &[i32]) -> Option<HRGN> {
     out
 }
 
-/// 命中区外 `HTTRANSPARENT`（鼠标投给下层窗口），命中区内 `HTCLIENT`。
+/// 命中區外 `HTTRANSPARENT`（滑鼠投給下層視窗），命中區內 `HTCLIENT`。
 unsafe extern "system" fn subclass(
     hwnd: HWND,
     msg: u32,
@@ -214,12 +214,12 @@ unsafe extern "system" fn subclass(
 ) -> LRESULT {
     if matches!(msg,WM_DWMCOMPOSITIONCHANGED|WM_DISPLAYCHANGE|WM_DWMCOLORIZATIONCOLORCHANGED)
         || (msg==WM_SHOWWINDOW && wp.0!=0) {
-        // 隐藏创建到首次显示、隐藏后恢复时也要恢复透明；等框架处理完窗口状态再应用。
+        // 隱藏建立到首次顯示、隱藏後恢復時也要恢復透明；等框架處理完視窗狀態再應用。
         let result=DefSubclassProc(hwnd,msg,wp,lp);
         let _=enable_alpha_composition(hwnd);
         return result;
     }
-    // 保留框架的焦点通知；lParam=-1 禁止系统在激活时重画透明窗口的顶边。
+    // 保留框架的焦點通知；lParam=-1 禁止系統在啟用時重畫透明視窗的頂邊。
     if msg==WM_NCACTIVATE {return DefSubclassProc(hwnd,msg,wp,LPARAM(-1));}
     if msg==WM_NCPAINT {return LRESULT(0);}
     if msg == WM_MOUSEACTIVATE
@@ -258,18 +258,18 @@ unsafe extern "system" fn on_foreground(
     }
     let mut pid = 0u32;
     let _ = GetWindowThreadProcessId(hwnd, Some(&mut pid));
-    // 自己（含托盘窗口）拿到前台不算「切走」
+    // 自己（含系統匣視窗）拿到前臺不算「切走」
     if pid != 0 && pid != GetCurrentProcessId() {
         FG_CHANGED.store(true, Ordering::Relaxed);
     }
 }
 
-/// 主线程每帧调用一次：这一帧是否发生了「前台切到别的程序」。
+/// 主執行緒每幀呼叫一次：這一幀是否發生了「前臺切到別的程式」。
 pub fn take_foreground_change() -> bool {
     FG_CHANGED.swap(false, Ordering::Relaxed)
 }
 
-/// winit 会在显示/改属性时重写窗口样式，所以每帧按需兜一次底。
+/// winit 會在顯示/改屬性時重寫視窗樣式，所以每幀按需兜一次底。
 unsafe fn apply_style(hwnd: HWND, editing: bool, raise: bool) {
     let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
     let want = (style | WS_POPUP.0 as isize)
@@ -281,13 +281,13 @@ unsafe fn apply_style(hwnd: HWND, editing: bool, raise: bool) {
         frame_changed = true;
     }
     let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
-    // 冻结单要求 0x08200088（含 WS_EX_NOREDIRECTIONBITMAP）。该位只能在
-    // CreateWindowEx 时设置，运行时 SetWindowLongPtrW 会回 ERROR_INVALID_PARAMETER；
-    // 而给 GL/窗口渲染的 HWND 加上它之后画面完全不被合成（实测可见像素为 0）。
-    // 因此这里只保留可用的 TOPMOST|TOOLWINDOW|NOACTIVATE，去掉会露在任务栏的
-    // APPWINDOW；ACCEPTFILES（winit 默认）也去掉，拖放走的是 OLE RegisterDragDrop，
-    // 不依赖 WM_DROPFILES，这样 ex style 就是 0x08000088。
-    // 置顶由 SetWindowPos 管理，避免样式标记与实际窗口层级脱节。
+    // 凍結單要求 0x08200088（含 WS_EX_NOREDIRECTIONBITMAP）。該位只能在
+    // CreateWindowEx 時設定，執行時 SetWindowLongPtrW 會回 ERROR_INVALID_PARAMETER；
+    // 而給 GL/視窗渲染的 HWND 加上它之後畫面完全不被合成（實測可見畫素為 0）。
+    // 因此這裡只保留可用的 TOPMOST|TOOLWINDOW|NOACTIVATE，去掉會露在工作列的
+    // APPWINDOW；ACCEPTFILES（winit 預設）也去掉，拖放走的是 OLE RegisterDragDrop，
+    // 不依賴 WM_DROPFILES，這樣 ex style 就是 0x08000088。
+    // 置頂由 SetWindowPos 管理，避免樣式標記與實際視窗層級脫節。
     let mut want_ex = (ex | WS_EX_TOOLWINDOW.0 as isize)
         & !(WS_EX_APPWINDOW.0 as isize)
         & !(WS_EX_ACCEPTFILES.0 as isize);
@@ -301,10 +301,10 @@ unsafe fn apply_style(hwnd: HWND, editing: bool, raise: bool) {
     }
     let topmost = ex & WS_EX_TOPMOST.0 as isize != 0;
     if frame_changed || !topmost || raise {
-        // 只有真的 SetWindowPos(HWND_TOPMOST) 才会让 TOPMOST 位生效
-        // 每次展开重新抬高实际层级；标记存在时仍可能被别的窗口盖住。
+        // 只有真的 SetWindowPos(HWND_TOPMOST) 才會讓 TOPMOST 位生效
+        // 每次展開重新抬高實際層級；標記存在時仍可能被別的視窗蓋住。
         let mut flags=SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE;
-        // 输入状态只切换激活权限，避免重画无边框窗口的非客户区。
+        // 輸入狀態只切換啟用許可權，避免重畫無邊框視窗的非客戶區。
         if frame_changed {flags|=SWP_FRAMECHANGED;}
         let _ = SetWindowPos(
             hwnd,
@@ -318,10 +318,10 @@ unsafe fn apply_style(hwnd: HWND, editing: bool, raise: bool) {
     }
 }
 
-/// 这些渲染路径交给系统的画面可能没有可用的透明通道，透明画布会显示成黑框（#72：AMD RX 6750 GRE 等）。
-/// 但同为 AMD，也有不少机器逐像素透明完全正常（#152 RX 5600、#114 AMD 核显）。所以这里只决定
-/// 「不直接信任系统合成」：画面改由分层窗口逐像素显示（见 `present_frame`），两类机器都不会有黑框，
-/// 边缘也保持抗锯齿；不再像 v0.6.63–0.6.64 那样直接用二值的窗口区域硬裁剪（圆角、肩部全是台阶）。
+/// 這些渲染路徑交給系統的畫面可能沒有可用的透明通道，透明畫布會顯示成黑框（#72：AMD RX 6750 GRE 等）。
+/// 但同為 AMD，也有不少機器逐畫素透明完全正常（#152 RX 5600、#114 AMD 核顯）。所以這裡只決定
+/// 「不直接信任系統合成」：畫面改由分層視窗逐畫素顯示（見 `present_frame`），兩類機器都不會有黑框，
+/// 邊緣也保持抗鋸齒；不再像 v0.6.63–0.6.64 那樣直接用二值的視窗區域硬裁剪（圓角、肩部全是臺階）。
 fn surface_needs_outline_clip(backend:Option<eframe::wgpu::Backend>,vendor:&str,renderer:&str)->bool {
     use eframe::wgpu::Backend;
     if matches!(backend,Some(Backend::Dx12|Backend::Vulkan)){return true;}
@@ -332,7 +332,7 @@ fn surface_needs_outline_clip(backend:Option<eframe::wgpu::Backend>,vendor:&str,
     })
 }
 
-/// 只识别同屏顶部的宽条窗口，普通弹窗、全屏窗口和其他屏幕不触发抬高。
+/// 只識別同屏頂部的寬條視窗，普通彈窗、全屏視窗和其他螢幕不觸發抬高。
 unsafe fn top_bar_above(hwnd:HWND,bounds:crate::display_layout::Bounds)->bool {
     let mut island=RECT::default();
     if !IsWindowVisible(hwnd).as_bool() || GetWindowRect(hwnd,&mut island).is_err(){return false;}
@@ -353,18 +353,18 @@ unsafe fn top_bar_above(hwnd:HWND,bounds:crate::display_layout::Bounds)->bool {
     false
 }
 
-/// 兼容后端的分层窗口状态：先按轮廓裁剪，读回到带透明的画面后再切到分层窗口。
+/// 相容後端的分層視窗狀態：先按輪廓裁剪，讀回到帶透明的畫面後再切到分層視窗。
 #[derive(Default)]
 enum Layering {
-    /// 不需要（透明合成正常）或还没收到第一帧。
+    /// 不需要（透明合成正常）或還沒收到第一幀。
     #[default]
     Pending,
     Active(crate::layered::Layered),
-    /// 读不到 alpha 或系统拒绝：一直用轮廓裁剪。
+    /// 讀不到 alpha 或系統拒絕：一直用輪廓裁剪。
     Unavailable,
 }
 
-/// 本机验证分层显示的开关：None 不启用；Some(false) 按需要分层的显卡处理；Some(true) 另外假装读回的画面没有透明通道。
+/// 本機驗證分層顯示的開關：None 不啟用；Some(false) 按需要分層的顯示卡處理；Some(true) 另外假裝讀回的畫面沒有透明通道。
 fn outline_test()->Option<bool> {
     static VALUE:std::sync::OnceLock<Option<bool>>=std::sync::OnceLock::new();
     *VALUE.get_or_init(||match std::env::var("DAOZAI_OUTLINE_TEST").ok()?.trim().to_ascii_lowercase().as_str() {
@@ -382,20 +382,20 @@ pub struct Window {
     hook: HWINEVENTHOOK,
     browser_state: (Option<bool>,PollClock),
     drag_capture: DragCapture,
-    /// 当前生效的贴合轮廓（物理像素键）、毛玻璃的合成模糊层与其状态。
+    /// 當前生效的貼合輪廓（物理畫素鍵）、毛玻璃的合成模糊層與其狀態。
     glass: Option<Vec<i32>>,
     backdrop: Option<crate::composition::Backdrop>,
     blur: bool,
     blur_unavailable: bool,
     opaque_surface: bool,
-    /// 读回画面没有透明通道时，用来补算边缘 alpha 的岛体轮廓（物理像素）。
+    /// 讀回畫面沒有透明通道時，用來補算邊緣 alpha 的島體輪廓（物理畫素）。
     outline: ShapeAlpha,
 }
 
-/// 按岛体轮廓补出来的 alpha：轮廓每帧随 `update` 更新，蒙版只在轮廓或画面尺寸变化时重算。
+/// 按島體輪廓補出來的 alpha：輪廓每幀隨 `update` 更新，蒙版只在輪廓或畫面尺寸變化時重算。
 #[derive(Default)]
 struct ShapeAlpha {
-    /// 读回的画面确实没有透明通道，正在用轮廓补 alpha。
+    /// 讀回的畫面確實沒有透明通道，正在用輪廓補 alpha。
     active: bool,
     key: Vec<i32>,
     polygons: Vec<Vec<(f32, f32)>>,
@@ -411,7 +411,7 @@ impl ShapeAlpha {
         self.key = key;
     }
 
-    /// 把读回的画面套上轮廓 alpha，返回交给分层窗口的画面。
+    /// 把讀回的畫面套上輪廓 alpha，返回交給分層視窗的畫面。
     fn apply(&mut self, size: [usize; 2], rgba: &[u8]) -> &[u8] {
         if !self.mask.as_ref().is_some_and(|(s, k, _)| *s == size && *k == self.key) {
             self.mask = Some((size, self.key.clone(), crate::layered::coverage_mask(size, &self.polygons)));
@@ -425,7 +425,7 @@ impl ShapeAlpha {
 impl Window {
     pub fn hwnd(&self)->HWND {self.hwnd}
 
-    /// 顶栏重新置顶后恢复岛体层级；没有遮挡时不修改窗口顺序，也不激活窗口。
+    /// 頂欄重新置頂後恢復島體層級；沒有遮擋時不修改視窗順序，也不啟用視窗。
     pub fn keep_above_top_bar(&mut self,bounds:crate::display_layout::Bounds) {
         let display=match &self.layering {Layering::Active(layered)=>layered.display(),_=>self.hwnd};
         if unsafe{top_bar_above(display,bounds)} {
@@ -451,32 +451,32 @@ impl Window {
                 WINEVENT_OUTOFCONTEXT,
             )
         };
-        // 区域用哨兵值：首帧（包括启动即隐藏的空区域）也必须真正调用 SetWindowRgn，
-        // 否则整块透明画布会挡住下层程序的点击。
+        // 區域用哨兵值：首幀（包括啟動即隱藏的空區域）也必須真正呼叫 SetWindowRgn，
+        // 否則整塊透明畫布會擋住下層程式的點選。
         let backend=cc.wgpu_render_state.as_ref().map(|state|state.adapter.get_info().backend);
         let (vendor,renderer)=cc.gl.as_ref().map(|gl|{
             use eframe::glow::HasContext;
             unsafe{(gl.get_parameter_string(eframe::glow::VENDOR),gl.get_parameter_string(eframe::glow::RENDERER))}
         }).unwrap_or_default();
-        // 本机验证用：DAOZAI_OUTLINE_TEST=alpha 按 AMD 等路径处理；=opaque 再假装读回的画面没有透明通道。
+        // 本機驗證用：DAOZAI_OUTLINE_TEST=alpha 按 AMD 等路徑處理；=opaque 再假裝讀回的畫面沒有透明通道。
         let opaque_surface=surface_needs_outline_clip(backend,&vendor,&renderer) || outline_test().is_some();
         if opaque_surface{glass_diagnostic(&format!("渲染相容：{vendor} {renderer} {backend:?}，不直接信任系統透明合成，首幀前先按輪廓裁剪"));}
         watch_drag(hwnd,cc.egui_ctx.clone());
         Some(Self { hwnd, layering:Layering::Pending, region: (i32::MIN, 0, 0, 0), expanded: false, hook, browser_state:(None,PollClock::default()), drag_capture:DragCapture::default(), glass:None, backdrop:None, blur:false, blur_unavailable:false, opaque_surface, outline:ShapeAlpha::default() })
     }
 
-    /// 使用目标屏幕的物理坐标定位，并在缩放、岛体大小、水平位置或屏幕连接变化后重新校正。
-    /// `scale` 是主窗口的实际像素比（系统 DPI × 岛体大小），画布按它同步调整物理尺寸。
-    /// `shift` 是 OLED 像素偏移的位移（物理像素），按展开面板的屏幕余量收窄后叠加在不贴边的一轴上。
+    /// 使用目標螢幕的物理座標定位，並在縮放、島體大小、水平位置或螢幕連線變化後重新校正。
+    /// `scale` 是主視窗的實際畫素比（系統 DPI × 島體大小），畫布按它同步調整物理尺寸。
+    /// `shift` 是 OLED 畫素偏移的位移（物理畫素），按展開面板的螢幕餘量收窄後疊加在不貼邊的一軸上。
     pub fn place_on_display(&self, scale:f32, bounds:crate::display_layout::Bounds, offset:f32, dock:crate::model::Dock, shift:(i32,i32))->bool {
         unsafe {
-            // 顶部：水平居中 + 水平偏移；左右：贴边 + 竖直偏移，画布换成竖向的大小。
+            // 頂部：水平居中 + 水平偏移；左右：貼邊 + 豎直偏移，畫布換成豎向的大小。
             let origin=if dock.is_side() {
                 crate::display_layout::side_origin(bounds,dock,(crate::side_dock::SIDE_W,crate::side_dock::SIDE_H),crate::side_dock::SIDE_HALF_EXTENT,scale,offset)
             } else {crate::display_layout::island_origin_offset(bounds,crate::app::WIN_W,scale,offset)};
             let Some((x,y))=origin else{return false;};
-            // OLED 像素偏移：只沿不贴边的一轴让开，并按展开面板的余量收窄——位置拉满或屏幕太窄时少挪、不挪，
-            // 贴边的一侧也保持严丝合缝，刘海不会和屏幕边缘裂开。
+            // OLED 畫素偏移：只沿不貼邊的一軸讓開，並按展開面板的餘量收窄——位置拉滿或螢幕太窄時少挪、不挪，
+            // 貼邊的一側也保持嚴絲合縫，劉海不會和螢幕邊緣裂開。
             let (back,forth)=crate::display_layout::shift_slack(bounds,scale,if dock.is_side() {crate::side_dock::SIDE_HALF_EXTENT} else {crate::display_layout::ISLAND_HALF_EXTENT},offset,dock);
             let (dx,dy)=(shift.0.clamp(-back,forth),shift.1.clamp(-back,forth));
             let (x,y)=if dock.is_side() {(x,y+dy)} else {(x+dx,y)};
@@ -494,21 +494,21 @@ impl Window {
         }
     }
 
-    /// 系统背景模糊是否正在生效（毛玻璃皮肤据此选择着色深浅）。
+    /// 系統背景模糊是否正在生效（毛玻璃皮膚據此選擇著色深淺）。
     pub fn blur_active(&self)->bool {self.blur}
     pub fn opaque_surface(&self)->bool {self.opaque_surface}
 
-    /// 是否需要每帧读回画面交给分层窗口（兼容后端，且分层窗口仍可用）。
+    /// 是否需要每幀讀回畫面交給分層視窗（相容後端，且分層視窗仍可用）。
     pub fn wants_frames(&self)->bool {self.opaque_surface && !matches!(self.layering,Layering::Unavailable)}
 
-    /// 交一帧读回的画面（RGBA，已预乘）。返回画面是否变化。
-    /// 首帧看读回的画面有没有真正的透明像素：有就原样交给分层窗口；没有（部分 AMD 显卡的 OpenGL）
-    /// 就按岛体轮廓补算边缘 alpha——普通模式也不再退回逐像素「有或没有」的轮廓裁剪。
+    /// 交一幀讀回的畫面（RGBA，已預乘）。返回畫面是否變化。
+    /// 首幀看讀回的畫面有沒有真正的透明畫素：有就原樣交給分層視窗；沒有（部分 AMD 顯示卡的 OpenGL）
+    /// 就按島體輪廓補算邊緣 alpha——普通模式也不再退回逐畫素「有或沒有」的輪廓裁剪。
     pub fn present_frame(&mut self,size:[usize;2],rgba:&[u8])->bool {
         if !self.wants_frames(){return false;}
         if matches!(self.layering,Layering::Pending) {
             let real=crate::layered::has_real_alpha(size,rgba) && outline_test()!=Some(true);
-            // 还没收到过岛体轮廓时无从补 alpha，先保持轮廓裁剪，等下一帧。
+            // 還沒收到過島體輪廓時無從補 alpha，先保持輪廓裁剪，等下一幀。
             if !real && self.outline.polygons.is_empty() {return false;}
             match crate::layered::Layered::new() {
                 Ok(layered)=>{
@@ -526,7 +526,7 @@ impl Window {
         let Layering::Active(layered)=&mut self.layering else {return false};
         let frame=if self.outline.active {self.outline.apply(size,rgba)} else {rgba};
         match layered.present(self.hwnd,size,frame) {
-            // 切到分层窗口后，下一次 update 换回矩形区域（岛仔窗口本身已几乎不可见，只负责命中）。
+            // 切到分層視窗後，下一次 update 換回矩形區域（島仔視窗本身已幾乎不可見，只負責命中）。
             Ok(changed)=>changed,
             Err(error)=>{
                 glass_diagnostic(&format!("渲染相容：分層視窗不可用，回到輪廓裁剪：{error:?}"));
@@ -551,7 +551,7 @@ impl Window {
         self.browser_state.0
     }
 
-    /// 区域参数均为窗口内的逻辑坐标 (x, y, 宽, 高)。
+    /// 區域引數均為視窗內的邏輯座標 (x, y, 寬, 高)。
     pub fn update(
         &mut self,
         region: (f32, f32, f32, f32),
@@ -565,7 +565,7 @@ impl Window {
     ) {
         let px = |v: f32| (v * ppp).round() as i32;
         let r = (px(region.0), px(region.1), px(region.0 + region.2), px(region.1 + region.3));
-        // 仅在拖动进入感应区后扩大 OLE 接收区域，避免普通点击改变透明窗口裁剪。
+        // 僅在拖動進入感應區後擴大 OLE 接收區域，避免普通點選改變透明視窗裁剪。
         let button_down=unsafe{GetAsyncKeyState(VK_LBUTTON.0 as i32)<0 || GetAsyncKeyState(VK_RBUTTON.0 as i32)<0};
         let zone=file_drop_zone.map(|(x,y,w,h)|(px(x),px(y),px(x+w),px(y+h)));
         let mut cursor=POINT::default();let mut window=RECT::default();
@@ -582,10 +582,10 @@ impl Window {
         let mut hits=vec![h];
         if let Some((x,y,w,h))=notice_hit {hits.push((px(x),px(y),px(x+w),px(y+h)));}
         *hit().lock().unwrap_or_else(|e| e.into_inner()) = hits;
-        // 毛玻璃：合成引擎的模糊块贴合岛体轮廓，窗口区域仍用矩形（含阴影与拖放感应区）。
+        // 毛玻璃：合成引擎的模糊塊貼合島體輪廓，視窗區域仍用矩形（含陰影與拖放感應區）。
         let _ = capture;
-        // 分层窗口显示的是带真实透明通道的画面时，系统模糊同样能透出来（模糊底板紧贴在岛仔窗口下方，
-        // 分层显示窗口在上方）；只有轮廓裁剪或按轮廓补 alpha（内部不透明）时才关掉模糊。
+        // 分層視窗顯示的是帶真實透明通道的畫面時，系統模糊同樣能透出來（模糊底板緊貼在島仔視窗下方，
+        // 分層顯示視窗在上方）；只有輪廓裁剪或按輪廓補 alpha（內部不透明）時才關掉模糊。
         let layered_alpha=matches!(self.layering,Layering::Active(_)) && !self.outline.active;
         match glass.filter(|g|!g.is_empty() && !self.blur_unavailable && (!self.opaque_surface || layered_alpha) && compositor_blur_allowed()) {
             Some(shapes) => {
@@ -618,11 +618,11 @@ impl Window {
                 self.blur = false;
             }
         }
-        // 记下岛体轮廓：读回画面没有透明通道时，分层窗口按它补算边缘 alpha。
+        // 記下島體輪廓：讀回畫面沒有透明通道時，分層視窗按它補算邊緣 alpha。
         if self.opaque_surface {
             if let Some(shapes)=glass.filter(|g|!g.is_empty()) {self.outline.set_shapes(shapes,ppp);}
         }
-        // 不可靠的透明合成路径按真实轮廓裁剪，避免圆角外侧和透明画布留下黑底。
+        // 不可靠的透明合成路徑按真實輪廓裁剪，避免圓角外側和透明畫布留下黑底。
         let outline_clip=self.opaque_surface && !matches!(self.layering,Layering::Active(_));
         match glass.filter(|_|outline_clip) {
             Some(shapes) => {
@@ -632,7 +632,7 @@ impl Window {
                         if let Some(rgn)=glass_region(&key) {
                             if SetWindowRgn(self.hwnd, rgn, true) != 0 {
                                 self.glass=Some(key);
-                                // 回到矩形区域时必须重新设置。
+                                // 回到矩形區域時必須重新設定。
                                 self.region=(i32::MIN,0,0,0);
                             } else {
                                 let _ = DeleteObject(rgn);
@@ -711,8 +711,8 @@ mod tests {
         }}}}
     }
 
-    /// 部分 AMD 显卡的 OpenGL：读回的画面没有透明通道。过去这里直接退回轮廓裁剪（圆角、肩部全是锯齿），
-    /// 现在要切到分层窗口，并按岛体轮廓补出带过渡的边缘 alpha。
+    /// 部分 AMD 顯示卡的 OpenGL：讀回的畫面沒有透明通道。過去這裡直接退回輪廓裁剪（圓角、肩部全是鋸齒），
+    /// 現在要切到分層視窗，並按島體輪廓補出帶過渡的邊緣 alpha。
     #[test]
     fn opaque_readback_uses_outline_alpha_instead_of_jagged_clip(){
         use crate::app::GlassShape;
@@ -726,7 +726,7 @@ mod tests {
                 let mut native=Window{hwnd,layering:Layering::Pending,region:(0,0,0,0),expanded:false,hook:HWINEVENTHOOK::default(),browser_state:(None,PollClock::now()),drag_capture:DragCapture::default(),glass:None,backdrop:None,blur:false,blur_unavailable:false,opaque_surface:true,outline:ShapeAlpha::default()};
                 let island=crate::shape::outline(Rect::from_min_max(pos2(80.0,0.0),pos2(320.0,60.0)),12.0,10.0,20.0);
                 let shapes=[GlassShape::Outline(island)];
-                // 读回的画面：岛体黑色、画布也是黑色，alpha 全部 255——和 AMD OpenGL 读回的一样。
+                // 讀回的畫面：島體黑色、畫布也是黑色，alpha 全部 255——和 AMD OpenGL 讀回的一樣。
                 let opaque=[0u8,0,0,255].repeat(w*h);
                 assert!(!native.present_frame([w,h],&opaque),"還沒收到輪廓時先保持輪廓裁剪");
                 assert!(matches!(native.layering,Layering::Pending));
@@ -741,7 +741,7 @@ mod tests {
                 let soft=(0..h).flat_map(|y|(0..w).map(move|x|(x,y))).filter(|&(x,y)|(1..255).contains(&alpha(x,y))).count();
                 assert!(soft>=80,"圓角和肩部要有抗鋸齒過渡畫素，實際 {soft}");
                 assert!(frame.chunks_exact(4).all(|p|p[0]<=p[3]&&p[1]<=p[3]&&p[2]<=p[3]),"必須是合法的預乘顏色");
-                // 切到分层窗口后不再用轮廓裁剪岛仔窗口本身。
+                // 切到分層視窗後不再用輪廓裁剪島仔視窗本身。
                 native.update((0.0,0.0,w as f32,h as f32),(80.0,0.0,240.0,60.0),None,None,Some(&shapes),1.0,false,false);
                 let region=CreateRectRgn(0,0,0,0);
                 if GetWindowRgn(hwnd,region).0!=0 {assert!(PtInRegion(region,10,150).as_bool(),"分層顯示後視窗區域應回到矩形");}
@@ -793,7 +793,7 @@ mod tests {
 
     #[test]
     fn drag_capture_ignores_repeated_clicks_below_the_island_without_an_observed_release() {
-        // 极简模式一秒才画一帧：两次点击之间可能没有一帧看到松开。
+        // 極簡模式一秒才畫一幀：兩次點選之間可能沒有一幀看到鬆開。
         let mut capture=DragCapture::default();let zone=Some((110,0,530,120));
         assert!(!capture.update(true,Some((200,60)),zone,(4,4)));
         assert!(!capture.update(true,Some((380,60)),zone,(4,4)),"在島下方連續點選不同標籤不能被當成拖檔案");
@@ -870,7 +870,7 @@ mod tests {
             false
         }
         unsafe {
-            // 窗口在屏幕外可见，才能验证实际桌面层级；不激活，也不遮挡用户桌面。
+            // 視窗在螢幕外可見，才能驗證實際桌面層級；不啟用，也不遮擋使用者桌面。
             let create=||TestWindow(CreateWindowExW(WS_EX_NOACTIVATE|WS_EX_TOOLWINDOW|WS_EX_TOPMOST,windows::core::w!("STATIC"),windows::core::w!(""),WS_POPUP|WS_VISIBLE,-10000,-10000,416,140,None,None,None,None).unwrap());
             let island=create();let cover=create();
             let flags=SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE;
@@ -889,7 +889,7 @@ mod tests {
             assert!(above(cover.0,island.0),"展開後不能每幀與其他彈窗爭搶層級");
             update(&mut native,false);
             assert!(above(cover.0,island.0),"收起時不抬高層級");
-            // 模拟只剩置顶标记、实际顺序落在普通窗口后面的情况。
+            // 模擬只剩置頂標記、實際順序落在普通視窗後面的情況。
             SetWindowPos(island.0,HWND_NOTOPMOST,0,0,0,0,flags).unwrap();
             SetWindowPos(cover.0,HWND_NOTOPMOST,0,0,0,0,flags).unwrap();
             SetWindowLongPtrW(island.0,GWL_EXSTYLE,GetWindowLongPtrW(island.0,GWL_EXSTYLE)|WS_EX_TOPMOST.0 as isize);
@@ -969,7 +969,7 @@ mod tests {
         impl Drop for TestWindow {fn drop(&mut self){unsafe{let _=DestroyWindow(self.0);}}}
         unsafe {
             let mut count=0u32;
-            // 与实际岛体一样，从已置顶窗口验证输入状态切换。
+            // 與實際島體一樣，從已置頂視窗驗證輸入狀態切換。
             let window=TestWindow(CreateWindowExW(WS_EX_NOACTIVATE|WS_EX_TOPMOST,windows::core::w!("STATIC"),windows::core::w!(""),WS_POPUP,0,0,100,50,None,None,None,None).unwrap());
             SetWindowSubclass(window.0,Some(count_frame),SUBCLASS_ID+1,&mut count as *mut u32 as usize).unwrap();
             apply_style(window.0,false,false);count=0;

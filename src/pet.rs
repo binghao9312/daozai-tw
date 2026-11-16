@@ -1,4 +1,4 @@
-//! 岛仔的原生状态、矢量表情与表情图集播放。
+//! 島仔的原生狀態、向量表情與表情圖集播放。
 use crate::anim::{approach, lerp, smoothstep};
 use crate::paint::{Card, H};
 use crate::theme::{self, W};
@@ -234,7 +234,7 @@ impl Default for Pet {
 
 impl Pet {
     pub fn react(&mut self, state: PetState) { self.reaction = Some((state, self.expressions.react(state))); self.age = 0.0; }
-    /// 反馈只在实际可见时计时，避免用户还在面板里操作时就播完。
+    /// 反饋只在實際可見時計時，避免使用者還在面板裡操作時就播完。
     pub fn advance(&mut self, dt: f32, visible: bool) {
         if visible {
             if let Some((_, remaining)) = &mut self.reaction {
@@ -325,7 +325,7 @@ impl Pet {
             }).collect();
             let stroke=if self.state==PetState::Music {3.6-0.8*smoothstep(0.5,1.5,eye.spread.abs())}else{3.6};
             c.path(&points, stroke, theme::WHITE);
-            // 圆端点保持胶囊眼睛的轮廓。
+            // 圓端點保持膠囊眼睛的輪廓。
             for p in [points[0], points[12]] { c.circle(p.0, p.1, stroke/2.0, theme::WHITE); }
         }
         match self.state {

@@ -1,13 +1,13 @@
-//! 毛玻璃皮肤的实时背景模糊：Windows 合成引擎（Windows.UI.Composition）。
+//! 毛玻璃皮膚的實時背景模糊：Windows 合成引擎（Windows.UI.Composition）。
 //!
-//! 早先用的 `SetWindowCompositionAttribute` 模糊总是铺满整个窗口矩形、不认窗口区域，
-//! 而岛仔窗口是一大块透明画布，于是桌面顶部出现一整块深色方块。
+//! 早先用的 `SetWindowCompositionAttribute` 模糊總是鋪滿整個視窗矩形、不認視窗區域，
+//! 而島仔視窗是一大塊透明畫布，於是桌面頂部出現一整塊深色方塊。
 //!
-//! 现在的做法：单独建一个只承载合成视觉的「模糊底板」窗口（无重定向位图、不接收鼠标、
-//! 不出现在任务栏），与岛仔窗口同位置同大小，并始终紧贴在它**正下方**。底板上的每块视觉
-//! 都用宿主背景画刷（Windows 11 亚克力用的系统实时模糊），主体按圆角裁剪，顶部外翻的
-//! 肩部按物理像素逐行拼出，模糊因此严格贴合岛体轮廓；岛体的着色、高光与文字仍由 egui
-//! 画在上层的岛仔窗口里。（直接挂在岛仔窗口上时，部分显卡会把视觉层叠到内容之上。）
+//! 現在的做法：單獨建一個只承載合成視覺的「模糊底板」視窗（無重定向點陣圖、不接收滑鼠、
+//! 不出現在工作列），與島仔視窗同位置同大小，並始終緊貼在它**正下方**。底板上的每塊視覺
+//! 都用宿主背景畫刷（Windows 11 亞克力用的系統實時模糊），主體按圓角裁剪，頂部外翻的
+//! 肩部按物理畫素逐行拼出，模糊因此嚴格貼合島體輪廓；島體的著色、高光與文字仍由 egui
+//! 畫在上層的島仔視窗裡。（直接掛在島仔視窗上時，部分顯示卡會把視覺層疊到內容之上。）
 
 use crate::app::BlurPiece;
 use windows::core::Interface;
@@ -21,7 +21,7 @@ use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_USE_HOSTBACKDRO
 use windows::Win32::System::WinRT::Composition::ICompositorDesktopInterop;
 use windows::Win32::System::WinRT::{CreateDispatcherQueueController, DispatcherQueueOptions, RoInitialize, DQTAT_COM_NONE, DQTYPE_THREAD_CURRENT, RO_INIT_SINGLETHREADED};
 
-/// 底板窗口：鼠标一律穿透、不激活。
+/// 底板視窗：滑鼠一律穿透、不啟用。
 unsafe extern "system" fn backdrop_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
     match msg {
         WM_NCHITTEST => LRESULT(HTTRANSPARENT as isize),
@@ -59,13 +59,13 @@ fn enable_host_backdrop(hwnd: HWND) -> windows::core::Result<()> {
     }
 }
 
-/// 把底板窗口裁成模糊块的并集。底板和岛仔画布一样大，而 `HTTRANSPARENT`
-/// 只把点击让给同一线程的窗口：不裁剪时，画布范围内（含岛右侧和下方大片空白）
-/// 其他程序的标题栏按钮等都会点不动，直到退出岛仔。
+/// 把底板視窗裁成模糊塊的並集。底板和島仔畫布一樣大，而 `HTTRANSPARENT`
+/// 只把點選讓給同一執行緒的視窗：不裁剪時，畫布範圍內（含島右側和下方大片空白）
+/// 其他程式的標題欄按鈕等都會點不動，直到退出島仔。
 ///
-/// 裁剪只负责让出点击，可见轮廓由各模糊块自己的圆角裁剪决定，所以按 `CLIP_GRID` 像素向外取整：
-/// 动画和歌词宽度变化时不必每帧重设窗口区域。每次重设都会让合成器重建这扇窗口，
-/// 在部分核显旧驱动上频繁重设会拖垮合成器（整机闪屏后卡死）。
+/// 裁剪只負責讓出點選，可見輪廓由各模糊塊自己的圓角裁剪決定，所以按 `CLIP_GRID` 畫素向外取整：
+/// 動畫和歌詞寬度變化時不必每幀重設視窗區域。每次重設都會讓合成器重建這扇視窗，
+/// 在部分核顯舊驅動上頻繁重設會拖垮合成器（整機閃屏後卡死）。
 const CLIP_GRID: i32 = 8;
 
 fn clip_rects(pieces: &[BlurPiece]) -> Vec<(i32, i32, i32, i32)> {
@@ -78,7 +78,7 @@ fn clip_rects(pieces: &[BlurPiece]) -> Vec<(i32, i32, i32, i32)> {
     rects
 }
 
-/// 区域没变时不调用系统；返回是否真的重设了区域。
+/// 區域沒變時不呼叫系統；返回是否真的重設了區域。
 fn clip_to_pieces(hwnd: HWND, pieces: &[BlurPiece], applied: &mut Option<Vec<(i32, i32, i32, i32)>>) -> bool {
     use windows::Win32::Graphics::Gdi::{CombineRgn, CreateRectRgn, DeleteObject, SetWindowRgn, RGN_OR};
     let rects = clip_rects(pieces);
@@ -92,7 +92,7 @@ fn clip_to_pieces(hwnd: HWND, pieces: &[BlurPiece], applied: &mut Option<Vec<(i3
             let _ = CombineRgn(all, all, part, RGN_OR);
             let _ = DeleteObject(part);
         }
-        // 底板没有重定向位图，内容全由合成视觉提供，不需要系统重画。成功后区域归系统所有，不能再删除。
+        // 底板沒有重定向點陣圖，內容全由合成視覺提供，不需要系統重畫。成功後區域歸系統所有，不能再刪除。
         if SetWindowRgn(hwnd, all, false) == 0 { let _ = DeleteObject(all); return false; }
     }
     *applied = Some(rects);
@@ -102,7 +102,7 @@ fn clip_to_pieces(hwnd: HWND, pieces: &[BlurPiece], applied: &mut Option<Vec<(i3
 pub struct Backdrop {
     hwnd: HWND,
     placed: (RECT, bool),
-    // 合成器依赖当前线程的 DispatcherQueue；控制器必须与合成器同生命周期。
+    // 合成器依賴當前執行緒的 DispatcherQueue；控制器必須與合成器同生命週期。
     _queue: Option<DispatcherQueueController>,
     compositor: Compositor,
     _target: DesktopWindowTarget,
@@ -118,14 +118,14 @@ pub struct Backdrop {
 impl Backdrop {
     pub fn new() -> windows::core::Result<Self> {
         let hwnd = create_backdrop_window()?;
-        // Win10 不支持这个 Win32 宿主背景属性。失败时不能继续绘制纯色画刷，
-        // 交给上层使用半透明底色，并释放尚未显示的底板窗口。
+        // Win10 不支援這個 Win32 宿主背景屬性。失敗時不能繼續繪製純色畫刷，
+        // 交給上層使用半透明底色，並釋放尚未顯示的底板視窗。
         if let Err(error) = enable_host_backdrop(hwnd) {
             unsafe { let _ = DestroyWindow(hwnd); }
             return Err(error);
         }
         unsafe {
-            // 主线程已由窗口框架初始化为单线程套间时返回 S_FALSE，忽略即可。
+            // 主執行緒已由視窗框架初始化為單執行緒套間時返回 S_FALSE，忽略即可。
             let _ = RoInitialize(RO_INIT_SINGLETHREADED);
         }
         let queue = unsafe {
@@ -138,7 +138,7 @@ impl Backdrop {
         .ok();
         let compositor = Compositor::new()?;
         let interop: ICompositorDesktopInterop = compositor.cast()?;
-        // 底板窗口没有自己的内容，视觉树就是它的全部画面。
+        // 底板視窗沒有自己的內容，視覺樹就是它的全部畫面。
         let target = unsafe { interop.CreateDesktopWindowTarget(hwnd, BOOL::from(true)) }?;
         let root = compositor.CreateContainerVisual()?;
         target.SetRoot(&root)?;
@@ -148,7 +148,7 @@ impl Backdrop {
         Ok(Self { hwnd, placed: (RECT::default(), false), _queue: queue, compositor, _target: target, root, children, brush, pool: Vec::new(), shown: Vec::new(), clip: None, visible: false })
     }
 
-    /// 让底板与岛仔窗口重合，并紧贴在它正下方。
+    /// 讓底板與島仔視窗重合，並緊貼在它正下方。
     fn follow(&mut self, island: HWND) {
         unsafe {
             let mut rect = RECT::default();
@@ -161,7 +161,7 @@ impl Backdrop {
         }
     }
 
-    /// 显示并更新模糊块（物理像素，岛仔窗口坐标）。形状不变时不提交任何改动。
+    /// 顯示並更新模糊塊（物理畫素，島仔視窗座標）。形狀不變時不提交任何改動。
     pub fn show(&mut self, island: HWND, pieces: &[BlurPiece]) -> windows::core::Result<()> {
         self.follow(island);
         if pieces != self.shown.as_slice() {
@@ -261,7 +261,7 @@ mod tests {
 
     #[test]
     fn animation_frames_do_not_reset_the_backdrop_region_every_frame() {
-        // 展开 / 歌词宽度变化时轮廓每帧只差零点几到一两个像素：大多数帧不应重设窗口区域。
+        // 展開 / 歌詞寬度變化時輪廓每幀只差零點幾到一兩個畫素：大多數幀不應重設視窗區域。
         let hwnd = create_backdrop_window().unwrap();
         let mut applied = None;
         let mut resets = 0;

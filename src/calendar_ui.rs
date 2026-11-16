@@ -1,4 +1,4 @@
-//! 岛内日程：左侧月历，右侧按时间排列邮件邀请与工作日程。
+//! 島內日程：左側月曆，右側按時間排列郵件邀請與工作日程。
 use crate::{app::{App, Cmd, Env, CALENDAR_PAGE}, calendar, mail, paint::{self,Card,H}, theme::{self,W}};
 use chrono::{Datelike, NaiveDate};
 use eframe::egui::{self,Color32};

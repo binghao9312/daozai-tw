@@ -1,8 +1,8 @@
-//! 毛玻璃皮肤的背景亮度采样。
+//! 毛玻璃皮膚的背景亮度取樣。
 //!
-//! 在岛体四周（窗口区域之外）取少量屏幕像素，估计岛背后的明暗，让着色深浅刚好
-//! 保证白字可读。`GetPixel` 读屏较慢，所以放在后台线程里每 1.5 秒采一次，
-//! 渲染线程只读结果；切回经典皮肤时线程随 `Sampler` 一起退出。
+//! 在島體四周（視窗區域之外）取少量螢幕畫素，估計島背後的明暗，讓著色深淺剛好
+//! 保證白字可讀。`GetPixel` 讀屏較慢，所以放在後臺執行緒裡每 1.5 秒採一次，
+//! 渲染執行緒只讀結果；切回經典皮膚時執行緒隨 `Sampler` 一起退出。
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -45,7 +45,7 @@ impl Sampler {
         Self { shared, stop }
     }
 
-    /// 采样点（屏幕物理坐标）。
+    /// 取樣點（螢幕物理座標）。
     pub fn set_points(&self, points: Vec<(i32, i32)>) {
         if let Ok(mut s) = self.shared.lock() {
             if s.points != points {
@@ -75,7 +75,7 @@ fn sample(points: &[(i32, i32)]) -> Vec<[f32; 3]> {
             .iter()
             .filter_map(|&(x, y)| {
                 let c = GetPixel(dc, x, y).0;
-                // CLR_INVALID：点在屏幕外或被裁掉。
+                // CLR_INVALID：點在螢幕外或被裁掉。
                 (c != 0xFFFF_FFFF).then(|| [(c & 0xFF) as f32 / 255.0, ((c >> 8) & 0xFF) as f32 / 255.0, ((c >> 16) & 0xFF) as f32 / 255.0])
             })
             .collect();

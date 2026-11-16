@@ -1,8 +1,8 @@
-//! 音乐兼容诊断：把播放器版本、进度读取和跳转是否适配写进歌词诊断日志。
-//! 只在状态变化时写一行，用来分清「播放器版本不认识」和「我们的逻辑有问题」。
+//! 音樂相容診斷：把播放器版本、進度讀取和跳轉是否適配寫進歌詞診斷日誌。
+//! 只在狀態變化時寫一行，用來分清「播放器版本不認識」和「我們的邏輯有問題」。
 use std::{collections::HashMap,sync::Mutex};
 
-/// 系统媒体会话的来源 → 播放器可执行文件名。
+/// 系統媒體會話的來源 → 播放器可執行檔名。
 pub(crate) fn player_exe(source:&str)->Option<&'static str> {
     Some(match source.to_ascii_lowercase().as_str() {
         "kugou"|"kugou.exe"=>"KuGou.exe",
@@ -17,7 +17,7 @@ pub(crate) fn player_exe(source:&str)->Option<&'static str> {
     })
 }
 
-/// 同一主题（如「酷狗进度」）只在内容变化时返回真；第一次出现也算变化。
+/// 同一主題（如「酷狗進度」）只在內容變化時返回真；第一次出現也算變化。
 fn changed(topic:&str,state:&str)->bool {
     static LAST:Mutex<Option<HashMap<String,String>>>=Mutex::new(None);
     let mut last=LAST.lock().unwrap_or_else(|e|e.into_inner());
@@ -32,12 +32,12 @@ fn write(line:&str) {
     crate::resources::append_log(&crate::model::config_dir().join("diagnostics"),"lyrics.log",&line);
 }
 
-/// 记一条状态；与上次相同则不写。
+/// 記一條狀態；與上次相同則不寫。
 pub(crate) fn state(topic:&str,state:&str) {
     if changed(topic,state) {write(&format!("{topic} → {state}"));}
 }
 
-/// 文件版本号（如 20.1.61.28014）；读不到时返回「未知」。
+/// 檔案版本號（如 20.1.61.28014）；讀不到時返回「未知」。
 pub(crate) fn file_version(path:&str)->String {
     use windows::{core::{HSTRING,w},Win32::Storage::FileSystem::{GetFileVersionInfoSizeW,GetFileVersionInfoW,VerQueryValueW,VS_FIXEDFILEINFO}};
     let path=HSTRING::from(path);
@@ -54,9 +54,9 @@ pub(crate) fn file_version(path:&str)->String {
     }
 }
 
-/// 当前播放器的版本：每个播放器进程只记一次（播放器重启或升级后会再记）。
+/// 當前播放器的版本：每個播放器程序只記一次（播放器重啟或升級後會再記）。
 pub(crate) fn player(source:&str) {
-    // 来源没变时不重复枚举进程；每次轮询只比较一个字符串。
+    // 來源沒變時不重複列舉程序；每次輪詢只比較一個字串。
     static LAST:Mutex<String>=Mutex::new(String::new());
     {
         let mut last=LAST.lock().unwrap_or_else(|e|e.into_inner());

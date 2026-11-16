@@ -1,5 +1,5 @@
-//! Grok Bot 周额度。凭据与接口映射参考 ai-usagebar，浏览器授权参考 gbu。
-//! 原客户端登录文件只读；独立授权保存在 Windows 凭据管理器。
+//! Grok Bot 周額度。憑據與介面對映參考 ai-usagebar，瀏覽器授權參考 gbu。
+//! 原客戶端登入檔案只讀；獨立授權儲存在 Windows 憑據管理器。
 use super::{Account,Snapshot,Window};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD,Engine};
 use ring::{digest,rand::{SecureRandom,SystemRandom}};
@@ -119,7 +119,7 @@ fn http_error(error:ureq::Error)->(String,u64){match error{
 }}
 fn checksum(machine:&str,millis:i64)->String{
     let stamp=(millis/1_000_000) as u32;
-    // 与客户端 JavaScript 的移位规则一致：移位数按 32 取模。
+    // 與客戶端 JavaScript 的移位規則一致：移位數按 32 取模。
     let mut bytes=[(stamp>>8) as u8,stamp as u8,(stamp>>24) as u8,(stamp>>16) as u8,(stamp>>8) as u8,stamp as u8];
     let mut previous=165;
     for (i,byte) in bytes.iter_mut().enumerate(){*byte=(*byte^previous).wrapping_add(i as u8);previous=*byte;}
@@ -160,7 +160,7 @@ pub fn fetch(agent:&ureq::Agent,account:&Account)->Result<Snapshot,(String,u64)>
 
 pub struct Connected {pub slot:String,pub label:String}
 fn uuid()->String{
-    // 请求标识无需保密，以纳秒时间和进程号生成，避免依赖系统随机源。
+    // 請求標識無需保密，以納秒時間和程序號生成，避免依賴系統隨機源。
     let input=format!("{}:{}",std::process::id(),chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default());
     let hash=digest::digest(&digest::SHA256,input.as_bytes());let mut bytes=[0u8;16];bytes.copy_from_slice(&hash.as_ref()[..16]);
     bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128;
@@ -288,7 +288,7 @@ mod tests {
         let listener=TcpListener::bind("127.0.0.1:0").unwrap();let url=format!("http://{}/aiserver.v1.DashboardService/GetSandUsageStatus",listener.local_addr().unwrap());
         let server=std::thread::spawn(move||{
             let(mut stream,_)=listener.accept().unwrap();stream.set_read_timeout(Some(std::time::Duration::from_secs(3))).unwrap();
-            // 读完请求再关闭连接，避免分包时未读完的正文触发 TCP 重置。
+            // 讀完請求再關閉連線，避免分包時未讀完的正文觸發 TCP 重置。
             let mut reader=BufReader::new(&mut stream);let mut request=String::new();
             loop{let mut line=String::new();assert!(reader.read_line(&mut line).unwrap()>0);if line=="\r\n"{break;}request.push_str(&line);}
             let request=request.to_ascii_lowercase();

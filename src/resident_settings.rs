@@ -28,7 +28,7 @@ impl crate::app::App {
         ui.painter().rect_filled(stage,10.0,Color32::from_rgb(19,25,36));
         let scale=((stage.width()-28.0)/layout.width).min(1.0);
         let origin=Pos2::new(stage.center().x-layout.width*scale/2.0,stage.top());
-        // 预览跟随当前的皮肤与形状。
+        // 預覽跟隨當前的皮膚與形狀。
         let pill=self.settings.island_shape==crate::model::IslandShape::Pill;
         let origin=if pill{origin+Vec2::new(0.0,4.0)}else{origin};
         let body=Rect::from_min_size(origin,Vec2::new(layout.width*scale,30.0*scale));

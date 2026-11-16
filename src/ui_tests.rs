@@ -1422,7 +1422,7 @@ fn island_position_drag_lifts_on_hold_glides_smoothly_and_snaps_to_center(){
     for _ in 0..20{island_drag_frame(&mut h,bounds,1.0,Some(start),None);}
     assert!(!h.app.open && h.app.progress()<0.5,"按住不動也應拿起島體");
     assert_eq!(h.app.settings.island_offset,-30);
-    // 視窗平滑跟隨：一幀跳過去的游標，視窗要分幾幀追上，且不按整數刻度跳。
+    // 視窗平滑跟隨：一幀跳過去的遊標，視窗要分幾幀追上，且不按整數刻度跳。
     let travel=1920.0/2.0-crate::display_layout::ISLAND_HALF_EXTENT;
     let to=|units:f32|Pos2::new(start.x+(units+30.0)/100.0*travel,start.y);
     island_drag_frame(&mut h,bounds,1.0,Some(to(-10.0)),None);
@@ -3835,7 +3835,7 @@ fn preview_wechat_call_ringing(){
     let dest=std::env::var_os("DAOZAI_CALL_PREVIEW_DIR").map(std::path::PathBuf::from)
         .unwrap_or_else(||std::env::temp_dir().join(format!("daozai-call-preview-{}",std::process::id())));
     std::fs::create_dir_all(&dest).unwrap();
-    // 單條提醒 / 響鈴期間反覆提醒 / 來電視窗在另一個程序裡（被當成第二個賬號）。
+    // 單條提醒 / 響鈴期間反覆提醒 / 來電視窗在另一個程式裡（被當成第二個賬號）。
     for (scenario,minimal) in [("single",false),("single",true),("ringing",false),("ringing",true),("twoproc",false),("twoproc",true)] {
         let mode=format!("{scenario}-{}",if minimal{"minimal"}else{"normal"});
         let mut h=H::new();h.app.settings.wechat_notifications=true;h.app.settings.minimal=minimal;
@@ -7387,7 +7387,7 @@ fn notification_preview_masks_fullwidth_and_zero_width_codes(){
     }
 }
 
-/// 記憶體實測：模擬長時間聽歌（不斷出現新漢字）並瀏覽各頁面，輸出程序記憶體、字形圖集和貼圖佔用。
+/// 記憶體實測：模擬長時間聽歌（不斷出現新漢字）並瀏覽各頁面，輸出程式記憶體、字形圖集和貼圖佔用。
 /// 執行：DAOZAI_ATLAS=4096 DAOZAI_PPP=1.5 cargo test --lib memory_profile -- --ignored --nocapture --test-threads=1
 #[test]
 #[ignore="記憶體實測，按需執行"]
@@ -7396,7 +7396,7 @@ fn memory_profile_long_listening_session(){
     let side:usize=std::env::var("DAOZAI_ATLAS").ok().and_then(|s|s.parse().ok()).unwrap_or(4096);
     let ppp:f32=std::env::var("DAOZAI_PPP").ok().and_then(|s|s.parse().ok()).unwrap_or(1.5);
     let songs:usize=std::env::var("DAOZAI_SONGS").ok().and_then(|s|s.parse().ok()).unwrap_or(120);
-    // 匿名記憶體≈Windows 的私有記憶體；檔案對映（程式程式碼、系統字型）可在程序間共享，不計入私有記憶體。
+    // 匿名記憶體≈Windows 的私有記憶體；檔案對映（程式程式碼、系統字型）可在程式間共享，不計入私有記憶體。
     fn rss()->String{
         let status=std::fs::read_to_string("/proc/self/status").unwrap_or_default();
         let kb=|key:&str|status.lines().find_map(|l|l.strip_prefix(key)?.trim().trim_end_matches(" kB").trim().parse::<f64>().ok()).unwrap_or(0.0)/1024.0;

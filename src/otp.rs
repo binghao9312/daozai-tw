@@ -1,8 +1,8 @@
-//! 验证码提取（v0.5.5）。
+//! 驗證碼提取（v0.5.5）。
 //!
-//! 加权打分而不是单条正则：单正则会把你订单号、金额、电话当验证码。
-//! 规则参考 pulse-mail（MIT，`otp/mod.rs`）的强/弱/负向词表与形状权重，
-//! 中文关键词表按国内邮件场景补齐；门槛 65 分——宁可漏，不可错。
+//! 加權打分而不是單條正則：單正則會把你訂單號、金額、電話當驗證碼。
+//! 規則參考 pulse-mail（MIT，`otp/mod.rs`）的強/弱/負向詞表與形狀權重，
+//! 中文關鍵詞表按國內郵件場景補齊；門檻 65 分——寧可漏，不可錯。
 
 use regex::Regex;
 use std::sync::OnceLock;
@@ -13,7 +13,7 @@ pub struct Code {
     pub score: i32,
 }
 
-/// 上岛门槛：低于这个分数只当作普通邮件。
+/// 上島門檻：低於這個分數只當作普通郵件。
 pub const THRESHOLD: i32 = 65;
 
 fn strong() -> &'static Regex {
@@ -43,7 +43,7 @@ fn weak() -> &'static Regex {
 fn candidate() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
     R.get_or_init(|| {
-        // 字母前缀、带分隔的 3-4 位分组、4-8 位数字、4-8 位字母数字。
+        // 字母字首、帶分隔的 3-4 位分組、4-8 位數字、4-8 位字母數字。
         Regex::new(concat!(
             r"(?:[A-Za-z]{1,3}-)?",
             r"(?:\d{3,4}[- ]\d{3,4}|\d{4}-\d{4}|[A-Za-z0-9]{3,4}-[A-Za-z0-9]{3,4}|\d{4,8}|[A-Za-z0-9]{4,8})"
@@ -57,7 +57,7 @@ fn clock() -> &'static Regex {
     R.get_or_init(|| Regex::new(r"\d{1,2}:\d{2}").expect("time regex"))
 }
 
-/// 全角转半角、去零宽字符、全角空格归一。
+/// 全形轉半形、去零寬字元、全形空格歸一。
 fn normalize(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
@@ -114,7 +114,7 @@ const EXPIRE_WORDS: &[&str] = &[
     "有效", "過期", "失效", "expire", "valid", "minutes", "分鐘", "小時內", "過期", "分鐘", "小時內",
 ];
 
-/// 纯字母只接受明确的验证码字段，不能靠标题、大小写或强调样式累积成高分。
+/// 純字母只接受明確的驗證碼欄位，不能靠標題、大小寫或強調樣式累積成高分。
 fn alphabetic_code_at(hay:&str,start:usize,end:usize,text:&str,emph:&[String])->bool {
     const PROSE: &[&str]=&[
         "please","verify","confirm","code","your","this","that","enter","click","continue",
@@ -157,7 +157,7 @@ fn alphabetic_code_at(hay:&str,start:usize,end:usize,text:&str,emph:&[String])->
         && !has(&around(hay,start,end,40),PROMO_WORDS)
 }
 
-/// 从主题 + 正文里挑出最像验证码的一个；`emphasized` 是 HTML 里加粗/大字号片段的纯文本。
+/// 從主題 + 正文裡挑出最像驗證碼的一個；`emphasized` 是 HTML 里加粗/大字號片段的純文字。
 pub fn extract(subject: &str, body: &str, emphasized: &[String]) -> Option<Code> {
     let subject = normalize(subject);
     let body = normalize(&take_chars(body, 6000));
@@ -171,7 +171,7 @@ pub fn extract(subject: &str, body: &str, emphasized: &[String]) -> Option<Code>
     for m in candidate().find_iter(&hay) {
         let prev = hay[..m.start()].chars().next_back();
         let next = hay[m.end()..].chars().next();
-        // 只认 ASCII 字母数字边界：中文紧贴验证码是常态，不能当边界外丢弃。
+        // 只認 ASCII 字母數字邊界：中文緊貼驗證碼是常態，不能當邊界外丟棄。
         if prev.is_some_and(|c| c.is_ascii_alphanumeric()) || next.is_some_and(|c| c.is_ascii_alphanumeric()) {
             continue;
         }
@@ -186,8 +186,8 @@ pub fn extract(subject: &str, body: &str, emphasized: &[String]) -> Option<Code>
         let Some((score, strong_signal)) = score_at(&hay, m.start(), m.end(), &text, subject_end, &emph) else {
             continue;
         };
-        // 没有强信号（强关键词 / 主题 / HTML 强调 / 独占行 / 冒号后）就不算验证码：
-        // 宁可不显示，也不能把订单号、金额之类的数字放大展示。
+        // 沒有強訊號（強關鍵詞 / 主題 / HTML 強調 / 獨佔行 / 冒號後）就不算驗證碼：
+        // 寧可不顯示，也不能把訂單號、金額之類的數字放大展示。
         if !strong_signal {
             continue;
         }
@@ -258,7 +258,7 @@ fn score_at(hay: &str, start: usize, end: usize, text: &str, subject_end: usize,
     let b60 = before(hay, start, 60);
     let a40 = after(hay, end, 40);
 
-    // ---- 硬丢弃：URL / 邮箱 / 日期时间 / 电话 / 订单金额卡号 ----
+    // ---- 硬丟棄：URL / 信箱 / 日期時間 / 電話 / 訂單金額卡號 ----
     let token = {
         let left = hay[..start].char_indices().rev()
             .find(|(_, c)| c.is_whitespace())
@@ -280,12 +280,12 @@ fn score_at(hay: &str, start: usize, end: usize, text: &str, subject_end: usize,
     if has(&around(hay, start, end, 6), MONEY_WORDS) {
         return None;
     }
-    // 订单/电话/会议号这类词只认紧邻的前文与极短的后续：真实验证码后面常跟
-    // “如非本人操作…订单号…”这类无关尾巴，窗口放宽会把真码误杀。
+    // 訂單/電話/會議號這類詞只認緊鄰的前文與極短的後續：真實驗證碼後面常跟
+    // “如非本人操作…訂單號…”這類無關尾巴，視窗放寬會把真碼誤殺。
     if has(&before(hay, start, 20), ORDER_WORDS) || has(&after(hay, end, 8), ORDER_WORDS) {
         return None;
     }
-    // 4 位年份：直接判负，掉到门槛以下
+    // 4 位年份：直接判負，掉到門檻以下
     if len == 4 && !mixed {
         if let Ok(y) = core.parse::<u32>() {
             if (1900..=2100).contains(&y) {
@@ -294,7 +294,7 @@ fn score_at(hay: &str, start: usize, end: usize, text: &str, subject_end: usize,
         }
     }
 
-    // ---- 正向信号 ----
+    // ---- 正向訊號 ----
     let strong_before = strong().is_match(&b40);
     if strong_before {
         score += 40;
@@ -344,12 +344,12 @@ fn score_at(hay: &str, start: usize, end: usize, text: &str, subject_end: usize,
     if has(&around(hay, start, end, 40), PROMO_WORDS) {
         score -= 30;
     }
-    // 强信号：任何一个成立才允许上岛展示。
+    // 強訊號：任何一個成立才允許上島展示。
     let strong_signal = strong_before || strong().is_match(&a40) || in_subject || is_emph || own_line || colon;
     Some((score, strong_signal))
 }
 
-/// HTML → 纯文本：去脚本样式、块级标签转换行、解常见实体、压缩空白。
+/// HTML → 純文字：去指令碼樣式、塊級標籤轉換行、解常見實體、壓縮空白。
 pub fn html_to_text(html: &str) -> String {
     static SCRIPT: OnceLock<Regex> = OnceLock::new();
     static TAGS: OnceLock<Regex> = OnceLock::new();
@@ -375,7 +375,7 @@ pub fn html_to_text(html: &str) -> String {
     out
 }
 
-/// HTML 里被「当码呈现」的片段：加粗、标题、大字号 span。
+/// HTML 裡被「當碼呈現」的片段：加粗、標題、大字號 span。
 pub fn emphasized(html: &str) -> Vec<String> {
     static TAGS: OnceLock<Regex> = OnceLock::new();
     let re = TAGS.get_or_init(|| {

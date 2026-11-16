@@ -1,4 +1,4 @@
-//! 只读 Chromium 桌面用量缓存，文件缺失或不完整时交由历史记录处理。
+//! 只讀 Chromium 桌面用量快取，檔案缺失或不完整時交由歷史記錄處理。
 use super::{Snapshot,Window};
 use std::{collections::{HashMap,HashSet},fs::{File,OpenOptions},io::{Read,Seek,SeekFrom},path::{Path,PathBuf}};
 
@@ -15,7 +15,7 @@ impl Cache {
         let path=self.path.join(name);
         if !self.files.contains_key(&path){
             let mut options=OpenOptions::new();options.read(true);
-            // 与运行中的 Chromium 兼容，只申请读取权限，不阻止它更新或替换文件。
+            // 與執行中的 Chromium 相容，只申請讀取許可權，不阻止它更新或替換檔案。
             #[cfg(windows)]{use std::os::windows::fs::OpenOptionsExt;options.share_mode(7);}
             self.files.insert(path.clone(),options.open(&path).ok()?);
         }
@@ -45,7 +45,7 @@ impl Cache {
         let body_address=u32_at(entry,60)?;let body_len=u32_at(entry,44)? as usize;
         let body=self.stream(body_address,body_len)?;
         let snapshot=parse_body(&body,headers,at,now)?;
-        // 写入中的条目直接跳过，不锁定、不复制或修复 Claude 的缓存。
+        // 寫入中的條目直接跳過，不鎖定、不復制或修復 Claude 的快取。
         if self.stream(address,96)?!=entry[..96]||self.stream(metadata_address,metadata_len)?!=metadata||self.stream(body_address,body_len)?!=body{return None;}
         Some(snapshot)
     }

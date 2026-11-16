@@ -1,5 +1,5 @@
-//! 播放器进程身份核实：只用“查询有限信息”权限确认进程名，
-//! 确认是目标播放器后，调用方才申请内存读取权限，避免接触其他软件。
+//! 播放器程序身份核實：只用“查詢有限訊息”許可權確認程序名，
+//! 確認是目標播放器後，呼叫方才申請記憶體讀取許可權，避免接觸其他軟體。
 use windows::Win32::{
     Foundation::CloseHandle,
     System::{
@@ -10,7 +10,7 @@ use windows::Win32::{
 
 fn exe_name(path:&str)->&str {path.rsplit(['\\','/']).next().unwrap_or(path)}
 
-/// 从进程快照按可执行文件名筛选进程号；快照不需要打开任何进程。
+/// 從程序快照按可執行檔名篩選程序號；快照不需要開啟任何程序。
 pub fn pids_named(exe:&str)->Vec<u32> {
     let mut pids=Vec::new();
     unsafe {
@@ -27,12 +27,12 @@ pub fn pids_named(exe:&str)->Vec<u32> {
     pids
 }
 
-/// 仅以有限查询权限核对进程映像名（进程号可能被复用，每次使用前都要核对）。
+/// 僅以有限查詢許可權核對程序映像名（程序號可能被複用，每次使用前都要核對）。
 pub fn image_is(pid:u32,exe:&str)->bool {
     image_path(pid).is_some_and(|path|exe_name(&path).eq_ignore_ascii_case(exe))
 }
 
-/// 用“查询有限信息”权限读取进程的可执行文件路径；只用于核对身份和读取版本号。
+/// 用“查詢有限訊息”許可權讀取程序的可執行檔案路徑；只用於核對身份和讀取版本號。
 pub fn image_path(pid:u32)->Option<String> {
     if pid==0 {return None;}
     unsafe {

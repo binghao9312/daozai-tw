@@ -1,4 +1,4 @@
-//! 网易云原生播放事件：只读增量日志，不依赖 SMTC 或特定 DLL 版本。
+//! 網易雲原生播放事件：只讀增量日誌，不依賴 SMTC 或特定 DLL 版本。
 use super::{MediaKind,NowPlaying};
 use std::{fs::File,io::{Read,Seek,SeekFrom},path::Path,sync::{mpsc,Arc},time::{Duration,Instant}};
 
@@ -12,7 +12,7 @@ fn monotonic_millis()->u64 {
     epoch.saturating_add(start.elapsed().as_millis() as u64)
 }
 
-// 初次读取历史记录时，使用可读的本地日期恢复进度；实时推进只依赖 Instant。
+// 初次讀取歷史記錄時，使用可讀的本地日期恢復進度；實時推進只依賴 Instant。
 fn historical_millis(line:&str,now:u64)->Option<u64> {
     use chrono::{Datelike,TimeZone};
     let date=line.strip_prefix('[')?.split(':').nth(2)?;
@@ -27,7 +27,7 @@ fn historical_millis(line:&str,now:u64)->Option<u64> {
     None
 }
 
-// elog 的逐字节替换格式，参考 https://github.com/344272586-sketch/dsh-pet-qqmusic/blob/main/lib/netease-elog.js
+// elog 的逐位元組替換格式，參考 https://github.com/344272586-sketch/dsh-pet-qqmusic/blob/main/lib/netease-elog.js
 fn decode(byte:u8)->u8 {
     let high=byte>>4;let low=byte&15;
     ((high^((low+8)&15))<<4)|((byte>>6)<<2)|(!high&3)
@@ -78,10 +78,10 @@ impl Playback {
         let Some((header,body))=line.strip_prefix('[').and_then(|s|s.split_once(']'))else{return;};
         let mut parts=header.split(':');
         if parts.next().and_then(|s|s.parse::<u32>().ok())!=Some(pid){return;}
-        // 日志计数只比较事件先后，不能与本机单调时钟相减。
+        // 日誌計數只比較事件先後，不能與本機單調時鐘相減。
         let Some(at)=parts.nth(2).and_then(|s|s.parse::<u64>().ok()).filter(|at|*at>=self.at)else{return;};
         if body.contains("\"exitApp\""){*self=Self::default();return;}
-        // 只解析播放事件；音频签名链接、Cookie 等其他日志内容不会进入状态或缓存。
+        // 只解析播放事件；音訊簽名連結、Cookie 等其他日誌內容不會進入狀態或快取。
         let Some((_,body))=body.split_once("【playing】,")else{return;};
         let Some((event,args))=body.trim().strip_prefix('"').and_then(|s|s.split_once("\","))else{return;};
         if matches!(event,"playOneTrackInPlayingList"|"checkPlayPrivilege"){
@@ -122,7 +122,7 @@ impl CoverCache {
         self.get_with(url,fetch_cover)
     }
     pub(super) fn get_with(&mut self,url:&str,load:impl FnOnce(&str)->Option<Arc<eframe::egui::ColorImage>>+Send+'static)->Option<Arc<eframe::egui::ColorImage>>{
-        // 切歌时丢弃旧请求的接收端，迟到的封面不能覆盖新歌。
+        // 切歌時丟棄舊請求的接收端，遲到的封面不能覆蓋新歌。
         if self.url!=url{*self=Self{url:url.into(),worker:self.worker.take(),..Default::default()};}
         if self.url.is_empty(){return None;}
         if let Some(receiver)=&self.pending{
@@ -135,7 +135,7 @@ impl CoverCache {
         if self.image.is_none() && self.pending.is_none() && self.worker.as_ref().is_none_or(|worker|worker.is_finished()) && self.retry_at.is_none_or(|at|Instant::now()>=at){
             let (sender,receiver)=mpsc::channel();let url=self.url.clone();
             self.pending=Some(receiver);self.retry_at=Some(Instant::now()+Duration::from_secs(3));
-            // 网络与解码不占用媒体轮询线程，歌词时间轴继续正常推进。
+            // 網路與解碼不佔用媒體輪詢執行緒，歌詞時間軸繼續正常推進。
             self.worker=crate::resources::COVER.spawn(move||{let _=sender.send(load(&url));});
             if self.worker.is_none(){self.pending=None;}
         }
@@ -143,8 +143,8 @@ impl CoverCache {
     }
 }
 
-/// 本地日志和队列都没有歌名时（漫游、私人 FM 续载、每日推荐等网易云不落盘的歌），按歌曲 ID 在线查一次。
-/// 只保留当前这首；请求在后台进行，不占媒体轮询线程；失败按 10 秒、60 秒再试，第三次失败后这首歌不再请求。
+/// 本地日誌和佇列都沒有歌名時（漫遊、私人 FM 續載、每日推薦等網易雲不落盤的歌），按歌曲 ID 線上查一次。
+/// 只保留當前這首；請求在後臺進行，不佔媒體輪詢執行緒；失敗按 10 秒、60 秒再試，第三次失敗後這首歌不再請求。
 #[derive(Default)]
 pub(super) struct DetailCache {
     id:Option<u64>,value:Option<(NowPlaying,String)>,failures:usize,retry_at:Option<Instant>,
@@ -154,7 +154,7 @@ pub(super) struct DetailCache {
 const DETAIL_RETRY:[Duration;2]=[Duration::from_secs(10),Duration::from_secs(60)];
 impl DetailCache {
     pub(super) fn get_with(&mut self,id:u64,load:impl FnOnce(u64)->Option<(NowPlaying,String)>+Send+'static)->Option<(NowPlaying,String)>{
-        // 换歌时丢弃旧请求的接收端，迟到的结果不能套到新歌上。
+        // 換歌時丟棄舊請求的接收端，遲到的結果不能套到新歌上。
         if self.id!=Some(id){*self=Self{id:Some(id),worker:self.worker.take(),..Default::default()};}
         if let Some(receiver)=&self.pending{
             match receiver.try_recv(){
@@ -190,7 +190,7 @@ fn fetch_detail(id:u64)->Option<(NowPlaying,String)>{
     detail_from(&serde_json::from_slice(&bytes).ok()?,id)
 }
 
-/// `{"code":200,"songs":[{…}]}`：歌曲字段与本地队列一致，只接受 ID 完全相同的那一首。
+/// `{"code":200,"songs":[{…}]}`：歌曲欄位與本地佇列一致，只接受 ID 完全相同的那一首。
 fn detail_from(value:&serde_json::Value,id:u64)->Option<(NowPlaying,String)>{
     if value.get("code").and_then(|v|v.as_i64())!=Some(200){return None;}
     value.get("songs")?.as_array()?.iter().filter_map(track).find(|(media,_)|media.song_id==Some(id))
@@ -303,7 +303,7 @@ pub(super) struct Reader {
     pid:u32,offset:u64,prefix:Vec<u8>,carry:Vec<u8>,skip_line:bool,
     playback:Playback,lookup:(Option<u64>,u64),cover:CoverCache,
     queue_print:Vec<Option<(std::time::SystemTime,u64)>>,
-    /// 本地队列确认查不到歌名的歌曲 ID：只对它们在线补全。
+    /// 本地佇列確認查不到歌名的歌曲 ID：只對它們線上補全。
     queue_missed:Option<u64>,detail:DetailCache,
 }
 impl Reader {
@@ -341,14 +341,14 @@ impl Reader {
             let replay=self.offset==0;
             self.offset=size;self.ingest(&bytes,now,replay);
         }
-        // 按歌曲 ID 补充不完整的元数据；有封面、歌名也可能仍缺少时长。
+        // 按歌曲 ID 補充不完整的後設資料；有封面、歌名也可能仍缺少時長。
         let id=self.playback.media.song_id;
         if id.is_some() && (!self.playback.media.is_music() || self.playback.media.artist.is_empty() || self.playback.media.duration<=0.0 || self.playback.artwork_url.is_empty()) && (self.lookup.0!=id || now.saturating_sub(self.lookup.1)>=5000){
             let root=path.parent()?;
-            // 大歌单的队列文件可达数十 MB：同一首歌且文件没有变化时不重复查找（这首歌本来就没有封面时会一直满足上面的条件）。
+            // 大歌單的佇列檔案可達數十 MB：同一首歌且檔案沒有變化時不重複查詢（這首歌本來就沒有封面時會一直滿足上面的條件）。
             let print=queue_fingerprint(root);
-            // 完整读过、确实没有这首歌（搜索、每日推荐等不在队列里的歌）也记下指纹：文件不变就不再整份重读，
-            // 否则大歌单下每 5 秒都要解析几十 MB。只有读取失败（被占用、写入中途）才清空指纹，稍后重试。
+            // 完整讀過、確實沒有這首歌（搜尋、每日推薦等不在佇列裡的歌）也記下指紋：檔案不變就不再整份重讀，
+            // 否則大歌單下每 5 秒都要解析幾十 MB。只有讀取失敗（被佔用、寫入中途）才清空指紋，稍後重試。
             if self.lookup.0!=id || self.queue_print!=print {
                 match queue_lookup(root,id?) {
                     QueueLookup::Found(metadata)=>{self.playback.metadata(metadata);self.queue_print=print;self.queue_missed=None;}
@@ -358,7 +358,7 @@ impl Reader {
             }
             self.lookup=(id,now);
         }
-        // 本地查不到歌名（漫游等模式）时按 ID 在线补全；每次轮询都取一下结果，查到后下一次采样就能显示。
+        // 本地查不到歌名（漫遊等模式）時按 ID 線上補全；每次輪詢都取一下結果，查到後下一次取樣就能顯示。
         if let Some(id)=id.filter(|id|self.queue_missed==Some(*id)) {
             if !self.playback.media.is_music() || self.playback.media.artist.is_empty() || self.playback.media.duration<=0.0 || self.playback.artwork_url.is_empty() {
                 let load:fn(u64)->Option<(NowPlaying,String)>=if cfg!(test){|_|None}else{fetch_detail};
@@ -387,10 +387,10 @@ fn queue_fingerprint(root:&Path)->Vec<Option<(std::time::SystemTime,u64)>>{
     QUEUE_FILES.iter().map(|(file,_)|std::fs::metadata(root.join("webdata/file").join(file)).ok().and_then(|meta|Some((meta.modified().ok()?,meta.len())))).collect()
 }
 
-/// 队列文件只防异常：长期用户的「我喜欢」等大歌单可达上万首（约 2KB/首）。
+/// 佇列檔案只防異常：長期使用者的「我喜歡」等大歌單可達上萬首（約 2KB/首）。
 const QUEUE_LIMIT:u64=256*1024*1024;
 
-/// 队列查找结果：找到（可能缺时长）、两个队列都完整读过且没有这首歌、或有队列暂时读不了。
+/// 佇列查詢結果：找到（可能缺時長）、兩個佇列都完整讀過且沒有這首歌、或有佇列暫時讀不了。
 #[derive(Debug)]
 enum QueueLookup {Found((NowPlaying,String)),Absent,Unreadable}
 
@@ -400,11 +400,11 @@ fn queue_lookup(root:&Path,id:u64)->QueueLookup{
         let found=(||{
             let file=match File::open(root.join("webdata/file").join(file)){
                 Ok(file)=>file,
-                // 没有这个队列（比如从没用过私人 FM）不算读取失败。
+                // 沒有這個佇列（比如從沒用過私人 FM）不算讀取失敗。
                 Err(error) if error.kind()==std::io::ErrorKind::NotFound=>return Ok(None),
                 Err(_)=>return Err(()),
             };
-            // 超过上限的文件不变就一直超限，按「没有」处理，不反复尝试。
+            // 超過上限的檔案不變就一直超限，按「沒有」處理，不反覆嘗試。
             if file.metadata().map_err(|_|())?.len()>QUEUE_LIMIT{crate::resources::REJECTED_DATA.fetch_add(1,std::sync::atomic::Ordering::Relaxed);return Ok(None);}
             search_queue(std::io::BufReader::new(file),key,id)
         })();
@@ -416,11 +416,11 @@ fn queue_lookup(root:&Path,id:u64)->QueueLookup{
 }
 
 /// 在 `{"<key>":[歌曲, …]}` 中逐首解析，找到第一首 ID 匹配的歌即停止：
-/// 内存只保留一首歌（约 2KB），不再把整个队列解析成 JSON 树。
+/// 記憶體只保留一首歌（約 2KB），不再把整個佇列解析成 JSON 樹。
 fn find_in_queue<R:Read>(reader:R,key:&str,id:u64)->Option<(NowPlaying,String)>{search_queue(reader,key,id).ok().flatten()}
 
-/// 与 `find_in_queue` 相同，但区分「完整读完、确实没有这首歌」（`Ok(None)`）
-/// 和「格式不符或写入中途截断」（`Err`）：前者文件不变就不必再查，后者要稍后重试。
+/// 與 `find_in_queue` 相同，但區分「完整讀完、確實沒有這首歌」（`Ok(None)`）
+/// 和「格式不符或寫入中途截斷」（`Err`）：前者檔案不變就不必再查，後者要稍後重試。
 fn search_queue<R:Read>(reader:R,key:&str,id:u64)->Result<Option<(NowPlaying,String)>,()>{
     use serde::de::{Deserializer as _,DeserializeSeed,Error as _,IgnoredAny,MapAccess,SeqAccess,Visitor};
     const FOUND:&str="daozai:found";
@@ -452,7 +452,7 @@ fn search_queue<R:Read>(reader:R,key:&str,id:u64)->Result<Option<(NowPlaying,Str
         }
     }
     let mut found=None;
-    // 找到后以约定错误提前结束解析；其余错误（格式不符、写入中途截断）视为暂时读不了。
+    // 找到後以約定錯誤提前結束解析；其餘錯誤（格式不符、寫入中途截斷）視為暫時讀不了。
     let result=serde_json::Deserializer::from_reader(reader).deserialize_map(Root{key,id,found:&mut found});
     if found.is_some(){return Ok(found);}
     result.map(|_|None).map_err(|_|())
@@ -473,7 +473,7 @@ pub(super) fn control(command:super::Transport){
         UI::WindowsAndMessaging::{FindWindowW,PostMessageW,WM_HOTKEY}}};
     let Some(name)=control_hotkey(command) else{return;};
     unsafe{if let Ok(window)=FindWindowW(w!("OrpheusBrowserHost"),PCWSTR::null()){
-        // 读取网易云当前注册的命令，不缓存随进程变化的编号，也不广播系统媒体键。
+        // 讀取網易雲當前註冊的命令，不快取隨程序變化的編號，也不廣播系統媒體鍵。
         let atom=GlobalFindAtomW(&HSTRING::from(name));
         if atom!=0 {let _=PostMessageW(window,WM_HOTKEY,WPARAM(atom as usize),LPARAM(0));}
     }}
@@ -669,7 +669,7 @@ mod tests{
         let lock=std::fs::OpenOptions::new().write(true).share_mode(2|4).open(&queue).unwrap();
         let before=queue_fingerprint(&files.root);assert!(before[0].is_some());
         assert!(File::open(&queue).is_err(),"测试应复现队列暂时不允许读取");
-        // 让原来的补全条件也成立，单独验证读取失败后能否重试。
+        // 讓原來的補全條件也成立，單獨驗證讀取失敗後能否重試。
         let mut partial=incomplete_track(123);partial["album"]=serde_json::json!({});files.log(partial);
         let mut reader=Reader::default();assert_eq!(reader.read(&files.path,Some(9),2000).unwrap().duration,0.0);
         drop(lock);assert_eq!(before,queue_fingerprint(&files.root),"释放读取锁不会改变文件指纹");
@@ -677,7 +677,7 @@ mod tests{
     }
     #[test]
     fn song_missing_from_an_unchanged_queue_is_not_reparsed_every_poll(){
-        // 搜索、每日推荐的歌不在播放队列里：完整读过一次后，文件不变就不能每 5 秒再整份解析一遍。
+        // 搜尋、每日推薦的歌不在播放佇列裡：完整讀過一次後，檔案不變就不能每 5 秒再整份解析一遍。
         let files=QueueFixture::new("absent");let mut other=incomplete_track(456);other["duration"]=240000.into();
         files.queue("playingList","list",serde_json::json!([other]));files.log(incomplete_track(123));
         let mut reader=Reader::default();assert_eq!(reader.read(&files.path,Some(9),2000).unwrap().duration,0.0);
@@ -686,7 +686,7 @@ mod tests{
         let mut found=incomplete_track(123);found["duration"]=180000.into();
         files.queue("playingList","list",serde_json::json!([other,found]));
         assert_eq!(reader.read(&files.path,Some(9),8000).unwrap().duration,180.0,"队列变化后照常重新查找");
-        // 漫游等模式：日志只有歌曲 ID，队列里也没有，界面应显示在线补全的歌名。
+        // 漫遊等模式：日誌只有歌曲 ID，佇列裡也沒有，介面應顯示線上補全的歌名。
         let next=format!("\"native播放资源load完成，开始播放\",{{\"songId\":\"789\"}}");
         { use std::io::Write; std::fs::OpenOptions::new().append(true).open(&files.path).unwrap().write_all(&encode(&event(9,3000,&next))).unwrap(); }
         assert!(reader.read(&files.path,Some(9),9000).is_none(),"只有 ID、没有歌名时不显示");
@@ -720,7 +720,7 @@ mod tests{
         assert_eq!(media.duration,240.0);assert_eq!(media.artist,"已有歌手");assert_eq!(media.album,"已有专辑");
         assert_eq!(reader.playback.artwork_url,"https://p1.music.126.net/test.jpg?param=256y256");
     }
-    /// 旧读法：整份解析后取第一首 ID 匹配的歌，用于新旧结果对比。
+    /// 舊讀法：整份解析後取第一首 ID 匹配的歌，用於新舊結果對比。
     fn whole_file(raw:&[u8],key:&str,id:u64)->Option<(NowPlaying,String)>{
         let value:serde_json::Value=serde_json::from_slice(raw).ok()?;
         value.get(key)?.as_array()?.iter().filter_map(track).find(|t|t.0.song_id==Some(id))
@@ -734,7 +734,7 @@ mod tests{
     }
     #[test]
     fn large_queue_is_searched_song_by_song_with_the_same_result(){
-        // 5000 首、约 2.2KB/首（与本机实测相近）：超过原先 8MB 整份解析的上限。
+        // 5000 首、約 2.2KB/首（與本機實測相近）：超過原先 8MB 整份解析的上限。
         let pad="填".repeat(700);
         let tracks:Vec<_>=(1..=5000u64).map(|id|serde_json::json!({"track":{"id":id,"name":format!("歌{id}"),"artists":[{"name":"歌手"}],
             "album":{"name":"专辑","picUrl":"https://p1.music.126.net/a.jpg"},"duration":200000+id,"extra":pad}})).collect();
@@ -747,10 +747,10 @@ mod tests{
         }
         assert!(find_in_queue(raw.as_slice(),"list",5001).is_none());
         assert!(find_in_queue(raw.as_slice(),"queue",1).is_none(),"只在指定的键下查找");
-        // 同一 ID 出现两次时取第一首，与旧读法一致。
+        // 同一 ID 出現兩次時取第一首，與舊讀法一致。
         let dup=serde_json::json!({"list":[{"id":7,"name":"第一首"},{"id":7,"name":"第二首","duration":1000}]}).to_string();
         assert_eq!(find_in_queue(dup.as_bytes(),"list",7).unwrap().0.title,"第一首");
-        // 客户端写入到一半：目标歌曲已完整写出时可用，未写完时不使用残缺数据。
+        // 客戶端寫入到一半：目標歌曲已完整寫出時可用，未寫完時不使用殘缺資料。
         let cut=&raw[..raw.len()/2];
         assert_eq!(find_in_queue(cut,"list",1).unwrap().0.song_id,Some(1));
         assert!(find_in_queue(cut,"list",5000).is_none());

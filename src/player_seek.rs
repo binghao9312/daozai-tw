@@ -1,4 +1,4 @@
-//! 系统跳转不可用时，定位播放器自己的进度控件并向该窗口发送消息。
+//! 系統跳轉不可用時，定位播放器自己的進度控制元件並向該視窗傳送訊息。
 use windows::{core::{Interface,VARIANT},Win32::{Foundation::*,System::{Com::*,Threading::*},UI::{Accessibility::*,WindowsAndMessaging::*},Graphics::Gdi::ScreenToClient}};
 use windows::Win32::UI::HiDpi::{SetThreadDpiAwarenessContext,DPI_AWARENESS_CONTEXT,DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2};
 use windows::Win32::UI::Input::KeyboardAndMouse::IsWindowEnabled;
@@ -79,7 +79,7 @@ fn apple_value(range:&IUIAutomationRangeValuePattern,duration:f64)->Option<(f64,
 pub(super) fn seek(source:&str,position:f64,duration:f64)->bool{
     let apple=super::apple_music::is_source(source);
     if !apple && !super::is_qqmusic(source){return false;}
-    // 窗口按进程映像名核对：新版的会话身份名（Tencent.QQMusic）不是文件名，统一换成 QQMusic.exe。
+    // 視窗按程序映像名核對：新版的會話身份名（Tencent.QQMusic）不是檔名，統一換成 QQMusic.exe。
     let source=if apple {source} else {"QQMusic.exe"};
     unsafe { (||->Option<()> {
         let _dpi=DpiContext(SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2));
@@ -90,12 +90,12 @@ pub(super) fn seek(source:&str,position:f64,duration:f64)->bool{
         if apple {
             let range=apple_bar(&ui,&root)?;let (_,max)=apple_value(&range,duration)?;
             if range.CurrentIsReadOnly().ok()?.as_bool() || !position.is_finite() || !(0.0..=max).contains(&position){return None;}
-            // 直接设置原生滑块；无需移动鼠标、激活窗口或扫描歌词区域。
+            // 直接設定原生滑塊；無需移動滑鼠、啟用視窗或掃描歌詞區域。
             return range.SetValue(position).ok();
         }
         let bar=qq_bar(&ui,&root,duration)?;
         let target=hwnd;
-        // 坐标来自无障碍控件，不依赖窗口位置；不移动鼠标，也不激活播放器。
+        // 座標來自無障礙控制元件，不依賴視窗位置；不移動滑鼠，也不啟用播放器。
         let mut p=point(bar.CurrentBoundingRectangle().ok()?,position,duration,5.0)?;
         if !ScreenToClient(target,&mut p).as_bool(){return None;}
         let mut client=RECT::default();GetClientRect(target,&mut client).ok()?;

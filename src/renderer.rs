@@ -1,32 +1,32 @@
-//! 渲染方式：默认 OpenGL；部分显卡的 OpenGL 驱动在长时间运行后会崩溃或画面错乱，
-//! 这时改用 Direct3D 12（兼容渲染）。崩溃处理只留一个标记文件，下次启动时再写入设置，
-//! 避免在崩溃现场改写设置文件。
+//! 渲染方式：預設 OpenGL；部分顯示卡的 OpenGL 驅動在長時間執行後會崩潰或畫面錯亂，
+//! 這時改用 Direct3D 12（相容渲染）。崩潰處理只留一個標記檔案，下次啟動時再寫入設定，
+//! 避免在崩潰現場改寫設定檔案。
 use std::sync::atomic::{AtomicBool, Ordering};
 
 static COMPAT_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 fn marker() -> std::path::PathBuf { crate::model::config_dir().join("diagnostics").join("renderer-fallback.txt") }
 
-/// 崩溃模块是不是显卡的 OpenGL 驱动（Intel igxelpicd64 / ig9icd64、NVIDIA nvoglv64、AMD atioglxx 等，
-/// 以及系统的 opengl32）。只看文件名，不含路径。
+/// 崩潰模組是不是顯示卡的 OpenGL 驅動（Intel igxelpicd64 / ig9icd64、NVIDIA nvoglv64、AMD atioglxx 等，
+/// 以及系統的 opengl32）。只看檔名，不含路徑。
 pub fn is_gl_driver(module: &str) -> bool {
     let name = module.rsplit(['\\', '/']).next().unwrap_or(module).to_ascii_lowercase();
     let stem = name.strip_suffix(".dll").unwrap_or(&name);
     stem == "opengl32" || stem.contains("ogl") || (stem.contains("icd") && !stem.contains("vk"))
 }
 
-/// 本次运行实际使用的是不是兼容渲染（崩溃处理据此判断是否还需要切换）。
+/// 本次執行實際使用的是不是相容渲染（崩潰處理據此判斷是否還需要切換）。
 pub fn compat_active() -> bool { COMPAT_ACTIVE.load(Ordering::Relaxed) }
 pub fn set_compat_active(active: bool) { COMPAT_ACTIVE.store(active, Ordering::Relaxed) }
 
-/// 崩溃现场调用：只写一个小标记文件，记下崩溃的驱动模块。
+/// 崩潰現場呼叫：只寫一個小標記檔案，記下崩潰的驅動模組。
 pub fn request_fallback(module: &str) {
     let path = marker();
     if let Some(dir) = path.parent() { let _ = std::fs::create_dir_all(dir); }
     let _ = std::fs::write(path, module.chars().filter(|c| !c.is_control()).take(120).collect::<String>());
 }
 
-/// 启动时调用：有标记就打开兼容渲染并记下原因，返回原因（写入诊断用）。
+/// 啟動時呼叫：有標記就開啟相容渲染並記下原因，返回原因（寫入診斷用）。
 pub fn apply_pending_fallback() -> Option<String> {
     let path = marker();
     let module = std::fs::read_to_string(&path).ok()?;
@@ -41,7 +41,7 @@ pub fn apply_pending_fallback() -> Option<String> {
     Some(settings.render_compat_reason)
 }
 
-/// 本次启动是否使用兼容渲染。
+/// 本次啟動是否使用相容渲染。
 pub fn compat_requested() -> bool { crate::model::Settings::load().render_compat }
 
 #[cfg(test)]

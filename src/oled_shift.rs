@@ -1,25 +1,25 @@
-//! OLED 像素偏移：岛体收起静止时沿停靠边缓慢移动几个像素，
-//! 让常驻的时间、电量等内容不在同一块像素上长期停留。
+//! OLED 畫素偏移：島體收起靜止時沿停靠邊緩慢移動幾個畫素，
+//! 讓常駐的時間、電量等內容不在同一塊畫素上長期停留。
 //!
-//! 目的是**减轻** OLED 静态显示留下的痕迹，不承诺阻止烧屏；默认关闭，
-//! 打开后也不改动用户保存的位置（`island_offset` 不受影响）。
+//! 目的是**減輕** OLED 靜態顯示留下的痕跡，不承諾阻止燒屏；預設關閉，
+//! 開啟後也不改動使用者儲存的位置（`island_offset` 不受影響）。
 //!
-//! 只在收起、可见且没有交互时移动；展开、点击、拖拽时保持当前位置。
-//! 移动只沿不贴边的那一轴进行，贴边的一侧保持严丝合缝。
+//! 只在收起、可見且沒有互動時移動；展開、點選、拖拽時保持當前位置。
+//! 移動只沿不貼邊的那一軸進行，貼邊的一側保持嚴絲合縫。
 use std::time::Duration;
 
 use crate::model::Dock;
 
-/// 单方向最大位移，物理像素。
+/// 單方向最大位移，物理畫素。
 pub const MAX_SHIFT: i32 = 3;
-/// 每一步的间隔。
+/// 每一步的間隔。
 pub const STEP: Duration = Duration::from_secs(45);
-/// 一个来回的步数：0 → MAX_SHIFT → -MAX_SHIFT → 0。
+/// 一個來回的步數：0 → MAX_SHIFT → -MAX_SHIFT → 0。
 pub const CYCLE: u32 = MAX_SHIFT as u32 * 4;
 
-/// 时间表上的位移：0 → 1 → … → MAX_SHIFT → … → -MAX_SHIFT → … → 0。
+/// 時間表上的位移：0 → 1 → … → MAX_SHIFT → … → -MAX_SHIFT → … → 0。
 ///
-/// 每一步只差 1 个像素，所以位置不会突然跳变；一个来回 `CYCLE` 步。
+/// 每一步只差 1 個畫素，所以位置不會突然跳變；一個來回 `CYCLE` 步。
 pub fn offset(elapsed: Duration) -> i32 {
     let max = MAX_SHIFT as i64;
     if max <= 0 { return 0; }
@@ -35,35 +35,35 @@ pub fn offset(elapsed: Duration) -> i32 {
     }
 }
 
-/// 当前应该应用的位移（物理像素）；`enabled` 为 false 时恒为 `(0, 0)`。
+/// 當前應該應用的位移（物理畫素）；`enabled` 為 false 時恆為 `(0, 0)`。
 ///
-/// 顶部停靠只左右移动，左右停靠只上下移动：动了贴边那一侧，刘海和屏幕边缘之间会裂开。
+/// 頂部停靠只左右移動，左右停靠只上下移動：動了貼邊那一側，劉海和螢幕邊緣之間會裂開。
 pub fn shift(enabled: bool, dock: Dock, elapsed: Duration) -> (i32, i32) {
     if !enabled { return (0, 0); }
     let px = offset(elapsed);
     if dock.is_side() { (0, px) } else { (px, 0) }
 }
 
-/// 向目标位移靠近，单轴每次最多 1 个像素。
+/// 向目標位移靠近，單軸每次最多 1 個畫素。
 ///
-/// 展开、拖拽期间位置保持不变，长时间交互后目标可能已经走到别处；
-/// 逐像素收敛可以避免整块面板（连同展开动画）一次跳好几个像素。
+/// 展開、拖拽期間位置保持不變，長時間互動後目標可能已經走到別處；
+/// 逐畫素收斂可以避免整塊面板（連同展開動畫）一次跳好幾個畫素。
 pub fn toward(current: (i32, i32), target: (i32, i32)) -> (i32, i32) {
     fn step(from: i32, to: i32) -> i32 { from + (to - from).clamp(-1, 1) }
     (step(current.0, target.0), step(current.1, target.1))
 }
 
-/// 是否该移动：收起、没有拖拽、不在编辑。
+/// 是否該移動：收起、沒有拖拽、不在編輯。
 ///
-/// 展开、点击、拖拽期间保持当前位置；回到收起静止后再继续。
+/// 展開、點選、拖拽期間保持當前位置；回到收起靜止後再繼續。
 pub fn should_move(expanded: bool, dragging: bool, editing: bool) -> bool {
     !expanded && !dragging && !editing
 }
 
-/// 距离下一次位移还有多久。
+/// 距離下一次位移還有多久。
 ///
-/// 主窗口把它交给现有的重绘调度（`request_repaint_after`），到点醒一次即可，
-/// 不额外起线程、不做高频轮询。刚跨过一步时返回整整一个间隔，不会原地空转。
+/// 主視窗把它交給現有的重繪排程（`request_repaint_after`），到點醒一次即可，
+/// 不額外起執行緒、不做高頻輪詢。剛跨過一步時返回整整一個間隔，不會原地空轉。
 pub fn until_next_step(elapsed: Duration) -> Duration {
     let step = STEP.as_millis();
     let left = (step - elapsed.as_millis() % step) as u64;
@@ -138,7 +138,7 @@ mod tests {
     fn reopening_walks_back_one_pixel_at_a_time() {
         let target = shift(false, Dock::Top, Duration::ZERO);
         assert_eq!(target, (0, 0));
-        // 展开前的位移是 3，直接恢复目标会让整块面板跳 3 像素。
+        // 展開前的位移是 3，直接恢復目標會讓整塊面板跳 3 畫素。
         let mut current = (3, 0);
         let mut frames = 0;
         while current != (0, 0) && frames < 10 {

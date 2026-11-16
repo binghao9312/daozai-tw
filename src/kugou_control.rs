@@ -1,4 +1,4 @@
-//! 酷狗未实现系统跳转时，使用客户端自己的本机播放控制接口。
+//! 酷狗未實現系統跳轉時，使用客戶端自己的本機播放控制介面。
 use std::{path::{Path,PathBuf},time::Duration};
 use base64::Engine;
 
@@ -41,7 +41,7 @@ fn send_seek(base:&str,token:&str,seconds:f64)->Option<()> {
 
 pub fn seek(seconds:f64)->bool {
     if !seconds.is_finite() || !(0.0..86400.0).contains(&seconds){return false;}
-    // 串行化首次握手和跳转，避免连续拖动产生多个本地服务会话。
+    // 序列化首次握手和跳轉，避免連續拖動產生多個本地服務會話。
     static LOCK:std::sync::Mutex<()>=std::sync::Mutex::new(());
     let Ok(_guard)=LOCK.lock() else{return false;};
     let Some((pid,executable))=player() else{return false;};

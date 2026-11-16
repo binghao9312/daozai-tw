@@ -1,11 +1,11 @@
-//! 系统媒体会话（SMTC）读取：Windows 10/11 的“正在播放”。
-//! 与原工具使用同一套 API（GlobalSystemMediaTransportControlsSessionManager）。
+//! 系統媒體會話（SMTC）讀取：Windows 10/11 的“正在播放”。
+//! 與原工具使用同一套 API（GlobalSystemMediaTransportControlsSessionManager）。
 
 #[path="apple_music.rs"]
 mod apple_music;
 #[cfg(windows)]
 #[cfg(windows)]
-// NetEase 私有日志读取已移出音源流程；播放控制仍使用 control()，其余保留以便日后回退。
+// NetEase 私有日誌讀取已移出音源流程；播放控制仍使用 control()，其餘保留以便日後回退。
 #[allow(dead_code)]
 #[path="netease_playback.rs"]
 mod netease_playback;
@@ -57,14 +57,14 @@ pub struct NowPlaying {
     pub song_id: Option<u64>,
     pub playing: bool,
     pub position: f64,
-    /// 播放位置的采样时刻，避免封面读取和线程交接消耗歌词提前量。
+    /// 播放位置的取樣時刻，避免封面讀取和執行緒交接消耗歌詞提前量。
     pub sampled_at: Option<std::time::Instant>,
-    /// 播放事件的 UTC 毫秒，用于比较系统会话与本机日志的新旧。
+    /// 播放事件的 UTC 毫秒，用於比較系統會話與本機日誌的新舊。
     pub event_time_ms: Option<u64>,
     pub duration: f64,
     pub artwork: Option<Arc<eframe::egui::ColorImage>>,
     pub playback_type: MediaKind,
-    /// 当前播放器在 Windows 音量混合器中的音量与静音状态。
+    /// 當前播放器在 Windows 音量混合器中的音量與靜音狀態。
     pub volume: Option<(u32,bool)>,
 }
 
@@ -72,7 +72,7 @@ impl NowPlaying {
     pub fn kind(&self)->MediaKind {
         if self.title.trim().is_empty(){return MediaKind::Unknown;}
         if self.playback_type==MediaKind::Video {return MediaKind::Video;}
-        // 部分浏览器把所有媒体都上报为音乐，补充识别明确的视频页面标题。
+        // 部分瀏覽器把所有媒體都上報為音樂，補充識別明確的影片頁面標題。
         let title=self.title.trim().to_lowercase();
         if [" - 抖音"," - youtube","_哔哩哔哩_bilibili"," - 哔哩哔哩"].iter().any(|suffix|title.ends_with(suffix)) {
             return MediaKind::Video;
@@ -82,11 +82,11 @@ impl NowPlaying {
         if ["chrome","msedge","firefox","brave","opera"].iter().any(|name|source.contains(name)) {
             let album=self.album.trim().to_lowercase();
             if ["bilibili","抖音","哔哩哔哩"].contains(&album.as_str()){return MediaKind::Video;}
-            // YouTube Music 网页版的自动生成歌手频道以 " - Topic" 结尾，与普通视频作者区分开。
+            // YouTube Music 網頁版的自動生成歌手頻道以 " - Topic" 結尾，與普通影片作者區分開。
             if album.contains("youtube music") || source.contains("youtube") || (is_ytmusic_source(&source) && self.artist.trim().to_lowercase().ends_with(" - topic")) {
                 return MediaKind::Music;
             }
-            // 视频作者也可能被放进 Artist；浏览器缺少专辑信息时不自动认作歌曲。
+            // 影片作者也可能被放進 Artist；瀏覽器缺少專輯訊息時不自動認作歌曲。
             if album.is_empty(){return MediaKind::Unknown;}
         }
         if self.artist.trim().is_empty(){MediaKind::Unknown}else{MediaKind::Music}
@@ -125,7 +125,7 @@ struct ArtworkCache {
     worker: Option<ArtworkWorker>,
     pending: bool,
     next_poll: Option<std::time::Instant>,
-    /// 连续读到同一张封面的次数；稳定后放慢复查，每次复查都要向播放器发 3 个系统请求并读出整张图。
+    /// 連續讀到同一張封面的次數；穩定後放慢複查，每次複查都要向播放器發 3 個系統請求並讀出整張圖。
     unchanged: u8,
 }
 
@@ -159,7 +159,7 @@ impl ArtworkCache {
                 Err(std::sync::mpsc::TryRecvError::Empty)=>{},
             }
         }
-        // 最多一个封面读取任务；旧任务结束后只采纳当前歌曲的结果。
+        // 最多一個封面讀取任務；舊任務結束後只採納當前歌曲的結果。
         if !self.pending && self.next_poll.is_none_or(|at|now>=at) {
             let interval=match (&self.image,self.unchanged) {(None,_)=>500,(Some(_),0..=2)=>2000,(Some(_),_)=>30_000};
             self.next_poll=Some(now+Duration::from_millis(interval));
@@ -170,7 +170,7 @@ impl ArtworkCache {
     }
     fn get(&mut self, key:String, load:impl FnOnce()->Option<Vec<u8>>)->Option<Arc<eframe::egui::ColorImage>> {
         if self.key!=key {self.key=key;self.bytes.clear();self.image=None;self.next_poll=None;self.unchanged=0;}
-        // 封面可能晚于歌名更新；每次检查内容，只在图片变化时重新解码。
+        // 封面可能晚於歌名更新；每次檢查內容，只在圖片變化時重新解碼。
         if let Some(bytes)=load() {
             if bytes==self.bytes {self.unchanged=self.unchanged.saturating_add(1);}
             else {
@@ -202,7 +202,7 @@ fn media_result<T:windows::core::RuntimeType+'static>(start:impl FnOnce()->windo
     media_result_in(&crate::resources::ASYNC,start)
 }
 
-/// 封面请求单独计数：播放器的封面接口卡住时，最多占满封面自己的名额，不影响歌名、进度和播放控制。
+/// 封面請求單獨計數：播放器的封面介面卡住時，最多佔滿封面自己的名額，不影響歌名、進度和播放控制。
 #[cfg(windows)]
 fn artwork_result<T:windows::core::RuntimeType+'static>(start:impl FnOnce()->windows::core::Result<windows::Foundation::IAsyncOperation<T>>)->Option<T>{
     media_result_in(&crate::resources::ASYNC_ARTWORK,start)
@@ -210,7 +210,7 @@ fn artwork_result<T:windows::core::RuntimeType+'static>(start:impl FnOnce()->win
 
 #[cfg(windows)]
 fn media_result_in<T:windows::core::RuntimeType+'static>(lane:&'static crate::resources::Lane,start:impl FnOnce()->windows::core::Result<windows::Foundation::IAsyncOperation<T>>)->Option<T>{
-    // 必须在创建 WinRT 请求之前占用名额；超时请求保留到确认终止。
+    // 必須在建立 WinRT 請求之前佔用名額；超時請求保留到確認終止。
     thread_local!{static RETRY_AT:std::cell::Cell<Option<std::time::Instant>>=const{std::cell::Cell::new(None)};}
     let now=std::time::Instant::now();
     if RETRY_AT.with(|at|at.get().is_some_and(|at|now<at)){return None;}
@@ -247,10 +247,10 @@ fn read_artwork(props:&windows::Media::Control::GlobalSystemMediaTransportContro
     Some(bytes)
 }
 
-/// YouTube Music 常见的 SourceAppUserModelId：Chrome / Edge / Brave 的 PWA 与分页，以及原生或第三方客户端。
+/// YouTube Music 常見的 SourceAppUserModelId：Chrome / Edge / Brave 的 PWA 與分頁，以及原生或第三方客戶端。
 pub(crate) const YTMUSIC_SOURCE_IDS:&[&str]=&["chrome.exe","msedge.exe","brave.exe","ytm-rs.exe","youtube music desktop app","pear desktop"];
 
-/// 是否属于 YouTube Music 的音源（含浏览器）。浏览器只凭来源名不足以判定歌曲，调用方还需看标题与歌手。
+/// 是否屬於 YouTube Music 的音源（含瀏覽器）。瀏覽器只憑來源名不足以判定歌曲，呼叫方還需看標題與歌手。
 pub(crate) fn is_ytmusic_source(source:&str)->bool {
     let s=source.to_ascii_lowercase();
     YTMUSIC_SOURCE_IDS.contains(&s.as_str()) || is_ytmusic(&s)
@@ -261,8 +261,8 @@ pub(crate) fn is_ytmusic(source:&str)->bool {
     s.contains("ytm-rs") || s.contains("youtube music") || s.contains("peardesktop") || s.contains("pear desktop")
 }
 
-/// QQ 音乐在系统媒体会话里的身份名：22.76 及以前是 `QQMusic.exe`，22.82 起改为 `Tencent.QQMusic`。
-/// 进度拖动、音量都要认出它；会话查找仍用原始身份名。
+/// QQ 音樂在系統媒體會話裡的身份名：22.76 及以前是 `QQMusic.exe`，22.82 起改為 `Tencent.QQMusic`。
+/// 進度拖動、音量都要認出它；會話查詢仍用原始身份名。
 pub(crate) fn is_qqmusic(source:&str)->bool {
     matches!(source.to_ascii_lowercase().as_str(),"qqmusic"|"qqmusic.exe"|"tencent.qqmusic")
 }
@@ -276,7 +276,7 @@ pub fn shared() -> Shared {
 fn choose_media(system:Option<NowPlaying>,native:Option<NowPlaying>)->Option<NowPlaying>{
     if let (Some(system),Some(native))=(&system,&native){
         if system.source.eq_ignore_ascii_case("cloudmusic.exe") && native.source.eq_ignore_ascii_case("cloudmusic.exe"){
-            // SMTC 与网易云日志的歌手分隔符、合唱署名写法不同；按规范化后的歌名与歌手集合判断，避免同一首歌丢失 song_id。
+            // SMTC 與網易雲日誌的歌手分隔符、合唱署名寫法不同；按規範化後的歌名與歌手集合判斷，避免同一首歌丟失 song_id。
             let same=crate::lyrics::same_song(&system.title,&system.artist,&native.title,&native.artist);
             let newer=match (native.event_time_ms,system.event_time_ms){(Some(n),Some(s))=>Some(n>s),_=>None};
             let use_native=newer.unwrap_or(same && system.playing==native.playing);
@@ -302,7 +302,7 @@ fn media_rank(media:&NowPlaying)->u8{
 }
 
 fn choose_media_for_source(system:Option<NowPlaying>,native:Option<NowPlaying>,previous:&str,native_pending:bool)->Option<NowPlaying>{
-    // 暂停或载入下一首时保留控制对象，其他客户端开始播放则照常切换。
+    // 暫停或載入下一首時保留控制物件，其他客戶端開始播放則照常切換。
     if previous.eq_ignore_ascii_case("cloudmusic.exe") && !system.as_ref().is_some_and(|m|m.playing && m.is_music())
         && (native.is_some() || native_pending) {
         if native.is_some() && system.as_ref().is_some_and(|m|m.source.eq_ignore_ascii_case(previous)){return choose_media(system,native);}
@@ -327,7 +327,7 @@ fn query_system(artwork:&mut ArtworkCache) -> Result<Option<NowPlaying>,()> {
     let all=mgr.GetSessions().map_err(|_|{artwork.manager=None;})?;
     for session in all{if !sessions.contains(&session){sessions.push(session);}}
     if sessions.is_empty(){return Ok(None);}
-    // 先比较全部会话；视频不能遮挡音乐，封面只为最终选中的会话读取。
+    // 先比較全部會話；影片不能遮擋音樂，封面只為最終選中的會話讀取。
     let previous=artwork.system.as_ref().map(|(media,_)|media.source.clone());
     let mut unreadable_previous=false;
     let (session,mut media)=sessions.iter().filter_map(|session|{
@@ -337,7 +337,7 @@ fn query_system(artwork:&mut ArtworkCache) -> Result<Option<NowPlaying>,()> {
     })
         .min_by_key(|(_,media)|media_rank(media)).ok_or(())?;
     music_log::player(&media.source);
-    // 当前播放器正在重载时，不把暂停中的另一客户端当成用户切换了播放源。
+    // 當前播放器正在過載時，不把暫停中的另一客戶端當成使用者切換了播放源。
     if media_rank(&media)>0 && unreadable_previous{return Err(());}
     let key=format!("{}|{}|{}|{}",media.source,media.title,media.artist,media.album);
     let session=session.clone();
@@ -385,7 +385,7 @@ fn read_session(session:&windows::Media::Control::GlobalSystemMediaTransportCont
         if let Ok(p) = tl.Position() {
             position = p.Duration as f64 / 10_000_000.0;
         }
-        // SMTC 只在事件发生时更新 Position；播放中要按 LastUpdatedTime 外推到「现在」。
+        // SMTC 只在事件發生時更新 Position；播放中要按 LastUpdatedTime 外推到「現在」。
         if playing {
             if let Ok(at) = tl.LastUpdatedTime() {
                 let now = unsafe { windows::Win32::System::SystemInformation::GetSystemTimeAsFileTime() };
@@ -421,7 +421,7 @@ pub enum Transport {
     Toggle,
     Next,
     Prev,
-    /// 跳到第几秒。
+    /// 跳到第幾秒。
     Seek(f64),
     SetVolume(u32),
     SetMute(bool),
@@ -443,7 +443,7 @@ impl ControlWorker {
         crate::resources::CONTROL.spawn(move||{
             let _apartment=init_winrt();
             while let Ok(first)=rx.recv(){
-                // 拖动进度条会连续排入多次跳转；QQ 音乐的跳转要遍历播放器界面并等待回读，只执行同一播放器的最后一次。
+                // 拖動進度條會連續排入多次跳轉；QQ 音樂的跳轉要遍歷播放器介面並等待回讀，只執行同一播放器的最後一次。
                 let mut batch=vec![first];
                 while let Ok(next)=rx.try_recv(){batch.push(next);}
                 let mut batch=batch.into_iter().peekable();
@@ -466,7 +466,7 @@ impl ControlWorker {
     }
 }
 
-/// 控制当前媒体会话（播放/暂停、上一首、下一首）。
+/// 控制當前媒體會話（播放/暫停、上一首、下一首）。
 #[cfg(windows)]
 pub fn control(cmd: Transport,source:&str) {
     if let Transport::SetVolume(percent)=cmd {crate::music_volume::set_volume(source,percent);return;}
@@ -494,10 +494,10 @@ pub fn control(cmd: Transport,source:&str) {
 #[cfg(not(windows))]
 pub fn control(_cmd: Transport,_source:&str) {}
 
-/// QQ 音乐自带的 `/seekto <秒>` 命令：由客户端的单实例通道转交给正在运行的 QQ 音乐，不依赖窗口和界面结构，
-/// 最小化时同样有效。22.82 起界面改由 QBCore 渲染、点击进度条的回退失效，系统跳转也只回报成功不实际跳转，
-/// 这是新版唯一可用的跳转方式（本机 22.82 实测）。只在 QQ 音乐已运行时调用其自身程序，不会启动新的客户端。
-/// 方案来自 cayww 的 PR #162。
+/// QQ 音樂自帶的 `/seekto <秒>` 命令：由客戶端的單例項通道轉交給正在執行的 QQ 音樂，不依賴視窗和介面結構，
+/// 最小化時同樣有效。22.82 起介面改由 QBCore 渲染、點選進度條的回退失效，系統跳轉也只回報成功不實際跳轉，
+/// 這是新版唯一可用的跳轉方式（本機 22.82 實測）。只在 QQ 音樂已執行時呼叫其自身程式，不會啟動新的客戶端。
+/// 方案來自 cayww 的 PR #162。
 #[cfg(windows)]
 fn qq_seek_command(seconds:f64)->bool{
     let Some(path)=player_process::pids_named("QQMusic.exe").into_iter().find_map(player_process::image_path) else{return false;};
@@ -509,7 +509,7 @@ fn qq_seek_command(seconds:f64)->bool{
         .spawn().is_ok()
 }
 
-/// 跳转在工作线程执行；专用回退必须回读实际位置，避免播放器接口假成功。
+/// 跳轉在工作執行緒執行；專用回退必須回讀實際位置，避免播放器介面假成功。
 #[cfg(windows)]
 pub fn seek(seconds:f64,source:&str)->bool {
     if !seconds.is_finite() || seconds<0.0{return false;}
@@ -539,7 +539,7 @@ pub fn seek(seconds:f64,source:&str)->bool {
         .and_then(|info|info.PlaybackStatus().ok()).is_some_and(|status|status!=windows::Media::Control::GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing);
     let accepted=(!native || enabled) && session.as_ref().and_then(|s|media_result(||s.TryChangePlaybackPositionAsync((target*10_000_000.0)as i64)))==Some(true);
     if !native{return accepted;}
-    // 依次尝试：系统接口 → QQ 音乐自带的 /seekto 命令 → 点击界面进度条（旧版）。每一级都回读位置确认。
+    // 依次嘗試：系統介面 → QQ 音樂自帶的 /seekto 命令 → 點選介面進度條（舊版）。每一級都回讀位置確認。
     for stage in 0..3 {
         match stage {
             0=>{if !accepted{continue;}}
@@ -552,7 +552,7 @@ pub fn seek(seconds:f64,source:&str)->bool {
         while start.elapsed()<timeout {
             std::thread::sleep(Duration::from_millis(100));
             if timeline().is_some_and(|(current,total)|(total-duration).abs()<1.5 && seek_arrived(current,target,start.elapsed().as_secs_f64())){
-                // QQ 的原生进度条会自动续播；确认续播事件后再恢复暂停，避免命令被覆盖。
+                // QQ 的原生進度條會自動續播；確認續播事件後再恢復暫停，避免命令被覆蓋。
                 if paused_qq && session.as_ref().and_then(|s|s.GetPlaybackInfo().ok()).and_then(|i|i.PlaybackStatus().ok())
                     ==Some(windows::Media::Control::GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing){
                     if !pause_requested {
@@ -580,7 +580,7 @@ fn seek_apple(session:&windows::Media::Control::GlobalSystemMediaTransportContro
         loop{if ready(){return true;}if start.elapsed()>=timeout{return false;}std::thread::sleep(Duration::from_millis(100));}
     };
     let success=(||{
-        // Apple Music 暂停时忽略滑块设置；跳转完成后恢复原来的暂停状态。
+        // Apple Music 暫停時忽略滑塊設定；跳轉完成後恢復原來的暫停狀態。
         if paused && (media_result(||session.TryPlayAsync())!=Some(true) || !wait(Duration::from_secs(2),&||status()==Some(Status::Playing))){return false;}
         for attempt in 0..2 {
             if !player_seek::seek(source,target,duration){return false;}
@@ -596,7 +596,7 @@ fn seek_apple(session:&windows::Media::Control::GlobalSystemMediaTransportContro
     if paused {
         let mut accepted=media_result(||session.TryPauseAsync())==Some(true);
         let start=std::time::Instant::now();let mut paused_at=None;let mut seen_pause=false;let mut retried=false;
-        // 原生滑块可能稍后再次续播，连续确认暂停后才结束；只补发一次暂停。
+        // 原生滑塊可能稍後再次續播，連續確認暫停後才結束；只補發一次暫停。
         while start.elapsed()<Duration::from_secs(3){
             let current=status();
             if current==Some(Status::Paused){
@@ -639,7 +639,7 @@ fn init_winrt()->MediaApartment {MediaApartment(unsafe{windows::Win32::System::C
 #[cfg(not(windows))]
 fn init_winrt() {}
 
-// 音乐客户端可能重复上报同一播放位置，保留该位置首次采样的时间。
+// 音樂客戶端可能重複上報同一播放位置，保留該位置首次取樣的時間。
 #[derive(Default)]
 struct PlaybackClock { previous: Option<NowPlaying> }
 impl PlaybackClock {
@@ -676,7 +676,7 @@ fn kugou_repeated_samples_do_not_freeze_lyrics() {
         assert_eq!(position,42.0+second as f64,"重复采样不能把进度拉回原地");
         if second>=3 {assert_eq!(lyrics.index_at(position as f32),Some(1));}
     }
-    // 新位置、暂停、恢复、切歌和切换播放器必须建立新的采样基准。
+    // 新位置、暫停、恢復、切歌和切換播放器必須建立新的取樣基準。
     for (position,playing,title,source) in [(12.0,true,"歌曲","KuGou.exe"),(12.0,false,"歌曲","KuGou.exe"),
         (12.0,true,"歌曲","KuGou.exe"),(12.0,true,"新歌","KuGou.exe"),(12.0,true,"新歌","QQMusic.exe")] {
         let now=media.sampled_at.unwrap()+Duration::from_secs(1);
@@ -720,7 +720,7 @@ fn other_clients_repeated_samples_keep_the_clock_running() {
             media.sampled_at=Some(now);clock.update(&mut media);
             assert_eq!(media.sampled_at,Some(now),"{source} 状态变化必须重置时钟");
         }
-        // 会话消失或缺少有效时间轴后，恢复时不能沿用旧计时。
+        // 會話消失或缺少有效時間軸後，恢復時不能沿用舊計時。
         clock.update(&mut NowPlaying::default());
         let now=start+Duration::from_secs(30);
         media.sampled_at=Some(now);clock.update(&mut media);assert_eq!(media.sampled_at,Some(now));
@@ -735,7 +735,7 @@ impl MediaMemory {
     fn update(&mut self,media:&mut NowPlaying,now:std::time::Instant){
         if media.playback_type==MediaKind::Video{self.last=None;return;}
         if media.title.trim().is_empty(){
-            // 会话重建时可短暂返回空值；保留窗口不刷新期限，真正退出最多延迟两秒收起。
+            // 會話重建時可短暫返回空值；保留視窗不重新整理期限，真正退出最多延遲兩秒收起。
             if let Some((old,at))=&self.last {
                 if now.duration_since(*at)<=Duration::from_secs(2) && (media.source.is_empty() || media.source==old.source){
                     *media=old.clone();return;
@@ -745,7 +745,7 @@ impl MediaMemory {
         }
         let complete=!media.artist.trim().is_empty() && media.duration>0.0;
         if let Some((old,at))=&self.last {
-            // 一路来源暂时没有 song_id（SMTC 不提供）不算换歌；两路都有且不同才是另一首。
+            // 一路來源暫時沒有 song_id（SMTC 不提供）不算換歌；兩路都有且不同才是另一首。
             let same=media.source==old.source && media.title==old.title
                 && (media.song_id.is_none() || old.song_id.is_none() || media.song_id==old.song_id)
                 && (media.artist.trim().is_empty() || crate::lyrics::artist_set(&media.artist)==crate::lyrics::artist_set(&old.artist));
@@ -753,7 +753,7 @@ impl MediaMemory {
                 if media.artist.trim().is_empty(){media.artist=old.artist.clone();}
                 if media.song_id.is_none(){media.song_id=old.song_id;}
                 if media.duration<=0.0{media.duration=old.duration;}
-                // 同一歌曲的秒数舍入波动不代表换歌，避免重置歌词和重复请求。
+                // 同一歌曲的秒數舍入波動不代表換歌，避免重置歌詞和重複請求。
                 if (media.duration-old.duration).abs()<=1.0{media.duration=old.duration;}
             }else if !same {self.last=None;}
         }
@@ -765,17 +765,17 @@ pub struct Poller {
     enabled:Arc<std::sync::atomic::AtomicBool>,stop:Arc<std::sync::atomic::AtomicBool>,worker:Option<std::thread::JoinHandle<()>>,
     interval_ms:Arc<std::sync::atomic::AtomicU32>,
 }
-/// 看着音乐页或刚点过播放控制时的采样间隔，与改版前一致。
+/// 看著音樂頁或剛點過播放控制時的取樣間隔，與改版前一致。
 pub const POLL_FAST:Duration=Duration::from_millis(250);
-/// 岛上收起显示歌词时：换歌、暂停最多晚半秒，歌词进度由本地时钟推算，不受影响。
+/// 島上收起顯示歌詞時：換歌、暫停最多晚半秒，歌詞進度由本地時鐘推算，不受影響。
 pub const POLL_LYRICS:Duration=Duration::from_millis(500);
-/// 其他时候只需跟上歌名和播放状态。
+/// 其他時候只需跟上歌名和播放狀態。
 pub const POLL_BACKGROUND:Duration=Duration::from_millis(1000);
-/// 没有任何播放器在放时，按请求间隔的 4 倍再放慢，限制在 1～2 秒。
+/// 沒有任何播放器在放時，按請求間隔的 4 倍再放慢，限制在 1～2 秒。
 fn idle_interval(requested:u32)->u32{requested.saturating_mul(4).clamp(1000,2000)}
 impl Poller {
     pub fn store(&self,enabled:bool,order:std::sync::atomic::Ordering){self.enabled.store(enabled,order);}
-    /// 调整采样间隔；变快时立即唤醒采样线程补查一次，展开音乐页或点控制按钮后马上看到最新状态。
+    /// 調整取樣間隔；變快時立即喚醒取樣執行緒補查一次，展開音樂頁或點控制按鈕後馬上看到最新狀態。
     pub fn set_interval(&self,interval:Duration){
         let ms=interval.as_millis().clamp(50,10_000) as u32;
         let previous=self.interval_ms.swap(ms,std::sync::atomic::Ordering::Relaxed);
@@ -789,7 +789,7 @@ impl Drop for Poller {
     }
 }
 
-/// 后台线程：刷新正在播放；持有者销毁后停止，不在界面线程等待 COM 返回。
+/// 後臺執行緒：重新整理正在播放；持有者銷燬後停止，不在介面執行緒等待 COM 返回。
 pub fn spawn_poller(state: Shared,ctx:eframe::egui::Context)->Poller {
     let enabled=Arc::new(std::sync::atomic::AtomicBool::new(true));
     let active=enabled.clone();
@@ -831,7 +831,7 @@ pub fn spawn_poller(state: Shared,ctx:eframe::egui::Context)->Poller {
             memory.update(&mut np,std::time::Instant::now());
             np.volume=volume.poll(&np.source);
             if !np.source.is_empty(){selected_source=np.source.clone();}
-            // 播放器没给封面（缺系统缩略图、电台 / FM 等模式）时按歌名在线找一张。
+            // 播放器沒給封面（缺系統縮圖、電臺 / FM 等模式）時按歌名線上找一張。
             #[cfg(windows)]
             if np.artwork.is_none(){np.artwork=cover_search.fill(&np,std::time::Instant::now());}
             playback_clock.update(&mut np);
@@ -891,11 +891,11 @@ mod tests {
         assert!(media_text(Ok(windows::core::HSTRING::from("字".repeat(4097)))).is_none());
         assert_eq!(media_text(Ok(windows::core::HSTRING::from("正常歌名"))).as_deref(),Some("正常歌名"));
     }
-    /// 控制线程全进程只允许一个，用到它的测试需要串行。
+    /// 控制執行緒全程序只允許一個，用到它的測試需要序列。
     static CONTROL_TESTS:Mutex<()>=Mutex::new(());
-    /// 封面线程全进程最多两个，其中一项测试会故意把它们占满；用到封面线程的测试需要串行，否则并行时会互相抢名额而误报。
+    /// 封面執行緒全程序最多兩個，其中一項測試會故意把它們佔滿；用到封面執行緒的測試需要序列，否則並行時會互相搶名額而誤報。
     static ARTWORK_TESTS:Mutex<()>=Mutex::new(());
-    /// 上一个测试释放工作对象后，后台线程要稍后才退出并交还名额；开始前先等名额空出来。
+    /// 上一個測試釋放工作物件後，後臺執行緒要稍後才退出並交還名額；開始前先等名額空出來。
     fn wait_lane_idle(lane:&'static crate::resources::Lane){
         let until=std::time::Instant::now()+Duration::from_secs(5);
         while lane.active()>0 && std::time::Instant::now()<until{std::thread::sleep(Duration::from_millis(5));}
@@ -961,7 +961,7 @@ mod tests {
     }
     #[test]
     fn resource_poller_stops_even_when_shared_state_is_still_owned(){
-        // 采样线程会建自己的封面缓存并占用封面名额。
+        // 取樣執行緒會建自己的封面快取並佔用封面名額。
         let _serial=ARTWORK_TESTS.lock().unwrap_or_else(|e|e.into_inner());wait_lane_idle(&crate::resources::ARTWORK);
         let state=shared();let poller=spawn_poller(state.clone(),eframe::egui::Context::default());
         poller.store(false,std::sync::atomic::Ordering::Relaxed);drop(poller);
@@ -1310,7 +1310,7 @@ mod tests {
     fn artwork_cache_replaces_a_temporary_cover_on_the_same_song(){
         let mut cache=ArtworkCache::default();
         let temporary=cache.get("song".into(),||Some(cover_bytes(eframe::egui::Color32::RED))).unwrap();
-        // 网页可能先提供占位图，随后才发布真实封面。
+        // 網頁可能先提供佔點陣圖，隨後才釋出真實封面。
         let actual=cache.get("song".into(),||Some(cover_bytes(eframe::egui::Color32::BLUE))).unwrap();
         assert!(!Arc::ptr_eq(&temporary,&actual),"同一首歌的真实封面到达后必须替换占位图");
         assert_eq!(actual.pixels[0],eframe::egui::Color32::BLUE);

@@ -1,4 +1,4 @@
-//! DeepSeek API 余额与系统凭据存储。
+//! DeepSeek API 餘額與系統憑據儲存。
 use super::{Account,Snapshot};
 use serde_json::Value;
 use std::{io::Read,sync::mpsc};

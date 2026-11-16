@@ -1,16 +1,16 @@
-//! 换歌与歌曲信息补全时的歌词状态：不串歌、不闪烁、不叠加网络线程。
+//! 換歌與歌曲訊息補全時的歌詞狀態：不串歌、不閃爍、不疊加網路執行緒。
 use super::*;
 use crate::smtc::NowPlaying;
 
 fn song(source:&str,title:&str,artist:&str,duration:f64)->NowPlaying{
-    // 播放器上报为音乐：歌手暂时为空时仍按歌曲处理（与真实客户端一致）。
+    // 播放器上報為音樂：歌手暫時為空時仍按歌曲處理（與真實客戶端一致）。
     NowPlaying{source:source.into(),title:title.into(),artist:artist.into(),duration,playing:true,position:7.0,
         playback_type:crate::smtc::MediaKind::Music,..Default::default()}
 }
 
 fn lyrics_on(h:&mut H){h.app.opts.fetch_lyrics=true;h.app.settings.island_lyrics=true;h.app.show_lyrics=true;}
 
-/// 用一个阻塞中的假线程占住网络名额：排队的查询不会真的联网。
+/// 用一個阻塞中的假執行緒佔住網路名額：排隊的查詢不會真的聯網。
 fn busy(h:&mut H)->(std::sync::mpsc::Sender<()>,std::thread::ThreadId){
     let (release,wait)=std::sync::mpsc::channel::<()>();
     let worker=std::thread::spawn(move||{let _=wait.recv();});
@@ -21,7 +21,7 @@ fn finish(h:&mut H,release:std::sync::mpsc::Sender<()>){
     release.send(()).unwrap();h.app.ly_worker.take().unwrap().join().unwrap();
 }
 
-/// 模拟当前歌曲已查到同步歌词。
+/// 模擬當前歌曲已查到同步歌詞。
 fn showing(h:&mut H,media:&NowPlaying,lrc:&str){
     h.media=media.clone();h.frame(vec![]);
     h.app.ly=crate::app::LyricsState{
@@ -61,7 +61,7 @@ fn filled_in_duration_keeps_synced_lyrics_without_a_new_lookup(){
     assert_eq!(h.app.ly.lyrics.as_ref().unwrap().lines[1].text,"从出生那年就飘着","补全时长不能清空歌词");
     assert!(!h.app.ly.loading && h.app.ly.pending.is_none(),"已有同步歌词时补全时长不再查询");
     assert_eq!(h.app.island_lyric().map(|(_,line)|line),Some("从出生那年就飘着"));
-    // 歌手从空补全、写法变化同样视为同一首。
+    // 歌手從空補全、寫法變化同樣視為同一首。
     let mut blank=song("QQMusic.exe","晴天","",269.0);showing(&mut h,&blank,"[00:05]从出生那年就飘着");
     blank.artist="周杰伦".into();h.media=blank;h.frame(vec![]);
     assert!(h.app.ly.lyrics.is_some() && h.app.ly.pending.is_none());

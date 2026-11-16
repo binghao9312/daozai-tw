@@ -1,7 +1,7 @@
-//! 极简 egui 软件光栅器：把 `ClippedPrimitive` 三角形网格画进 RGBA 帧缓冲。
+//! 極簡 egui 軟體光柵器：把 `ClippedPrimitive` 三角形網格畫進 RGBA 幀緩衝。
 //!
-//! 与 egui_glow 的混合方式一致：顶点色与纹理都是 gamma 空间预乘 alpha，
-//! `dst = src + dst·(1 - src.a)`。抗锯齿由 egui 的羽化网格本身提供。
+//! 與 egui_glow 的混合方式一致：頂點色與紋理都是 gamma 空間預乘 alpha，
+//! `dst = src + dst·(1 - src.a)`。抗鋸齒由 egui 的羽化網格本身提供。
 
 use eframe::egui::{epaint, ImageData, TextureId, TexturesDelta};
 use std::collections::HashMap;
@@ -76,7 +76,7 @@ impl Raster {
             let tex = self.textures.get(&mesh.texture_id).map(|t| t as *const Tex);
             for tri in mesh.indices.chunks_exact(3) {
                 let v = [&mesh.vertices[tri[0] as usize], &mesh.vertices[tri[1] as usize], &mesh.vertices[tri[2] as usize]];
-                // SAFETY: 纹理表在绘制期间不会被修改
+                // SAFETY: 紋理表在繪製期間不會被修改
                 let t = tex.map(|p| unsafe { &*p });
                 self.tri(v, ppp, (cx0, cy0, cx1, cy1), t);
             }
@@ -104,7 +104,7 @@ impl Raster {
         let uv: [(f32, f32); 3] = std::array::from_fn(|i| (v[i].uv.x, v[i].uv.y));
         let edge = |a: (f32, f32), b: (f32, f32), x: f32, y: f32| (b.0 - a.0) * (y - a.1) - (b.1 - a.1) * (x - a.0);
         for y in y0..y1 {
-            let py = y as f32 + 0.5 + 0.000291; // 采样点微偏：共享边上的像素只归一个三角形
+            let py = y as f32 + 0.5 + 0.000291; // 取樣點微偏：共享邊上的畫素只歸一個三角形
             for x in x0..x1 {
                 let px = x as f32 + 0.5 + 0.000137;
                 let w0 = edge(p[1], p[2], px, py) * inv;

@@ -1,4 +1,4 @@
-//! 不需要交换标准输入输出的外部程序启动。
+//! 不需要交換標準輸入輸出的外部程式啟動。
 use std::{io,process::{Child,Command}};
 
 pub fn spawn(command:&mut Command)->io::Result<Child>{

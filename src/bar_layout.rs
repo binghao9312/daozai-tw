@@ -1,10 +1,10 @@
-//! 常驻组件按实际占位排布，并在开关变化时连续补位。
+//! 常駐元件按實際佔位排布，並在開關變化時連續補位。
 use crate::anim::{smoothstep, Spring};
 
 pub(crate) const CLOCK: usize = 0;
 pub(crate) const BATTERY: usize = 1;
 pub(crate) const QUOTA: usize = 2;
-/// 可独立排列的天气徽标。
+/// 可獨立排列的天氣徽標。
 pub(crate) const WEATHER: usize = 5;
 pub(crate) fn quota_slot(position:usize)->usize {
     if position<3 {QUOTA+position} else {WIDTHS.len()+position-3}
@@ -13,7 +13,7 @@ pub(crate) const MUSIC: usize = 6;
 pub(crate) const FOCUS: usize = 7;
 pub(crate) const BELL: usize = 8;
 pub(crate) const PET: usize = 9;
-/// 天气徽标的基础槽宽；温度文字更长时由 `widen` 补足。
+/// 天氣徽標的基礎槽寬；溫度文字更長時由 `widen` 補足。
 pub(crate) const WEATHER_WIDTH: f32 = 38.0;
 const WIDTHS: [f32; 10] = [44.0,20.0,27.0,27.0,27.0,WEATHER_WIDTH,14.0,crate::focus_bar::WIDTH,20.0,32.0];
 
@@ -74,7 +74,7 @@ impl Layout {
         Self {width:width.max(96.0),x,widths,quotas}
     }
     pub fn quota_slots(&self)->impl Iterator<Item=usize> { (0..self.quotas).map(quota_slot) }
-    /// 把某个槽加宽 extra：其余槽对称让位并记入总宽。点数文字、时段时钟、天气温度共用。
+    /// 把某個槽加寬 extra：其餘槽對稱讓位並記入總寬。點數文字、時段時鐘、天氣溫度共用。
     pub fn widen(&mut self,slot:usize,extra:f32){
         if extra<=0.0 {return;}
         let Some(center)=self.x.get(slot).copied().flatten() else {return;};
@@ -101,7 +101,7 @@ impl Layout {
             cursor+=right-left+12.0;
         }
     }
-    /// 圆环换边经过时钟时，暂时淡出时钟，避免移动中相互遮挡。
+    /// 圓環換邊經過時鐘時，暫時淡出時鐘，避免移動中相互遮擋。
     pub fn clearance(&self,slot:usize)->f32 {
         let Some(x)=self.x[slot] else{return 0.0;};
         let distance=self.quota_slots().filter_map(|i|self.x[i].map(|other|(other-x).abs()-(self.widths[i]-27.0)/2.0)).fold(f32::INFINITY,f32::min);
@@ -240,7 +240,7 @@ mod tests {
                 layout.reorder(&order);
                 let (clock,weather)=match (layout.x[CLOCK],layout.x[WEATHER]) {(Some(c),Some(w))=>(c,w),_=>panic!("時鐘與天氣都應就位：{layout:?}")};
                 assert!(weather>clock+22.0+6.9,"天氣應緊跟時鐘右側：時鐘 {clock}，天氣 {weather}");
-                // 相邻排列的时钟与天气保持标准组件间距。
+                // 相鄰排列的時鐘與天氣保持標準元件間距。
                 assert!((weather-clock-(38.0+44.0)/2.0-12.0).abs()<0.01);
                 let mut boxes:Vec<_>=layout.x.iter().enumerate().filter_map(|(i,x)|x.map(|x|(x-layout.widths[i]/2.0,x+layout.widths[i]/2.0))).collect();
                 boxes.sort_by(|a,b|a.0.total_cmp(&b.0));
@@ -266,7 +266,7 @@ mod tests {
         let mut boxes:Vec<_>=layout.x.iter().enumerate().filter_map(|(i,x)|x.map(|x|(x-layout.widths[i]/2.0,x+layout.widths[i]/2.0))).collect();
         boxes.sort_by(|a,b|a.0.total_cmp(&b.0));
         assert!(boxes.windows(2).all(|p|p[1].0-p[0].1>=6.9));
-        // 未就位的槽位调用 widen 应是空操作。
+        // 未就位的槽位呼叫 widen 應是空操作。
         let mut empty=Layout::new(true,0,true,true,false,true,false);
         let width=empty.width;empty.widen(WEATHER,20.0);
         assert_eq!(empty.width,width);

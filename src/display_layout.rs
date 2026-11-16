@@ -1,14 +1,14 @@
-//! 按显示屏的物理坐标居中岛体，透明画布的额外宽度不参与居中。
+//! 按顯示屏的物理座標居中島體，透明畫布的額外寬度不參與居中。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Bounds { pub left:i32, pub top:i32, pub right:i32, pub bottom:i32 }
 
 #[derive(Clone, Debug)]
 pub struct Display { pub id:String, pub label:String, pub bounds:Bounds,
-    /// 工作区顶边：顶栏类软件或置顶的任务栏登记后会比 `bounds.top` 更靠下。
+    /// 工作區頂邊：頂欄類軟體或置頂的工作列登記後會比 `bounds.top` 更靠下。
     pub work_top:i32, pub primary:bool }
 
-/// 岛体摆放用的屏幕范围：开启「避开顶栏」时顶边换成工作区顶边。
-/// 只认屏幕上方三分之一以内的占用，异常的工作区不会把岛推到屏幕中间。
+/// 島體擺放用的螢幕範圍：開啟「避開頂欄」時頂邊換成工作區頂邊。
+/// 只認螢幕上方三分之一以內的佔用，異常的工作區不會把島推到螢幕中間。
 pub fn placement_bounds(display:&Display, avoid_top_bar:bool)->Bounds {
     let mut b=display.bounds;
     let reserved=display.work_top-b.top;
@@ -56,18 +56,18 @@ pub fn island_origin(m:Bounds, island_width:f32, scale:f32)->Option<(i32,i32)> {
     Some((x.clamp(i32::MIN as f64,i32::MAX as f64) as i32,m.top))
 }
 
-/// 岛体可见内容（展开面板、肩部与阴影）距中心的最大半宽，逻辑点。
-/// 水平偏移以此为界，保证展开后面板仍完整留在屏幕内。
+/// 島體可見內容（展開面板、肩部與陰影）距中心的最大半寬，邏輯點。
+/// 水平偏移以此為界，保證展開後面板仍完整留在螢幕內。
 pub const ISLAND_HALF_EXTENT: f32 = 240.0;
 
-/// 岛体中心能离开屏幕中线的最大距离（物理像素）。屏幕太窄时为 0，只能居中。
+/// 島體中心能離開螢幕中線的最大距離（物理畫素）。螢幕太窄時為 0，只能居中。
 pub fn island_travel(m:Bounds, scale:f32)->f64 {
     if m.right<=m.left || !scale.is_finite() || scale<=0.0 {return 0.0;}
     ((m.right as f64-m.left as f64)/2.0-ISLAND_HALF_EXTENT as f64*scale as f64).max(0.0)
 }
 
-/// 按水平偏移定位：`offset` 为 -1（最左）..0（居中）..1（最右），按可移动范围的比例换算，
-/// 所以换屏、改系统缩放或调整岛体大小后仍保持相同的相对位置。
+/// 按水平偏移定位：`offset` 為 -1（最左）..0（居中）..1（最右），按可移動範圍的比例換算，
+/// 所以換屏、改系統縮放或調整島體大小後仍保持相同的相對位置。
 pub fn island_origin_offset(m:Bounds, island_width:f32, scale:f32, offset:f32)->Option<(i32,i32)> {
     let (x,y)=island_origin(m,island_width,scale)?;
     let offset=if offset.is_finite(){offset.clamp(-1.0,1.0)}else{0.0};
@@ -75,8 +75,8 @@ pub fn island_origin_offset(m:Bounds, island_width:f32, scale:f32, offset:f32)->
     Some(((x as f64+shift).clamp(i32::MIN as f64,i32::MAX as f64) as i32,y))
 }
 
-/// 左右停靠：画布贴着屏幕左 / 右边，竖直方向按 `offset`（-1 最上 … 0 居中 … 1 最下）移动，
-/// 可移动范围保证展开面板始终完整留在屏幕内。返回画布左上角（物理像素）。
+/// 左右停靠：畫布貼著螢幕左 / 右邊，豎直方向按 `offset`（-1 最上 … 0 居中 … 1 最下）移動，
+/// 可移動範圍保證展開面板始終完整留在螢幕內。返回畫布左上角（物理畫素）。
 pub fn side_origin(m:Bounds, dock:crate::model::Dock, canvas:(f32,f32), half_extent:f32, scale:f32, offset:f32)->Option<(i32,i32)> {
     if m.right<=m.left || m.bottom<=m.top || !scale.is_finite() || scale<=0.0 {return None;}
     let (w,h)=((canvas.0*scale) as f64,(canvas.1*scale) as f64);
@@ -87,17 +87,17 @@ pub fn side_origin(m:Bounds, dock:crate::model::Dock, canvas:(f32,f32), half_ext
     Some((x.round() as i32,(cy-h/2.0).round() as i32))
 }
 
-/// 当前站位下，OLED 像素偏移往两侧各还能走多少物理像素。
+/// 當前站位下，OLED 畫素偏移往兩側各還能走多少物理畫素。
 ///
-/// `half_extent` 是展开面板相对岛体中心的最大半宽（顶部停靠）或半高（左右停靠）。
-/// 留出的余量保证展开面板仍完整留在屏幕内：位置拉到最边、或屏幕窄到没有余量时，
-/// 返回值会很小甚至为 0，调用方据此少挪或不挪。返回值是 (向小坐标, 向大坐标)。
+/// `half_extent` 是展開面板相對島體中心的最大半寬（頂部停靠）或半高（左右停靠）。
+/// 留出的餘量保證展開面板仍完整留在螢幕內：位置拉到最邊、或螢幕窄到沒有餘量時，
+/// 返回值會很小甚至為 0，呼叫方據此少挪或不挪。返回值是 (向小座標, 向大座標)。
 pub fn shift_slack(m:Bounds, scale:f32, half_extent:f32, offset:f32, dock:crate::model::Dock)->(i32,i32) {
     if m.right<=m.left || m.bottom<=m.top || !scale.is_finite() || scale<=0.0 || !half_extent.is_finite() || half_extent<=0.0 {return (0,0);}
     let offset=if offset.is_finite() {offset.clamp(-1.0,1.0)} else {0.0} as f64;
     let half=half_extent as f64*scale as f64;
     let (low,high)=if dock.is_side() {(m.top as f64,m.bottom as f64)} else {(m.left as f64,m.right as f64)};
-    // 与 island_travel / side_origin 用同一个可移动范围，余量才不会和实际站位对不上。
+    // 與 island_travel / side_origin 用同一個可移動範圍，餘量才不會和實際站位對不上。
     let travel=((high-low)/2.0-half).max(0.0);
     let center=(low+high)/2.0+travel*offset;
     let back=(center-half-low).max(0.0);
@@ -307,7 +307,7 @@ mod tests {
     }
 }
 
-/// 只有岛仔所在屏幕的前台全屏窗口才触发隐藏。
+/// 只有島仔所在螢幕的前臺全屏視窗才觸發隱藏。
 pub fn hide_for_fullscreen(enabled:bool,fullscreen:Option<Bounds>,island:Option<Bounds>)->bool {
     enabled && fullscreen.is_some() && fullscreen==island
 }

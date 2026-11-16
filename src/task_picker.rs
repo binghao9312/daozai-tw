@@ -1,4 +1,4 @@
-//! 岛内右侧的日期、小时和分钟滚轮。
+//! 島內右側的日期、小時和分鐘滾輪。
 use chrono::{Datelike,Duration,Local,NaiveDate,NaiveDateTime,Timelike};
 use eframe::egui::{self,Color32};
 use crate::paint::{capsule,Card,H};
@@ -8,7 +8,7 @@ pub(crate) enum PickerAction { Save, Skip, Cancel }
 pub(crate) struct ReminderPicker {
     pub open:bool,
     pub focus:bool,
-    /// 每周重复的待办：只看时间，允许选今天已过去的时刻；左侧说明文字。
+    /// 每週重複的待辦：只看時間，允許選今天已過去的時刻；左側說明文字。
     pub repeat_note:Option<String>,
     origin:NaiveDate,
     positions:[i64;3],

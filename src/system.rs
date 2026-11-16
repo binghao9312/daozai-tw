@@ -1,4 +1,4 @@
-//! Windows 状态采样与经用户授权的通知读取。
+//! Windows 狀態取樣與經使用者授權的通知讀取。
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::mpsc::{self, Receiver};
@@ -38,7 +38,7 @@ pub struct Observation {
     pub fullscreen: Option<crate::display_layout::Bounds>,
 }
 
-/// 跨进程输入法查询和 COM 状态采样留在后台，只在状态改变时唤醒界面。
+/// 跨程序輸入法查詢和 COM 狀態取樣留在後臺，只在狀態改變時喚醒介面。
 pub fn observe(ctx:eframe::egui::Context,initial:Snapshot,input:Option<crate::input::State>)->Receiver<Observation> {
     let(tx,rx)=mpsc::sync_channel(1);
     std::thread::Builder::new().name("daozai-system".into()).spawn(move||{
@@ -131,7 +131,7 @@ unsafe fn audio_device() -> Result<IMMDevice> {    thread_local! {static INITIAL
             let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
         }
     });
-    // 每个采样线程复用枚举器，但每次仍查询当前默认设备，保留热插拔响应。
+    // 每個取樣執行緒複用列舉器，但每次仍查詢當前預設裝置，保留熱插拔響應。
     thread_local! {static ENUMERATOR:std::cell::RefCell<Option<IMMDeviceEnumerator>>=const{std::cell::RefCell::new(None)};}
     ENUMERATOR.with(|slot| {
         let mut slot=slot.borrow_mut();
@@ -142,7 +142,7 @@ unsafe fn audio_device() -> Result<IMMDevice> {    thread_local! {static INITIAL
     })
 }
 unsafe fn audio() -> Result<IAudioEndpointVolume> {audio_device()?.Activate(CLSCTX_ALL,None)}
-/// 设置主音量（0..100）；同时解除静音，拖动音量条时立刻能听到。
+/// 設定主音量（0..100）；同時解除靜音，拖動音量條時立刻能聽到。
 #[cfg(windows)]
 pub fn set_volume(percent: u32) {
     unsafe {
@@ -153,7 +153,7 @@ pub fn set_volume(percent: u32) {
     }
 }
 
-/// 切换静音，返回切换后的静音状态（拿不到设备时返回 None）。
+/// 切換靜音，返回切換後的靜音狀態（拿不到裝置時返回 None）。
 #[cfg(windows)]
 pub fn toggle_mute() -> Option<bool> {
     unsafe {
@@ -164,7 +164,7 @@ pub fn toggle_mute() -> Option<bool> {
     }
 }
 
-/// 当前会话是否锁屏。查询走 WTS（一次本机 RPC），按 2 秒缓存，避免每帧都查。
+/// 當前會話是否鎖屏。查詢走 WTS（一次本機 RPC），按 2 秒快取，避免每幀都查。
 pub fn screen_locked() -> bool {
     use std::sync::Mutex;
     use std::time::{Duration, Instant};
@@ -208,28 +208,28 @@ pub fn idle_seconds() -> f64 {
         }
     }
 }
-/// 前台窗口在全屏判定里需要的信息。
+/// 前臺視窗在全屏判定裡需要的訊息。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Foreground {
     hwnd: isize,
     pid: u32,
-    /// 最终所有者窗口（没有所有者时是它自己）。
+    /// 最終所有者視窗（沒有所有者時是它自己）。
     root_owner: isize,
-    /// 会在任务栏单独显示按钮的普通程序窗口（不是工具窗口、对话框或浮动面板）。
+    /// 會在工作列單獨顯示按鈕的普通程式視窗（不是工具視窗、對話方塊或浮動面板）。
     app_window: bool,
 }
 
-/// 前台从全屏窗口切到别的窗口时，是否仍按原来的全屏处理（岛仔保持隐藏）。
+/// 前臺從全屏視窗切到別的視窗時，是否仍按原來的全屏處理（島仔保持隱藏）。
 ///
-/// 3ds Max、Photoshop 这类软件全屏（或最大化后盖满整块屏幕）时，插件面板、浮动工具条、
-/// 属性对话框都是同一个程序的附属窗口；每点一下前台就在它们和主窗口之间来回切，
-/// 过去岛仔会跟着「出现 → 消失」闪一次。只要原来的全屏窗口还盖着屏幕，
-/// 而新的前台是它的附属窗口（被它拥有，或同一程序里不单独占任务栏的窗口），就继续隐藏。
-/// 切到另一个程序、或同一程序里另开的普通窗口（如浏览器的新窗口）时照常显示。
+/// 3ds Max、Photoshop 這類軟體全屏（或最大化後蓋滿整塊螢幕）時，外掛面板、浮動工具條、
+/// 屬性對話方塊都是同一個程式的附屬視窗；每點一下前臺就在它們和主視窗之間來回切，
+/// 過去島仔會跟著「出現 → 消失」閃一次。只要原來的全屏視窗還蓋著螢幕，
+/// 而新的前臺是它的附屬視窗（被它擁有，或同一程式裡不單獨佔工作列的視窗），就繼續隱藏。
+/// 切到另一個程式、或同一程式裡另開的普通視窗（如瀏覽器的新視窗）時照常顯示。
 fn keeps_fullscreen(last: Foreground, still_covers: bool, now: Option<Foreground>) -> bool {
     if !still_covers { return false; }
     match now {
-        // 激活切换的瞬间前台可能是空的，不当成离开全屏。
+        // 啟用切換的瞬間前臺可能是空的，不當成離開全屏。
         None => true,
         Some(now) => now.hwnd == last.hwnd || now.root_owner == last.hwnd || (now.pid == last.pid && !now.app_window),
     }
@@ -246,7 +246,7 @@ unsafe fn foreground_info(hwnd: HWND) -> Foreground {
     Foreground { hwnd: hwnd.0 as isize, pid, root_owner, app_window }
 }
 
-/// 窗口盖满它所在的整块屏幕时返回该屏幕范围。
+/// 視窗蓋滿它所在的整塊螢幕時返回該螢幕範圍。
 unsafe fn covering_monitor(hwnd: HWND) -> Option<crate::display_layout::Bounds> {
     if !IsWindow(hwnd).as_bool() || !IsWindowVisible(hwnd).as_bool() || IsIconic(hwnd).as_bool() {
         return None;
@@ -272,19 +272,19 @@ unsafe fn covering_monitor(hwnd: HWND) -> Option<crate::display_layout::Bounds> 
 
 pub fn fullscreen() -> Option<crate::display_layout::Bounds> {
     use std::sync::Mutex;
-    // 上一次判定为全屏的窗口：前台切到它的附属窗口时沿用（见 `keeps_fullscreen`）。
+    // 上一次判定為全屏的視窗：前臺切到它的附屬視窗時沿用（見 `keeps_fullscreen`）。
     static LAST: Mutex<Option<Foreground>> = Mutex::new(None);
     let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
     unsafe {
         let hwnd = GetForegroundWindow();
         let now = (!hwnd.0.is_null()).then(|| foreground_info(hwnd));
         if let Some(info) = now {
-            // 岛仔自己的窗口（设置窗口等）不算全屏，也不沿用。
+            // 島仔自己的視窗（設定視窗等）不算全屏，也不沿用。
             if info.pid == windows::Win32::System::Threading::GetCurrentProcessId() {
                 *last = None;
                 return None;
             }
-            // 桌面与资源管理器桌面窗口不能当成全屏游戏。
+            // 桌面與資源管理器桌面視窗不能當成全屏遊戲。
             let mut cls = [0u16; 64];
             let n = GetClassNameW(hwnd, &mut cls);
             let cls = String::from_utf16_lossy(&cls[..n.max(0) as usize]);
@@ -316,16 +316,16 @@ mod fullscreen_follow_tests {
 
     #[test]
     fn plugin_panels_and_dialogs_of_the_fullscreen_app_keep_the_island_hidden() {
-        // 被主窗口拥有的插件面板 / 对话框
+        // 被主視窗擁有的外掛面板 / 對話方塊
         let owned = Foreground { hwnd: 200, pid: 7, root_owner: 100, app_window: false };
         assert!(keeps_fullscreen(MAX, true, Some(owned)));
-        // 同一程序里不占任务栏的浮动工具窗口（没有设所有者）
+        // 同一程式裡不佔工作列的浮動工具視窗（沒有設所有者）
         let tool = Foreground { hwnd: 201, pid: 7, root_owner: 201, app_window: false };
         assert!(keeps_fullscreen(MAX, true, Some(tool)));
-        // 插件放在独立进程里、但窗口挂在主窗口下面
+        // 外掛放在獨立程序裡、但視窗掛在主視窗下面
         let other_process = Foreground { hwnd: 202, pid: 9, root_owner: 100, app_window: false };
         assert!(keeps_fullscreen(MAX, true, Some(other_process)));
-        // 激活切换瞬间前台为空
+        // 啟用切換瞬間前臺為空
         assert!(keeps_fullscreen(MAX, true, None));
     }
 
@@ -333,10 +333,10 @@ mod fullscreen_follow_tests {
     fn switching_to_another_app_or_leaving_fullscreen_shows_the_island() {
         let other_app = Foreground { hwnd: 300, pid: 9, root_owner: 300, app_window: true };
         assert!(!keeps_fullscreen(MAX, true, Some(other_app)), "切到別的程式時照常顯示");
-        // 同一程序新开的普通窗口（如浏览器的第二个窗口）也照常显示
+        // 同一程式新開的普通視窗（如瀏覽器的第二個視窗）也照常顯示
         let second_window = Foreground { hwnd: 301, pid: 7, root_owner: 301, app_window: true };
         assert!(!keeps_fullscreen(MAX, true, Some(second_window)));
-        // 原来的全屏窗口已经还原、最小化或关闭
+        // 原來的全屏視窗已經還原、最小化或關閉
         let owned = Foreground { hwnd: 200, pid: 7, root_owner: 100, app_window: false };
         assert!(!keeps_fullscreen(MAX, false, Some(owned)));
         assert!(!keeps_fullscreen(MAX, false, None));
@@ -352,7 +352,7 @@ pub(crate) fn is_browser_process(name:&str)->bool {
 
 fn browser_overlaps_island(browser:RECT,island:RECT,dock:crate::model::Dock)->bool {
     if dock.is_side() {return window_covers_side(browser,island,dock);}
-    // 窗口是 CANVAS_W 宽的透明画布，岛体中心固定在画布左侧 WIN_W/2 处（与水平位置、大小无关）。
+    // 視窗是 CANVAS_W 寬的透明畫布，島體中心固定在畫布左側 WIN_W/2 處（與水平位置、大小無關）。
     let scale=(island.right-island.left) as f32/crate::app::CANVAS_W;
     let center=island.left as f32+crate::app::WIN_W*scale/2.0;
     let half=crate::app::PW*scale/2.0;
@@ -360,8 +360,8 @@ fn browser_overlaps_island(browser:RECT,island:RECT,dock:crate::model::Dock)->bo
         && (browser.top as f32)<island.top as f32+crate::app::BAR_H*scale && browser.bottom>island.top
 }
 
-/// 左右停靠：画布是 SIDE_W × SIDE_H，岛体贴在画布的左 / 右边、竖直居中。
-/// 前台窗口盖住岛所在的那一段屏幕边缘（例如最大化、全屏或贴边摆放）即视为遮挡。
+/// 左右停靠：畫布是 SIDE_W × SIDE_H，島體貼在畫布的左 / 右邊、豎直居中。
+/// 前臺視窗蓋住島所在的那一段螢幕邊緣（例如最大化、全屏或貼邊擺放）即視為遮擋。
 fn window_covers_side(window:RECT,island:RECT,dock:crate::model::Dock)->bool {
     let scale=(island.right-island.left) as f32/crate::side_dock::SIDE_W;
     let cy=island.top as f32+crate::side_dock::SIDE_H*scale/2.0;
@@ -379,7 +379,7 @@ pub fn browser_at_top(island:HWND,settings:&crate::model::Settings)->Option<bool
         if foreground.0.is_null(){return None;}
         let mut pid=0;
         GetWindowThreadProcessId(foreground,Some(&mut pid));
-        // 设置、托盘和岛内输入沿用此前的避让状态，避免自身窗口引起反复切换。
+        // 設定、系統匣和島內輸入沿用此前的避讓狀態，避免自身視窗引起反覆切換。
         if pid==0 || pid==GetCurrentProcessId(){return None;}
         let mut browser_rect=RECT::default();let mut island_rect=RECT::default();
         if GetWindowRect(foreground,&mut browser_rect).is_err() || GetWindowRect(island,&mut island_rect).is_err(){return None;}
@@ -426,7 +426,7 @@ fn notification_body(n: &UserNotification) -> Result<String> {
     }
     Ok(parts.join(" · "))
 }
-/// 停止信号独立于消息队列，断开后结束等待，不再读取通知。
+/// 停止訊號獨立於訊息佇列，斷開後結束等待，不再讀取通知。
 pub struct Notifications {
     incoming: Receiver<Incoming>,
     stop: mpsc::Sender<()>,
@@ -463,7 +463,7 @@ impl NotificationBaseline {
         let Some(previous)=&self.previous else{return version.created>self.started;};
         let Some(old)=previous.get(&id) else{return self.primed || version.created>self.started;};
         if old.created!=version.created{return true;}
-        // 未读取、读取失败后的首次成功只建立指纹，避免通道切换和恢复读取时重放旧通知。
+        // 未讀取、讀取失敗後的首次成功只建立指紋，避免通道切換和恢復讀取時重放舊通知。
         matches!((old.body,version.body),(ToastBody::Read(before),ToastBody::Read(after)) if before!=after)
     }
     fn finish(&mut self,mut current:HashMap<u32,ToastVersion>,complete:bool){
@@ -476,7 +476,7 @@ impl NotificationBaseline {
             Err(_)=>{
                 if let Some(old)=self.previous.as_ref().and_then(|items|items.get(&id)).filter(|old|old.created==created && old.client==client){return (*old,None);}
                 let version=ToastVersion{created,client,body:ToastBody::Unavailable};
-                // 已确认是新通知时仍给通用提醒；恢复正文后只补指纹，不重复弹出。
+                // 已確認是新通知時仍給通用提醒；恢復正文後只補指紋，不重複彈出。
                 let message=self.changed(id,version).then(||if tracked{"有新訊息".into()}else{"收到新通知".into()});
                 return (version,message);
             }
@@ -499,7 +499,7 @@ fn channel_status(client:crate::messenger::Messenger)->String{
     }
 }
 
-/// 必须由窗口线程发起权限请求，后台仅读取新增或更新的通知。
+/// 必須由視窗執行緒發起許可權請求，後臺僅讀取新增或更新的通知。
 pub fn connect(ctx:eframe::egui::Context,filter:crate::messenger::NotificationFilter) -> Result<Notifications> {
     connect_inner(ctx,filter,crate::messenger::toast_suppression(&crate::model::Settings::default()))
 }
@@ -562,11 +562,11 @@ fn connect_inner(ctx:eframe::egui::Context,filter:crate::messenger::Notification
                     if let Some(old)=baseline.unchanged_other(number,created){current.insert(number,old);continue;}
                     let known=baseline.previous.as_ref().and_then(|old|old.get(&number)).filter(|old|old.created==created).and_then(|old|old.client);
                     let (app,id)=notification_identity(&n,number,created,known);
-                    // 微信只走任务栏事件，即使客户端同时发送系统通知也不读取其正文。
+                    // 微信只走工作列事件，即使客戶端同時傳送系統通知也不讀取其正文。
                     let client=crate::messenger::Messenger::from_notification_id(&id);
                     if !filter.allows(&id) || crate::messenger::suppresses_toast(&app,&id,worker_mask.load(std::sync::atomic::Ordering::Relaxed)){current.insert(number,ToastVersion::new(created,client,None));continue;}
                     let tracked=client.is_some();
-                    // 已适配客户端同时检查正文变化；其他应用的启动历史不需要读取正文。
+                    // 已適配客戶端同時檢查正文變化；其他應用的啟動歷史不需要讀取正文。
                     let body=if tracked || baseline.previous.is_some() || created>baseline.started{notification_body(&n)}else{Ok(String::new())};
                     let (version,body)=baseline.observe(number,created,client,tracked,body);
                     current.insert(number,version);
@@ -629,7 +629,7 @@ pub fn pick_files_for(title:&str,multiple:bool) -> Result<Vec<std::path::PathBuf
         Ok(out)
     }
 }
-/// 构建资源管理器可识别的文件数据对象。
+/// 構建資源管理器可識別的檔案資料物件。
 fn file_data_object(path: &std::path::Path) -> Result<windows::Win32::System::Com::IDataObject> {
     unsafe {
         use windows::Win32::UI::Shell::*;
@@ -652,7 +652,7 @@ fn file_data_object(path: &std::path::Path) -> Result<windows::Win32::System::Co
         result
     }
 }
-/// 原生拖出只允许复制，取消拖放不会改变置物架与原文件。
+/// 原生拖出只允許複製，取消拖放不會改變置物架與原檔案。
 pub fn drag_file(path: &std::path::Path) -> Result<()> {
     unsafe {
         use windows::Win32::System::Ole::{OleInitialize, OleUninitialize, DROPEFFECT_COPY};
@@ -764,7 +764,7 @@ mod tests {
     #[test]
     fn side_dock_avoidance_checks_the_covered_screen_edge(){
         use crate::model::Dock;
-        // 1920×1080 屏幕，100% 缩放：左侧画布 0..500，竖直居中（240..840），岛体中心 y=540。
+        // 1920×1080 螢幕，100% 縮放：左側畫布 0..500，豎直居中（240..840），島體中心 y=540。
         let left=RECT{left:0,top:240,right:500,bottom:840};
         let right=RECT{left:1420,top:240,right:1920,bottom:840};
         let maximized=RECT{left:-8,top:-8,right:1928,bottom:1048};

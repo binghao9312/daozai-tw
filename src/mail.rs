@@ -1,11 +1,11 @@
-//! 邮件（v0.5.5）：六类邮箱的账号模型、IMAP 收取、正文解析。
+//! 郵件（v0.5.5）：六類信箱的帳號模型、IMAP 收取、正文解析。
 //!
-//! 轻量化约束：只用 Rust 原生 crate（`imap` + `native-tls` + `mailparse`），
-//! 不引 Node/Go/Electron。凭据一律进 Windows 凭据管理器（`keyring`），
-//! 账号清单只存「邮箱 + 类型 + 是否监控」，不存密码。
+//! 輕量化約束：只用 Rust 原生 crate（`imap` + `native-tls` + `mailparse`），
+//! 不引 Node/Go/Electron。憑據一律進 Windows 憑據管理器（`keyring`），
+//! 帳號清單隻存「信箱 + 型別 + 是否監控」，不存密碼。
 //!
-//! 收信优先 `Session::idle()` 长连接；服务器不支持 IDLE 时退回轮询（60/120/300 秒）。
-//! 正文只在内存里解析，不落盘、不缓存。
+//! 收信優先 `Session::idle()` 長連線；伺服器不支援 IDLE 時退回輪詢（60/120/300 秒）。
+//! 正文只在記憶體裡解析，不落盤、不快取。
 
 use std::collections::HashMap;
 #[cfg(windows)]
@@ -15,7 +15,7 @@ pub(crate) mod fetch;
 pub const SERVICE: &str = "Daozai.Mail";
 pub const MICROSOFT_UNSUPPORTED: &str = "Outlook、Hotmail、Live 和 Microsoft 365 雲信箱需要 OAuth 授權，島仔暫不支援密碼直連。";
 
-// ---------------------------------------------------------------- 邮箱类型
+// ---------------------------------------------------------------- 信箱型別
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Provider {
@@ -85,12 +85,12 @@ impl Provider {
         993
     }
 
-    /// 163 / 126 在 LOGIN 之前必须发 RFC 2971 的 `ID`，否则会被判 Unsafe Login。
+    /// 163 / 126 在 LOGIN 之前必須發 RFC 2971 的 `ID`，否則會被判 Unsafe Login。
     pub fn needs_id(self) -> bool {
         matches!(self, Provider::Mail163 | Provider::Mail126)
     }
 
-    /// 设置界面的操作指引。
+    /// 設定介面的操作指引。
     pub fn hint(self) -> &'static str {
         match self {
             Provider::Microsoft => MICROSOFT_UNSUPPORTED,
@@ -131,14 +131,14 @@ impl Provider {
     }
 }
 
-// ---------------------------------------------------------------- 账号与状态
+// ---------------------------------------------------------------- 帳號與狀態
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Account {
     pub email: String,
     pub provider: Provider,
     pub custom: Option<CustomImap>,
-    /// 是否监控这个账号（设置里可逐个开关）。
+    /// 是否監控這個帳號（設定裡可逐個開關）。
     pub enabled: bool,
 }
 
@@ -190,7 +190,7 @@ pub fn load_accounts() -> Vec<Account> {
     }
 }
 
-/// 纯解析：账号清单里只有邮箱、类型、开关，没有任何密码字段。
+/// 純解析：帳號清單裡只有信箱、型別、開關，沒有任何密碼欄位。
 pub fn decode_accounts(raw: &[u8]) -> Vec<Account> {
     let Ok(json) = serde_json::from_slice::<serde_json::Value>(raw) else {
         return Vec::new();
@@ -238,7 +238,7 @@ pub enum Status {
     Idle,
     Connecting,
     Ready,
-    /// 授权码缺失或失效。
+    /// 授權碼缺失或失效。
     Auth(String),
     Failed(String),
 }
@@ -263,18 +263,18 @@ pub struct Item {
     pub account: String,
     pub from: String,
     pub subject: String,
-    /// 本地时间 `MM-DD HH:MM`
+    /// 本地時間 `MM-DD HH:MM`
     pub time: String,
     pub code: Option<String>,
     /// IMAP INTERNALDATE, used only to bound code display age.
     pub received_unix: Option<i64>,
-    /// 完整纯文字正文，保留分段，仅保存在内存中。
+    /// 完整純文字正文，保留分段，僅儲存在記憶體中。
     pub summary: std::sync::Arc<str>,
-    /// HTML 原文（无 HTML 版本时为空）。排版层据此还原标题、列表、引用等结构；
-    /// `summary` 只作为纯文本邮件的兜底，两者都只在内存中保存。
+    /// HTML 原文（無 HTML 版本時為空）。排版層據此還原標題、列表、引用等結構；
+    /// `summary` 只作為純文字郵件的兜底，兩者都只在記憶體中儲存。
     pub html: std::sync::Arc<str>,
     pub links: Vec<Link>,
-    /// 会议邀请（来自 .ics / text/calendar），没有就是 `None`。
+    /// 會議邀請（來自 .ics / text/calendar），沒有就是 `None`。
     pub meeting: Option<Meeting>,
     pub uid: u32,
 }
@@ -285,7 +285,7 @@ pub struct Link {
     pub url: String,
 }
 
-/// 仅把有效网页链接交给默认浏览器。
+/// 僅把有效網頁連結交給預設瀏覽器。
 pub fn web_url(raw:&str)->Option<String> {
     let parsed=url::Url::parse(raw.trim()).ok()?;
     if !matches!(parsed.scheme(),"https"|"http") || parsed.host_str().is_none(){return None;}
@@ -322,18 +322,18 @@ pub fn links_of(parsed:&Parsed)->Vec<Link> {
     links
 }
 
-/// 会议邀请里界面和提醒要用的字段。
+/// 會議邀請裡介面和提醒要用的欄位。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Meeting {
     pub all_day: bool,
     pub title: String,
-    /// 开始时间（Unix 秒，本地时区解释）。
+    /// 開始時間（Unix 秒，本地時區解釋）。
     pub start: i64,
-    /// 来源提供的结束时间；缺失或无效时不推测时长。
+    /// 來源提供的結束時間；缺失或無效時不推測時長。
     pub end: Option<i64>,
-    /// 本地时间 `MM-DD HH:MM`，直接显示。
+    /// 本地時間 `MM-DD HH:MM`，直接顯示。
     pub at: String,
-    /// iCalendar 的 `UID`；邮件和日历两条来源靠它 + 开始时间去重。
+    /// iCalendar 的 `UID`；郵件和日曆兩條來源靠它 + 開始時間去重。
     pub uid: String,
 }
 
@@ -350,11 +350,11 @@ pub enum Event {
 pub struct Parsed {
     pub from: String,
     pub subject: String,
-    /// text/plain 正文（没有则空）。
+    /// text/plain 正文（沒有則空）。
     pub text: String,
-    /// text/html 正文转成的纯文本（没有则空）。
+    /// text/html 正文轉成的純文字（沒有則空）。
     pub html: String,
-    /// text/calendar 正文（.ics 原文，没有则空）。
+    /// text/calendar 正文（.ics 原文，沒有則空）。
     pub calendar: String,
     pub emphasized: Vec<String>,
 }
@@ -405,7 +405,7 @@ fn collect(mail: &mailparse::ParsedMail, plain: &mut String, html: &mut String, 
     }
 }
 
-/// 解析一封原始邮件（头部 + 正文），只保留界面上要用的字段。
+/// 解析一封原始郵件（頭部 + 正文），只保留介面上要用的欄位。
 pub fn parse_message(raw: &[u8]) -> Parsed {
     let Ok(mail) = mailparse::parse_mail(raw) else {
         return Parsed {
@@ -429,7 +429,7 @@ pub fn parse_message(raw: &[u8]) -> Parsed {
     Parsed { from, subject, text: plain, html, calendar, emphasized }
 }
 
-/// 优先纯文本；HTML 原文另外保留给阅读界面排版。
+/// 優先純文字；HTML 原文另外保留給閱讀介面排版。
 pub fn body_of(parsed:&Parsed)->String {
     let body = if !parsed.text.trim().is_empty() {
         parsed.text.clone()
@@ -441,7 +441,7 @@ pub fn body_of(parsed:&Parsed)->String {
     body.replace("\r\n","\n").trim().to_string()
 }
 
-/// 紧凑场景使用的短摘要。
+/// 緊湊場景使用的短摘要。
 pub fn summary_of(parsed: &Parsed) -> String {
     let body=body_of(parsed);
     let flat = body.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -452,7 +452,7 @@ pub fn summary_of(parsed: &Parsed) -> String {
     out
 }
 
-/// 从解析结果里提验证码：先纯文本，纯文本没有再看 HTML 文本。
+/// 從解析結果裡提驗證碼：先純文字，純文字沒有再看 HTML 文字。
 pub fn code_of(parsed: &Parsed) -> Option<String> {
     if let Some(c) = otp::extract(&parsed.subject, &parsed.text, &parsed.emphasized) {
         return Some(c.text);
@@ -466,17 +466,17 @@ pub fn code_of(parsed: &Parsed) -> Option<String> {
     None
 }
 
-/// 从 .ics 文本里取第一个 VEVENT 的标题与开始时间（邮件正文用）。
+/// 從 .ics 文字里取第一個 VEVENT 的標題與開始時間（郵件正文用）。
 pub fn meeting_of(calendar: &str) -> Option<Meeting> {
     meetings_of(calendar).into_iter().next()
 }
 
-/// 从一段 iCalendar 里取出所有带时刻的 VEVENT。
+/// 從一段 iCalendar 裡取出所有帶時刻的 VEVENT。
 ///
-/// CalDAV 的 `calendar-query` 一次会返回多个事件，邮件里的 `.ics` 通常只有一个；
-/// 两者共用这一套解析；支持带时刻和全天日期，没有有效 DTSTART 就跳过。
+/// CalDAV 的 `calendar-query` 一次會返回多個事件，郵件裡的 `.ics` 通常只有一個；
+/// 兩者共用這一套解析；支援帶時刻和全天日期，沒有有效 DTSTART 就跳過。
 pub fn meetings_of(calendar: &str) -> Vec<Meeting> {
-    // RFC 5545 折行：以空格/制表符开头的行是上一行的续行。
+    // RFC 5545 折行：以空格/製表符開頭的行是上一行的續行。
     let mut lines: Vec<String> = Vec::new();
     for raw in calendar.lines() {
         let line = raw.trim_end_matches('\r');
@@ -567,7 +567,7 @@ fn event_of(fields: &[(String, String)]) -> Option<Meeting> {
     })
 }
 
-/// iCalendar 文本转义：`\n` / `\,` / `\;` / `\\`。
+/// iCalendar 文字轉義：`\n` / `\,` / `\;` / `\\`。
 fn ics_text(v: &str) -> String {
     let mut out = String::with_capacity(v.len());
     let mut it = v.chars();
@@ -587,11 +587,11 @@ fn ics_text(v: &str) -> String {
 
 use crate::otp;
 
-// ---------------------------------------------------------------- 凭据
+// ---------------------------------------------------------------- 憑據
 
 #[cfg(windows)]
 pub mod secrets {
-    /// 凭据只进 Windows 凭据管理器；键是邮箱地址，值是授权码。
+    /// 憑據只進 Windows 憑據管理器；鍵是信箱地址，值是授權碼。
     pub fn save(email: &str, password: &str) -> Result<(), String> {
         let entry = keyring::Entry::new(super::SERVICE, &email.to_ascii_lowercase())
             .map_err(|e| format!("憑據管理器不可用：{e}"))?;
@@ -622,15 +622,15 @@ pub mod secrets {
     pub fn delete(_email: &str) {}
 }
 
-// ---------------------------------------------------------------- 收信服务
+// ---------------------------------------------------------------- 收信服務
 
 #[cfg(windows)]
 pub(crate) mod net {
-    //! TLS 连接 + 163/126 的 pre-login `ID` 握手。
+    //! TLS 連線 + 163/126 的 pre-login `ID` 握手。
     //!
-    //! `imap` 2.4 只在已登录的 `Session` 上暴露 `run_command_and_check_ok`，
-    //! 而网易要求 greeting → ID → LOGIN 的顺序，所以这里手工读问候、发 ID，
-    //! 再把「已经读掉的开头字节」原样交回给 imap。
+    //! `imap` 2.4 只在已登入的 `Session` 上暴露 `run_command_and_check_ok`，
+    //! 而網易要求 greeting → ID → LOGIN 的順序，所以這裡手工讀問候、發 ID，
+    //! 再把「已經讀掉的開頭位元組」原樣交回給 imap。
 
     use super::Account;
     use imap::extensions::idle::SetReadTimeout;
@@ -641,7 +641,7 @@ pub(crate) mod net {
 
     pub type Stream = TlsStream<TcpStream>;
 
-    /// 先吐出预先读到的问候字节，再透传给底层流。
+    /// 先吐出預先讀到的問候位元組，再透傳給底層流。
     pub struct Prefixed<S> {
         head: Vec<u8>,
         pos: usize,
@@ -680,7 +680,7 @@ pub(crate) mod net {
         fn set_read_timeout(&mut self, timeout: Option<Duration>) -> imap::Result<()> {
             self.inner
                 .get_ref()
-                // imap 结束 IDLE 时传入 None；恢复普通命令的超时，避免无限阻塞。
+                // imap 結束 IDLE 時傳入 None；恢復普通命令的超時，避免無限阻塞。
                 .set_read_timeout(timeout.or(Some(Duration::from_secs(20))))
                 .map_err(imap::Error::Io)
         }
@@ -718,7 +718,7 @@ pub(crate) mod net {
         let _ = tcp.set_write_timeout(timeout);
         let mut stream = tls.connect(&host, tcp).map_err(|e| format!("TLS 握手失敗：{e}"))?;
 
-        // 1) 读问候，直到 "* OK" / "* PREAUTH"
+        // 1) 讀問候，直到 "* OK" / "* PREAUTH"
         let mut greeting = Vec::new();
         loop {
             let mut line = Vec::new();
@@ -736,7 +736,7 @@ pub(crate) mod net {
             }
         }
 
-        // 2) 网易系：LOGIN 之前先发 ID（RFC 2971）
+        // 2) 網易系：LOGIN 之前先發 ID（RFC 2971）
         if account.provider.needs_id() {
             stream
                 .write_all(b"A0001 ID (\"name\" \"daozai\" \"version\" \"0.5.5\" \"vendor\" \"daozai\")\r\n")
@@ -757,7 +757,7 @@ pub(crate) mod net {
             }
         }
 
-        // 3) 把问候交回 imap，再正常登录
+        // 3) 把問候交回 imap，再正常登入
         let mut client = imap::Client::new(Prefixed::new(greeting, stream));
         client.read_greeting().map_err(|e| format!("伺服器問候異常：{e}"))?;
         let session = client
@@ -774,7 +774,7 @@ pub(crate) mod net {
         }
     }
 
-    /// 测试连接：连上、登录、选 INBOX，然后退出。
+    /// 測試連線：連上、登入、選 INBOX，然後退出。
     pub fn probe(account: &Account, password: &str) -> Result<(), String> {
         let mut session = connect(account, password)?;
         session.select("INBOX").map_err(|e| format!("無法開啟收件箱：{e}"))?;
@@ -902,7 +902,7 @@ mod service {
         true
     }
 
-    // 只在轮询分支保活。各类邮箱都在同一个检查截止点按 UID 查新邮件。
+    // 只在輪詢分支保活。各類信箱都在同一個檢查截止點按 UID 查新郵件。
     fn wait_for_poll<S:std::io::Read+std::io::Write>(
         session:&mut imap::Session<S>,start:Instant,secs:u64,allow_noop:&mut bool,mut wait_until:impl FnMut(Instant)->bool,
     )->imap::Result<()>{
@@ -912,10 +912,10 @@ mod service {
         loop{
             let wake=if *allow_noop{(previous+KEEPALIVE).min(deadline)}else{deadline};
             if wait_until(wake) || !*allow_noop{return Ok(());}
-            // NOOP 可携带 EXISTS、EXPUNGE、FETCH 等通知；收信以随后的 UID 查询为准。
+            // NOOP 可攜帶 EXISTS、EXPUNGE、FETCH 等通知；收信以隨後的 UID 查詢為準。
             match session.run_command_and_check_ok("NOOP"){
                 Ok(())=>{},
-                // 服务器明确拒绝保活时，保留当前连接，按原间隔用 UID 查询。
+                // 伺服器明確拒絕保活時，保留當前連線，按原間隔用 UID 查詢。
                 Err(imap::Error::No(_)|imap::Error::Bad(_))=>*allow_noop=false,
                 Err(error)=>return Err(error),
             }
@@ -933,7 +933,7 @@ mod service {
     }
 
     fn wait_for_change<T: std::io::Read + std::io::Write + imap::extensions::idle::SetReadTimeout>(session: &mut imap::Session<T>) -> imap::Result<()> {
-        // 优先响应服务器推送；定期补查，避免服务端漏推送时长时间没有提醒。
+        // 優先響應伺服器推送；定期補查，避免服務端漏推送時長時間沒有提醒。
         session.idle()?.wait_with_timeout(Duration::from_secs(10)).map(|_| ())
     }
 
@@ -1054,7 +1054,7 @@ mod service {
             if idle_supported {
                 match wait_for_change(session) {
                     Ok(())=>{},
-                    // 服务器明确拒绝推送时，本次连接改为轮询；重连后重新检查推送能力。
+                    // 伺服器明確拒絕推送時，本次連線改為輪詢；重連後重新檢查推送能力。
                     Err(imap::Error::No(_)|imap::Error::Bad(_))=>idle_supported=false,
                     Err(_)=>return Err("郵件推送連線中斷，正在重連".into()),
                 }
@@ -1066,7 +1066,7 @@ mod service {
             fetch_new(session,account,last_uid.as_mut().unwrap(),ev).map_err(|_|"讀取新郵件失敗，正在重連")?;
             if idle_supported && *last_uid==previous && cycle_started.elapsed()<Duration::from_secs(5) {
                 if sleep_stop(stop,5){let _=session.logout();return Ok(());}
-                // 冷却后补读新邮件，并消费等待期间到达的通知，再进入下一轮推送等待。
+                // 冷卻後補讀新郵件，並消費等待期間到達的通知，再進入下一輪推送等待。
                 fetch_new(session,account,last_uid.as_mut().unwrap(),ev).map_err(|_|"讀取新郵件失敗，正在重連")?;
             }
         }
@@ -1325,7 +1325,7 @@ mod service {
         }
     }
 
-    /// 首次连接：把最近 20 封读进面板，但不当作新邮件提示。
+    /// 首次連線：把最近 20 封讀進面板，但不當作新郵件提示。
     fn recent<S:std::io::Read+std::io::Write>(
         session: &mut imap::Session<S>,
         account: &Account,
@@ -1385,7 +1385,7 @@ mod service {
         println!("invitation_recognized=true plain_date_rejected=true");
     }
 
-    /// 显式运行的真实邮箱只读检查；不输出地址、凭据或邮件内容。
+    /// 顯式執行的真實信箱只讀檢查；不輸出地址、憑據或郵件內容。
     #[test]
     fn exmail_capability_trailing_spaces_preserve_following_response() {
         let response=b"* CAPABILITY IMAP4 IMAP4rev1 XLIST MOVE IDLE XAPPLEPUSHSERVICE NAMESPACE CHILDREN ID UIDPLUS \r\na2 OK capabilities\r\n";
@@ -1485,8 +1485,8 @@ pub use service::Service;
 #[cfg(test)]
 mod tests {
 
-    /// multipart/alternative 邮件必须同时保留 text/plain 与 text/html 原文，
-    /// 否则排版层只能拿到被压平的纯文本。
+    /// multipart/alternative 郵件必須同時保留 text/plain 與 text/html 原文，
+    /// 否則排版層只能拿到被壓平的純文字。
     #[test]
     fn multipart_message_keeps_html_original(){
         let raw=b"From: Team <team@example.com>\r\nSubject: Weekly\r\n\
@@ -1593,7 +1593,7 @@ Content-Type: multipart/alternative; boundary=\"b\"\r\n\r\n\
         let s = summary_of(&parsed);
         assert_eq!(s.chars().count(), 201, "200 字 + 省略號");
         assert!(s.ends_with('…'));
-        // 没有正文时摘要为空，界面只显示主题
+        // 沒有正文時摘要為空，介面只顯示主題
         assert_eq!(summary_of(&parse_message(&raw("空", ""))), "");
     }
 
@@ -1646,7 +1646,7 @@ END:VCALENDAR\r\n";
 
     #[test]
     fn ics_utc_and_folded_lines() {
-        // 折行：CRLF + 一个空格被删掉，"Design s" + "ync" = "Design sync"
+        // 折行：CRLF + 一個空格被刪掉，"Design s" + "ync" = "Design sync"
         let utc = "BEGIN:VCALENDAR\nBEGIN:VEVENT\nSUMMARY:Design s\n ync\nDTSTART:20261030T063000Z\nEND:VEVENT\nEND:VCALENDAR\n";
         let m = meeting_of(utc).expect("Z 時間應能解析");
         assert_eq!(m.title, "Design sync");
@@ -1675,7 +1675,7 @@ END:VCALENDAR\r\n";
 
     #[test]
     fn no_ics_means_no_meeting() {
-        // 普通邮件没有日历部分，不从正文猜测日期。
+        // 普通郵件沒有日曆部分，不從正文猜測日期。
         let all_day = "BEGIN:VEVENT\nSUMMARY:放假\nDTSTART;VALUE=DATE:20261030\nEND:VEVENT\n";
         assert!(meeting_of(all_day).unwrap().all_day);
         assert!(meeting_of("").is_none());

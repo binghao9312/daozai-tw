@@ -1,4 +1,4 @@
-//! Agent 额度。配置只保存登录引用，独立授权由系统安全保存。
+//! Agent 額度。配置只儲存登入引用，獨立授權由系統安全儲存。
 use serde_json::{json, Value};
 use std::{collections::HashMap, fs, io::Read, path::{Path, PathBuf}, sync::mpsc, time::{Duration, Instant}};
 use base64::Engine;
@@ -208,24 +208,24 @@ impl Config {
 #[derive(Clone, Debug, PartialEq)]
 #[derive(serde::Serialize,serde::Deserialize)]
 pub struct Window {pub label:String,pub seconds:Option<i64>,pub remaining:f32,pub reset:Option<i64>,
-    /// 积分型额度的具体数值（例如 Kiro 的点数）；有值时界面显示数值而不是百分比。
+    /// 積分型額度的具體數值（例如 Kiro 的點數）；有值時介面顯示數值而不是百分比。
     #[serde(default)]pub amount:Option<Amount>}
-/// 周期额度的绝对数值：剩余量与总额。百分比仍然用于绘制进度，数值用于文字。
+/// 週期額度的絕對數值：剩餘量與總額。百分比仍然用於繪製進度，數值用於文字。
 #[derive(Clone, Debug, PartialEq)]
 #[derive(serde::Serialize,serde::Deserialize)]
 pub struct Amount {pub remaining:f64,pub limit:f64}
 impl Amount {
     pub fn new(remaining:f64,limit:f64)->Self{let limit=limit.max(0.0);Self{remaining:remaining.clamp(0.0,limit),limit}}
-    /// 常驻栏剩余点数：三位数以上取整。
+    /// 常駐欄剩餘點數：三位數以上取整。
     pub fn short(&self)->String{if self.remaining>=100.0{format!("{:.0}",self.remaining)}else{number_text(self.remaining)}}
-    /// 列表与提示里的完整写法：剩余 / 总额。
+    /// 列表與提示裡的完整寫法：剩餘 / 總額。
     pub fn full(&self)->String{format!("{} / {}",number_text(self.remaining),number_text(self.limit))}
 }
 fn number_text(v:f64)->String{let digits=if v<1.0{2}else{1};let factor=10f64.powi(digits);let rounded=(v*factor).round()/factor;if rounded>=1000.0||rounded.fract()==0.0{format!("{rounded:.0}")}else{format!("{rounded:.digits$}",digits=digits as usize)}}
 impl Window {
-    /// 剩余量的书面写法：数值型额度给出“剩余 / 总额”，其余给出百分比。
+    /// 剩餘量的書面寫法：數值型額度給出“剩餘 / 總額”，其餘給出百分比。
     pub fn value_text(&self)->String{self.amount.as_ref().map(Amount::full).unwrap_or_else(||format!("{:.0}%",self.remaining))}
-    /// 一句话额度摘要，用于小岛提示与设置页。
+    /// 一句話額度摘要，用於小島提示與設定頁。
     pub fn summary(&self)->String{format!("{}剩餘 {}",self.label,self.value_text())}
 }
 #[derive(Clone, Debug, Default)]
@@ -347,7 +347,7 @@ impl Service {
                 }
             }
             if accounts.is_empty(){continue;}
-            // 停用后保留退避记录，重新启用时仍尊重服务器的限流时间。
+            // 停用後保留退避記錄，重新啟用時仍尊重伺服器的限流時間。
             let pending=self.workers.get(&group).map(|worker|worker.pending.clone()).unwrap_or_default();
             {let Ok(mut next)=pending.lock()else{return false;};next.accounts=Some(accounts);next.running=true;}
             let next=pending.clone();let results=self.results.clone();let run=run.clone();
@@ -380,7 +380,7 @@ impl Service {
             });
             if spawned.is_err(){if let Ok(mut state)=pending.lock(){state.running=false;}return false;}
             self.workers.insert(group,Worker{pending,wake});
-            // 信号与最新请求合并；关闭时只等在途请求，不积累新的线程。
+            // 訊號與最新請求合併；關閉時只等在途請求，不積累新的執行緒。
             let _=self.workers[&group].wake.try_send(());
         }
         true

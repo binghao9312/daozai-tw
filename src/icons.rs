@@ -1,7 +1,7 @@
-//! 系统文件缩略图 / 图标。
+//! 系統檔案縮圖 / 圖示。
 //!
-//! 文件夹用系统图标，其余文件优先用 `IShellItemImageFactory` 取 96 px 内容缩略图，
-//! 失败再用 `SHGetFileInfoW` 取 32 px 大图标；都失败返回 `None`，界面改画矢量文件图标。
+//! 資料夾用系統圖示，其餘檔案優先用 `IShellItemImageFactory` 取 96 px 內容縮圖，
+//! 失敗再用 `SHGetFileInfoW` 取 32 px 大圖示；都失敗返回 `None`，介面改畫向量檔案圖示。
 
 use eframe::egui::{self,ColorImage};
 use std::path::{Path,PathBuf};
@@ -131,7 +131,7 @@ fn thumbnail(path: &Path, size: i32, flags: windows::Win32::UI::Shell::SIIGBF) -
         if lines == 0 {
             return None;
         }
-        // BGRA（预乘）→ RGBA；JPEG 之类的缩略图 alpha 全 0，当作不透明
+        // BGRA（預乘）→ RGBA；JPEG 之類的縮圖 alpha 全 0，當作不透明
         let opaque = px.chunks_exact(4).all(|p| p[3] == 0);
         for p in px.chunks_exact_mut(4) {
             p.swap(0, 2);
@@ -197,7 +197,7 @@ fn shell_icon(path: &Path) -> Option<ColorImage> {
                 let old = SelectObject(dc, HGDIOBJ(bmp.0));
                 let _ = DrawIconEx(dc, 0, 0, icon, SIZE, SIZE, 0, None, DI_NORMAL);
                 SelectObject(dc, old);
-                // 图标是 32 位 BGRA（直通 alpha）
+                // 圖示是 32 位 BGRA（直通 alpha）
                 let n = (SIZE * SIZE) as usize;
                 let src = std::slice::from_raw_parts(bits as *const u8, n * 4);
                 out = Some(src.to_vec());

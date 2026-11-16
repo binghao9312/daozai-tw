@@ -1,24 +1,24 @@
-//! 兼容渲染的逐像素透明：独立的分层显示窗口（`UpdateLayeredWindow`）。
+//! 相容渲染的逐畫素透明：獨立的分層顯示視窗（`UpdateLayeredWindow`）。
 //!
-//! 兼容后端（Direct3D 12 交换链、部分 AMD OpenGL 驱动）交给系统的画面没有可用的 alpha，
-//! 透明画布会显示成黑块，过去只能按岛体轮廓裁剪窗口区域；窗口区域逐像素「要么有要么没有」，
-//! 圆角和肩部必然出现锯齿。
+//! 相容後端（Direct3D 12 交換鏈、部分 AMD OpenGL 驅動）交給系統的畫面沒有可用的 alpha，
+//! 透明畫布會顯示成黑塊，過去只能按島體輪廓裁剪視窗區域；視窗區域逐畫素「要麼有要麼沒有」，
+//! 圓角和肩部必然出現鋸齒。
 //!
-//! 现在的做法：
-//! - 画面变化时把渲染结果读回（已预乘 alpha），交给一个只负责显示的分层窗口，
-//!   它紧贴在岛仔窗口正上方、鼠标一律穿透，边缘保留抗锯齿；
-//! - 岛仔窗口本身设成整体不透明度 1/255 的分层窗口：交换链的画面几乎完全看不见，
-//!   但仍按原来的窗口区域与命中区接收点击、悬停和拖放（不透明度为 0 时系统不再命中）。
-//!   直接对岛仔窗口用 `UpdateLayeredWindow` 不行：翻转模型交换链的画面会盖过分层内容。
+//! 現在的做法：
+//! - 畫面變化時把渲染結果讀回（已預乘 alpha），交給一個只負責顯示的分層視窗，
+//!   它緊貼在島仔視窗正上方、滑鼠一律穿透，邊緣保留抗鋸齒；
+//! - 島仔視窗本身設成整體不透明度 1/255 的分層視窗：交換鏈的畫面幾乎完全看不見，
+//!   但仍按原來的視窗區域與命中區接收點選、懸停和拖放（不透明度為 0 時系統不再命中）。
+//!   直接對島仔視窗用 `UpdateLayeredWindow` 不行：翻轉模型交換鏈的畫面會蓋過分層內容。
 
 use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, POINT, RECT, SIZE, WPARAM};
 use windows::Win32::Graphics::Gdi::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
-/// 岛仔窗口的整体不透明度：1/255 仍可命中，交换链画面肉眼不可见。
+/// 島仔視窗的整體不透明度：1/255 仍可命中，交換鏈畫面肉眼不可見。
 const OWNER_ALPHA: u8 = 1;
 
-/// 读回画面的哈希：画面没变时不必重设分层窗口，也不再请求下一次读回。
+/// 讀回畫面的雜湊：畫面沒變時不必重設分層視窗，也不再請求下一次讀回。
 pub fn image_hash(size: [usize; 2], rgba: &[u8]) -> u64 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325 ^ ((size[0] as u64) << 32 | size[1] as u64);
     for p in rgba.chunks_exact(8) {
@@ -27,20 +27,20 @@ pub fn image_hash(size: [usize; 2], rgba: &[u8]) -> u64 {
     h
 }
 
-/// 画面自己在动（歌词滚动、动效）而没有用户输入时，两次读回的最小间隔：约 30 帧/秒。
-/// 每次读回都要 GPU 回传整帧、换通道再交给系统合成，2 倍缩放下每帧约 2ms，60 帧/秒会持续占掉十几个百分点的单核。
+/// 畫面自己在動（歌詞滾動、動效）而沒有使用者輸入時，兩次讀回的最小間隔：約 30 幀/秒。
+/// 每次讀回都要 GPU 回傳整幀、換通道再交給系統合成，2 倍縮放下每幀約 2ms，60 幀/秒會持續佔掉十幾個百分點的單核。
 pub const AMBIENT_READBACK: std::time::Duration = std::time::Duration::from_millis(33);
 
-/// 这一帧要不要请求下一次读回：`None` 立即请求；`Some(d)` 先等 d 再重绘、到时再请求（保证最后一帧不会漏掉）。
-/// 拖动、悬停、点击等有输入的帧保持满帧，跟手不打折扣。
+/// 這一幀要不要請求下一次讀回：`None` 立即請求；`Some(d)` 先等 d 再重繪、到時再請求（保證最後一幀不會漏掉）。
+/// 拖動、懸停、點選等有輸入的幀保持滿幀，跟手不打折扣。
 pub fn readback_delay(last: Option<std::time::Instant>, now: std::time::Instant, interactive: bool) -> Option<std::time::Duration> {
     if interactive { return None; }
     let elapsed = now.saturating_duration_since(last?);
     (elapsed < AMBIENT_READBACK).then(|| AMBIENT_READBACK - elapsed)
 }
 
-/// 读回的画面里必须真的有透明像素（画布四角一定是透明的），否则说明这条路径读不到 alpha，
-/// 不能切到分层窗口（整块画布会变成黑底）。
+/// 讀回的畫面裡必須真的有透明畫素（畫布四角一定是透明的），否則說明這條路徑讀不到 alpha，
+/// 不能切到分層視窗（整塊畫布會變成黑底）。
 pub fn has_real_alpha(size: [usize; 2], rgba: &[u8]) -> bool {
     let [w, h] = size;
     if w == 0 || h == 0 || rgba.len() != w * h * 4 { return false; }
@@ -48,9 +48,9 @@ pub fn has_real_alpha(size: [usize; 2], rgba: &[u8]) -> bool {
     [corner(0, 0), corner(w - 1, 0), corner(0, h - 1), corner(w - 1, h - 1)].iter().any(|&a| a < 255)
 }
 
-/// 读回画面没有 alpha 时（部分 AMD 显卡的 OpenGL 默认帧缓冲不带透明通道），按岛体轮廓
-/// 算出每个像素被覆盖的比例当作 alpha：轮廓是物理像素坐标的闭合多边形，多块之间取并集。
-/// 每行取 4 条子扫描线、横向按精确的线段长度累计，边缘过渡与 egui 自身的抗锯齿相当。
+/// 讀回畫面沒有 alpha 時（部分 AMD 顯示卡的 OpenGL 預設幀緩衝不帶透明通道），按島體輪廓
+/// 算出每個畫素被覆蓋的比例當作 alpha：輪廓是物理畫素座標的閉合多邊形，多塊之間取並集。
+/// 每行取 4 條子掃描線、橫向按精確的線段長度累計，邊緣過渡與 egui 自身的抗鋸齒相當。
 pub fn coverage_mask(size: [usize; 2], polygons: &[Vec<(f32, f32)>]) -> Vec<u8> {
     const SUB: usize = 4;
     let [w, h] = size;
@@ -76,7 +76,7 @@ pub fn coverage_mask(size: [usize; 2], polygons: &[Vec<(f32, f32)>]) -> Vec<u8> 
                     }
                 }
                 xs.sort_by(|a, b| a.0.total_cmp(&b.0));
-                // 非零环绕：环绕数从 0 变非 0 处开始、回到 0 处结束，与 GDI 的 WINDING 区域一致。
+                // 非零環繞：環繞數從 0 變非 0 處開始、回到 0 處結束，與 GDI 的 WINDING 區域一致。
                 let (mut wind, mut start) = (0, 0.0f32);
                 for &(x, dir) in &xs {
                     if wind == 0 { start = x; }
@@ -99,14 +99,14 @@ pub fn coverage_mask(size: [usize; 2], polygons: &[Vec<(f32, f32)>]) -> Vec<u8> 
     mask
 }
 
-/// 把轮廓算出的 alpha 套到读回的画面上：画布清屏色是透明黑，读回的 RGB 本来就是「颜色 × 覆盖率」，
-/// 再按预乘要求把每个通道压到不超过 alpha，轮廓外的像素全部清空。
+/// 把輪廓算出的 alpha 套到讀回的畫面上：畫布清屏色是透明黑，讀回的 RGB 本來就是「顏色 × 覆蓋率」，
+/// 再按預乘要求把每個通道壓到不超過 alpha，輪廓外的畫素全部清空。
 pub fn apply_mask(rgba: &[u8], mask: &[u8], out: &mut Vec<u8>) {
     out.clear();
     out.extend(rgba.chunks_exact(4).zip(mask).flat_map(|(p, &a)| [p[0].min(a), p[1].min(a), p[2].min(a), a]));
 }
 
-/// 显示窗口：鼠标一律穿透、不激活。
+/// 顯示視窗：滑鼠一律穿透、不啟用。
 unsafe extern "system" fn display_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
     match msg {
         WM_NCHITTEST => LRESULT(HTTRANSPARENT as isize),
@@ -136,7 +136,7 @@ fn create_display_window() -> windows::core::Result<HWND> {
     }
 }
 
-/// 让岛仔窗口自身几乎不可见但仍可命中；winit 改样式时可能抹掉分层位，每帧兜底。
+/// 讓島仔視窗自身幾乎不可見但仍可命中；winit 改樣式時可能抹掉分層位，每幀兜底。
 unsafe fn hide_owner(owner: HWND) -> windows::core::Result<()> {
     let ex = GetWindowLongPtrW(owner, GWL_EXSTYLE);
     if ex & WS_EX_LAYERED.0 as isize == 0 {
@@ -146,7 +146,7 @@ unsafe fn hide_owner(owner: HWND) -> windows::core::Result<()> {
     Ok(())
 }
 
-/// 层级上紧挨在下面的可见窗口（跳过输入法等隐藏的辅助窗口）。
+/// 層級上緊挨在下面的可見視窗（跳過輸入法等隱藏的輔助視窗）。
 unsafe fn next_visible(hwnd: HWND) -> Option<HWND> {
     let mut current = hwnd;
     while let Ok(next) = GetWindow(current, GW_HWNDNEXT) {
@@ -216,8 +216,8 @@ impl Layered {
         self.size = (0, 0);
     }
 
-    /// 把一帧（RGBA，已预乘）交给显示窗口。画面没变返回 Ok(false)；
-    /// 尺寸与岛仔窗口当前大小不符（读回之后窗口又改了大小）时跳过，等下一帧。
+    /// 把一幀（RGBA，已預乘）交給顯示視窗。畫面沒變返回 Ok(false)；
+    /// 尺寸與島仔視窗當前大小不符（讀回之後視窗又改了大小）時跳過，等下一幀。
     pub fn present(&mut self, owner: HWND, size: [usize; 2], rgba: &[u8]) -> windows::core::Result<bool> {
         let (w, h) = (size[0] as i32, size[1] as i32);
         let mut rect = RECT::default();
@@ -235,7 +235,7 @@ impl Layered {
             let blend = BLENDFUNCTION { BlendOp: AC_SRC_OVER as u8, BlendFlags: 0, SourceConstantAlpha: 255, AlphaFormat: AC_SRC_ALPHA as u8 };
             let (src, dst_pos, sz) = (POINT::default(), POINT { x: rect.left, y: rect.top }, SIZE { cx: w, cy: h });
             UpdateLayeredWindow(self.display, None, Some(&dst_pos), Some(&sz), self.dc, Some(&src), COLORREF(0), Some(&blend), ULW_ALPHA)?;
-            // 显示窗口有了内容之后才把岛仔窗口自身藏起来，避免切换瞬间什么都看不到。
+            // 顯示視窗有了內容之後才把島仔視窗自身藏起來，避免切換瞬間什麼都看不到。
             hide_owner(owner)?;
         }
         self.last = Some(hash);
@@ -243,7 +243,7 @@ impl Layered {
         Ok(true)
     }
 
-    /// 每帧跟随岛仔窗口：可见性、位置，以及紧贴在它正上方的层级。
+    /// 每幀跟隨島仔視窗：可見性、位置，以及緊貼在它正上方的層級。
     pub fn sync(&mut self, owner: HWND, raise: bool) {
         if self.last.is_none() { return; }
         unsafe {
@@ -260,14 +260,14 @@ impl Layered {
             if (o.left, o.top) != (d.left, d.top) || !display_visible || raise {
                 let _ = SetWindowPos(self.display, HWND_TOPMOST, o.left, o.top, 0, 0, flags | SWP_SHOWWINDOW);
             }
-            // 岛仔窗口紧贴在显示窗口下面：别的置顶窗口不会夹在两者之间。
+            // 島仔視窗緊貼在顯示視窗下面：別的置頂視窗不會夾在兩者之間。
             if next_visible(self.display) != Some(owner) {
                 let _ = SetWindowPos(owner, self.display, 0, 0, 0, 0, flags | SWP_NOMOVE);
             }
         }
     }
 
-    /// 放弃分层显示，岛仔窗口恢复为普通窗口（回到轮廓裁剪）。
+    /// 放棄分層顯示，島仔視窗恢復為普通視窗（回到輪廓裁剪）。
     pub fn detach(&mut self, owner: HWND) {
         unsafe {
             let ex = GetWindowLongPtrW(owner, GWL_EXSTYLE);
@@ -300,7 +300,7 @@ mod tests {
         assert_eq!(readback_delay(Some(now), now + Duration::from_millis(10), false), Some(Duration::from_millis(23)), "動畫期間未到間隔時延後");
         assert_eq!(readback_delay(Some(now), now + AMBIENT_READBACK, false), None, "到間隔立即讀回");
         assert_eq!(readback_delay(Some(now), now + Duration::from_millis(1), true), None, "有輸入時保持滿幀");
-        // 60 帧/秒的动画持续 1 秒：读回次数减半左右。
+        // 60 幀/秒的動畫持續 1 秒：讀回次數減半左右。
         let (mut last, mut count) = (None, 0);
         for frame in 0..60u64 {
             let t = now + Duration::from_micros(frame * 16_667);
@@ -321,31 +321,31 @@ mod tests {
 
     #[test]
     fn coverage_mask_gives_fractional_edges() {
-        // x 1.5..3.5、y 0..2 的矩形：左右边缘各盖住半个像素，中间整格。
+        // x 1.5..3.5、y 0..2 的矩形：左右邊緣各蓋住半個畫素，中間整格。
         let rect = vec![(1.5, 0.0), (3.5, 0.0), (3.5, 2.0), (1.5, 2.0)];
         let mask = coverage_mask([5, 2], &[rect]);
         assert_eq!(&mask[..5], &[0, 128, 255, 128, 0]);
         assert_eq!(&mask[..5], &mask[5..]);
-        // 上下边缘落在像素中间时同样只盖一半。
+        // 上下邊緣落在畫素中間時同樣只蓋一半。
         let half = coverage_mask([1, 2], &[vec![(0.0, 0.5), (1.0, 0.5), (1.0, 2.0), (0.0, 2.0)]]);
         assert_eq!(half, vec![128, 255]);
     }
 
     #[test]
     fn coverage_mask_smooths_curves_and_unions_shapes() {
-        // 圆：内部全满、外部全空，边缘一圈是过渡值（这正是轮廓裁剪做不到的）。
+        // 圓：內部全滿、外部全空，邊緣一圈是過渡值（這正是輪廓裁剪做不到的）。
         let circle: Vec<(f32, f32)> = (0..64).map(|i| { let a = i as f32 / 64.0 * std::f32::consts::TAU; (10.0 + 7.0 * a.cos(), 10.0 + 7.0 * a.sin()) }).collect();
         let mask = coverage_mask([20, 20], &[circle]);
         assert_eq!(mask[10 * 20 + 10], 255);
         assert_eq!(mask[0], 0);
         let soft = mask.iter().filter(|&&a| a > 0 && a < 255).count();
         assert!(soft >= 30, "圓周應有一圈抗鋸齒過渡畫素，實際 {soft}");
-        // 两块方向相反、互相重叠的轮廓取并集，重叠处不能被抵消成空洞。
+        // 兩塊方向相反、互相重疊的輪廓取並集，重疊處不能被抵消成空洞。
         let a = vec![(0.0, 0.0), (6.0, 0.0), (6.0, 4.0), (0.0, 4.0)];
         let b = vec![(4.0, 0.0), (4.0, 4.0), (10.0, 4.0), (10.0, 0.0)];
         let both = coverage_mask([10, 4], &[a, b]);
         assert!(both.iter().all(|&v| v == 255), "並集應整塊覆蓋：{both:?}");
-        // 轮廓超出画布时安全截断。
+        // 輪廓超出畫布時安全截斷。
         let out = coverage_mask([4, 4], &[vec![(-5.0, -5.0), (9.0, -5.0), (9.0, 9.0), (-5.0, 9.0)]]);
         assert!(out.iter().all(|&v| v == 255));
         assert!(coverage_mask([4, 4], &[]).iter().all(|&v| v == 0));
@@ -369,7 +369,7 @@ mod tests {
         assert_eq!(image_hash([3, 2], &a), image_hash([3, 2], &a));
     }
 
-    /// 兼容渲染每帧都会走这里：连续提交几千帧不同画面，进程内存和 GDI 对象都不能随帧数增长。
+    /// 相容渲染每幀都會走這裡：連續提交幾千幀不同畫面，程序記憶體和 GDI 物件都不能隨幀數增長。
     #[test]
     fn presenting_many_frames_does_not_leak() {
         unsafe {
@@ -399,7 +399,7 @@ mod tests {
     #[test]
     fn display_window_follows_owner_and_owner_stays_clickable() {
         unsafe {
-            // 用 BUTTON：STATIC 自己就返回 HTTRANSPARENT，测不出命中。
+            // 用 BUTTON：STATIC 自己就返回 HTTRANSPARENT，測不出命中。
             let owner = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST, windows::core::w!("BUTTON"), windows::core::w!(""), WS_POPUP | WS_VISIBLE, -10000, -10000, 4, 2, None, None, None, None).unwrap();
             let mut layered = Layered::new().unwrap();
             let mut px = vec![0u8; 32];

@@ -360,7 +360,7 @@ impl App {
         self.pending_messengers.iter().rev().find(|u|u.source==source).copied().unwrap_or(crate::app::Unread::of(source))
     }
     pub fn receive_wechat_reminder(&mut self){self.receive_wechat_reminder_from(0,0);}
-    /// 微信視窗閃動：`pid` 是該賬號的程序，`window` 是閃動的視窗。
+    /// 微信視窗閃動：`pid` 是該賬號的程式，`window` 是閃動的視窗。
     pub fn receive_wechat_reminder_from(&mut self,pid:u32,window:isize){
         self.receive_messenger_reminder(crate::app::Unread{source:crate::app::Messenger::Wechat,pid,window});
     }

@@ -1,11 +1,11 @@
-//! Windows 音量混合器中的播放器音量；只操作匹配的应用会话。
+//! Windows 音量混合器中的播放器音量；只操作匹配的應用會話。
 use std::{sync::{mpsc,Arc,Mutex},time::{Duration, Instant}};
 
 type Job=Box<dyn FnOnce()+Send>;
 
-/// 音量混合器的读写都放到这一个独立线程里。枚举音频设备在个别声卡、蓝牙或虚拟声卡驱动上
-/// 可能长时间不返回，不能拖住歌曲信息采样（否则岛上一直「暂无音乐」）或播放控制。
-/// 线程卡住时队列很快填满，之后的音量操作直接放弃，不再新开线程。
+/// 音量混合器的讀寫都放到這一個獨立執行緒裡。列舉音訊裝置在個別音效卡、藍芽或虛擬音效卡驅動上
+/// 可能長時間不返回，不能拖住歌曲訊息取樣（否則島上一直「暫無音樂」）或播放控制。
+/// 執行緒卡住時佇列很快填滿，之後的音量操作直接放棄，不再新開執行緒。
 fn submit(job:Job)->bool {
     static WORKER:Mutex<Option<mpsc::SyncSender<Job>>>=Mutex::new(None);
     let mut worker=WORKER.lock().unwrap_or_else(|e|e.into_inner());
@@ -17,7 +17,7 @@ fn submit(job:Job)->bool {
     worker.as_ref().is_some_and(|tx|tx.try_send(job).is_ok())
 }
 
-/// 在音量线程上执行并最多等 2 秒；超时按失败处理。
+/// 在音量執行緒上執行並最多等 2 秒；超時按失敗處理。
 fn run(job:impl FnOnce(Instant)->bool+Send+'static)->bool {
     let (tx,rx)=mpsc::sync_channel(1);
     let deadline=Instant::now()+Duration::from_secs(2);
@@ -27,7 +27,7 @@ fn run(job:impl FnOnce(Instant)->bool+Send+'static)->bool {
 
 type Latest=Arc<Mutex<Option<(String,Option<(u32,bool)>)>>>;
 
-/// 采样线程用：只取音量线程上次读到的结果，从不等待。
+/// 取樣執行緒用：只取音量執行緒上次讀到的結果，從不等待。
 #[derive(Default)]
 pub(crate) struct Reader {
     source: String,
@@ -50,7 +50,7 @@ fn executable(source:&str)->Option<String> {
     let source=source.to_lowercase();
     match source.as_str() {
         "kugou"=>Some("kugou.exe".into()),
-        // QQ 音乐 22.82 起系统媒体会话的身份名改为 Tencent.QQMusic。
+        // QQ 音樂 22.82 起系統媒體會話的身份名改為 Tencent.QQMusic。
         "qqmusic"|"tencent.qqmusic"=>Some("qqmusic.exe".into()),
         "spotify"=>Some("spotify.exe".into()),
         "汽水音乐"=>Some("sodamusic.exe".into()),
@@ -85,7 +85,7 @@ mod platform {
     pub fn sessions(source:&str)->Vec<ISimpleAudioVolume> {
         if source.is_empty(){return Vec::new();}
         unsafe {
-            // 采样、控制各用自己的 COM 线程与枚举器，不跨线程传递音频接口。
+            // 取樣、控制各用自己的 COM 執行緒與列舉器，不跨執行緒傳遞音訊介面。
             thread_local!{static ENUMERATOR:Option<IMMDeviceEnumerator>=unsafe{
                 let _=CoInitializeEx(None,COINIT_MULTITHREADED);
                 CoCreateInstance(&MMDeviceEnumerator,None,CLSCTX_ALL).ok()
@@ -93,7 +93,7 @@ mod platform {
             ENUMERATOR.with(|enumerator|{
                 let mut volumes=Vec::new();
                 let Some(enumerator)=enumerator else{return volumes;};
-                // 应用可能被路由到非默认输出，遍历当前可用的播放设备。
+                // 應用可能被路由到非預設輸出，遍歷當前可用的播放裝置。
                 let Ok(devices)=enumerator.EnumAudioEndpoints(eRender,DEVICE_STATE_ACTIVE) else{return volumes;};
                 for d in 0..devices.GetCount().unwrap_or(0) {
                     let Ok(device)=devices.Item(d) else{continue;};

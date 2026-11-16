@@ -1,7 +1,7 @@
-//! 面板内绘制：局部坐标画布 `Card` + 全部矢量图标。
+//! 面板內繪製：區域性座標畫布 `Card` + 全部向量圖示。
 //!
-//! `Card` 把「面板局部逻辑点」映射到屏幕，并自带裁剪、整体透明度与可交互开关：
-//! 切页时旧页用 `live = false` 的画布绘制，只画不响应点击，也不会和新页抢 id。
+//! `Card` 把「面板區域性邏輯點」對映到螢幕，並自帶裁剪、整體透明度與可互動開關：
+//! 切頁時舊頁用 `live = false` 的畫布繪製，只畫不響應點選，也不會和新頁搶 id。
 
 use crate::theme::{self, font, W};
 use eframe::egui::{self, Color32, FontId, Id, Pos2, Rect, Response, Sense, Stroke, Vec2};
@@ -40,7 +40,7 @@ impl<'a> Card<'a> {
         Pos2::new(v.x, v.y)
     }
 
-    // ---------- 派生画布 ----------
+    // ---------- 派生畫布 ----------
     pub fn faded(&self, alpha: f32) -> Self {
         let mut c = self.clone();
         c.painter.multiply_opacity(alpha.clamp(0.0, 1.0));
@@ -51,7 +51,7 @@ impl<'a> Card<'a> {
         c.origin += Vec2::new(dx, dy) * self.s;
         c
     }
-    /// 以局部点 (cx, cy) 为中心整体缩放（按钮按下的回弹）。
+    /// 以區域性點 (cx, cy) 為中心整體縮放（按鈕按下的回彈）。
     pub fn scaled(&self, cx: f32, cy: f32, k: f32) -> Self {
         let mut c = self.clone();
         let center = self.pos(cx, cy);
@@ -71,7 +71,7 @@ impl<'a> Card<'a> {
         c
     }
 
-    // ---------- 文字（y 一律是基线，跨字体对齐稳定） ----------
+    // ---------- 文字（y 一律是基線，跨字型對齊穩定） ----------
     pub fn font(&self, size: f32, w: W) -> FontId {
         font(size * self.s, w)
     }
@@ -81,7 +81,7 @@ impl<'a> Card<'a> {
     pub fn text_w(&self, t: &str, size: f32, w: W) -> f32 {
         self.galley(t, size, w, Color32::WHITE).size().x / self.s
     }
-    /// 返回局部坐标下的文字宽度。
+    /// 返回區域性座標下的文字寬度。
     pub fn text(&self, x: f32, base: f32, t: &str, size: f32, w: W, color: Color32, h: H) -> f32 {
         let g = self.galley(t, size, w, color);
         let gw = g.size().x;
@@ -95,7 +95,7 @@ impl<'a> Card<'a> {
         self.painter.galley(p, g, color);
         gw / self.s
     }
-    /// 以字形的实际可见范围对齐垂直中心，保持中英文状态文字居中。
+    /// 以字形的實際可見範圍對齊垂直中心，保持中英文狀態文字居中。
     pub fn centered_text(&self, x:f32, cy:f32, t:&str, size:f32, w:W, color:Color32, h:H) {
         if t.is_empty(){return;}
         let g=self.galley(t,size,w,color);
@@ -103,7 +103,7 @@ impl<'a> Card<'a> {
         let pos=self.pos(x,cy)-Vec2::new(dx,g.mesh_bounds.center().y);
         self.painter.galley(pos,g,color);
     }
-    /// 超宽时末尾加省略号。
+    /// 超寬時末尾加省略號。
     pub fn fit(&self, t: &str, size: f32, w: W, max_w: f32) -> String {
         if self.text_w(t, size, w) <= max_w {
             return t.to_owned();
@@ -122,7 +122,7 @@ impl<'a> Card<'a> {
         chars[..low].iter().collect::<String>() + "…"
     }
 
-    /// 按宽度折行，最多 `max_lines` 行，还有剩余内容时最后一行加省略号。
+    /// 按寬度折行，最多 `max_lines` 行，還有剩餘內容時最後一行加省略號。
     pub fn wrap(&self, t: &str, size: f32, w: W, max_w: f32, max_lines: usize) -> Vec<String> {
         let mut out: Vec<String> = Vec::new();
         let mut cur = String::new();
@@ -158,7 +158,7 @@ impl<'a> Card<'a> {
         out
     }
 
-    // ---------- 图形 ----------
+    // ---------- 圖形 ----------
     pub fn fill(&self, x: f32, y: f32, w: f32, h: f32, r: f32, color: Color32) {
         self.painter.rect_filled(self.rect(x, y, w, h), r * self.s, color);
     }
@@ -187,7 +187,7 @@ impl<'a> Card<'a> {
         let v: Vec<Pos2> = pts.iter().map(|&(x, y)| self.pos(x, y)).collect();
         self.painter.add(egui::Shape::convex_polygon(v, color, Stroke::NONE));
     }
-    /// 圆弧描边（角度单位弧度，0 = 正右，顺时针为正）。
+    /// 圓弧描邊（角度單位弧度，0 = 正右，順時針為正）。
     pub fn arc(&self, cx: f32, cy: f32, r: f32, a0: f32, a1: f32, width: f32, color: Color32) {
         let n = (((a1 - a0).abs() / TAU) * 96.0).ceil().max(2.0) as usize;
         let pts: Vec<(f32, f32)> = (0..=n)
@@ -198,7 +198,7 @@ impl<'a> Card<'a> {
             .collect();
         self.path(&pts, width, color);
     }
-    /// 径向柔光（中心 color → 边缘透明）。
+    /// 徑向柔光（中心 color → 邊緣透明）。
     pub fn glow(&self, cx: f32, cy: f32, r: f32, color: Color32) {
         let mut mesh = egui::Mesh::default();
         let c = self.pos(cx, cy);
@@ -206,7 +206,7 @@ impl<'a> Card<'a> {
         let n = 48;
         for i in 0..=n {
             let a = i as f32 / n as f32 * TAU;
-            // 中间加一圈 45% 处的半透明，近似高斯衰减
+            // 中間加一圈 45% 處的半透明，近似高斯衰減
             mesh.colored_vertex(c + Vec2::angled(a) * r * 0.45 * self.s, color.gamma_multiply(0.45));
             mesh.colored_vertex(c + Vec2::angled(a) * r * self.s, Color32::TRANSPARENT);
         }
@@ -218,7 +218,7 @@ impl<'a> Card<'a> {
         }
         self.painter.add(egui::Shape::mesh(mesh));
     }
-    /// 圆角竖直渐变，沿用 egui 的边缘抗锯齿。
+    /// 圓角豎直漸變，沿用 egui 的邊緣抗鋸齒。
     pub fn vgrad(&self, x: f32, y: f32, w: f32, h: f32, radius:f32, top: Color32, bottom: Color32) {
         let r = self.rect(x, y, w, h);
         let shapes=vec![egui::epaint::ClippedShape{clip_rect:self.painter.clip_rect(),shape:egui::Shape::rect_filled(r,radius*self.s,Color32::WHITE)}];
@@ -233,7 +233,7 @@ impl<'a> Card<'a> {
             }
         }
     }
-    /// 虚线圆角框；`phase` 让虚线沿边「流动」。
+    /// 虛線圓角框；`phase` 讓虛線沿邊「流動」。
     pub fn dashed(&self, x: f32, y: f32, w: f32, h: f32, r: f32, width: f32, color: Color32, phase: f32) {
         let mut pts = Vec::new();
         let corner = |cx: f32, cy: f32, a0: f32, pts: &mut Vec<Pos2>| {
@@ -254,7 +254,7 @@ impl<'a> Card<'a> {
         self.painter.extend(shapes);
     }
 
-    // ---------- 交互 ----------
+    // ---------- 互動 ----------
     pub fn hit(&self, x: f32, y: f32, w: f32, h: f32, id: impl std::hash::Hash) -> Response {
         let rect = self.rect(x, y, w, h).intersect(self.painter.clip_rect());
         let sense = if self.live { Sense::click() } else { Sense::hover() };
@@ -266,7 +266,7 @@ impl<'a> Card<'a> {
         let rect=self.rect(x,y,w,h).intersect(self.painter.clip_rect());
         self.ui.interact(rect,Id::new(("card-drag",self.live,id)),if self.live{Sense::click_and_drag()}else{Sense::hover()})
     }
-    /// 悬停 / 按下的平滑过渡量（0..1）。
+    /// 懸停 / 按下的平滑過渡量（0..1）。
     pub fn hover_t(&self, r: &Response) -> (f32, f32) {
         let ctx = self.ui.ctx();
         let h = ctx.animate_bool_with_time(r.id.with("h"), self.live && r.hovered(), 0.14);
@@ -374,7 +374,7 @@ mod gradient_tests {
     }
 }
 
-/// 胶囊按钮：悬停提亮、按下轻微缩小，返回 (响应, 内容画布)。
+/// 膠囊按鈕：懸停提亮、按下輕微縮小，返回 (響應, 內容畫布)。
 pub fn capsule<'a>(
     c: &Card<'a>,
     x: f32,
@@ -393,7 +393,7 @@ pub fn capsule<'a>(
     (r, inner)
 }
 
-// ======================= 图标 =======================
+// ======================= 圖示 =======================
 
 pub fn close(c:&Card,cx:f32,cy:f32,r:f32,color:Color32) {
     c.seg((cx-r,cy-r),(cx+r,cy+r),1.2,color);
@@ -409,7 +409,7 @@ pub fn chevron(c: &Card, x: f32, y: f32, dir: f32, hover: f32, press: f32) {
     c.path(&[(cx - dir * s * 0.75, y - s), (cx + dir * s * 0.45, y), (cx - dir * s * 0.75, y + s)], 1.6, Color32::WHITE);
 }
 
-/// 电池环：充电绿色 + 闪电；低电量红色；否则灰色并显示百分比弧。
+/// 電池環：充電綠色 + 閃電；低電量紅色；否則灰色並顯示百分比弧。
 pub fn battery(c: &Card, cx: f32, cy: f32, pct: Option<u8>, charging: bool, k: f32) {
     let r = 8.2 * k;
     let w = 2.6 * k;
@@ -437,15 +437,15 @@ pub fn battery(c: &Card, cx: f32, cy: f32, pct: Option<u8>, charging: bool, k: f
     }
 }
 
-/// 播放 ↔ 暂停形变：`t` = 0 播放三角，1 暂停双竖条。
+/// 播放 ↔ 暫停形變：`t` = 0 播放三角，1 暫停雙豎條。
 pub fn play_pause(c: &Card, cx: f32, cy: f32, size: f32, t: f32, color: Color32) {
     let (w, h) = (size * 0.86, size);
     let bw = w * 0.34;
     let l = |a: (f32, f32), b: (f32, f32)| (cx + a.0 + (b.0 - a.0) * t, cy + a.1 + (b.1 - a.1) * t);
-    // 三角拆成左梯形 + 右三角，与两根竖条一一对应插值
-    let dx = w * 0.08 * (1.0 - t); // 三角视觉重心右移
+    // 三角拆成左梯形 + 右三角，與兩根豎條一一對應插值
+    let dx = w * 0.08 * (1.0 - t); // 三角視覺重心右移
     if t==0.0 {
-        // 静止播放态画完整三角形，公共边不能被两块图形分别羽化。
+        // 靜止播放態畫完整三角形，公共邊不能被兩塊圖形分別羽化。
         c.poly(&[(cx-w/2.0+dx,cy-h/2.0),(cx+w/2.0+dx,cy),(cx-w/2.0+dx,cy+h/2.0)],color);
         return;
     }
@@ -513,7 +513,7 @@ pub fn stopwatch(c: &Card, cx: f32, cy: f32, r: f32, hand: f32, color: Color32) 
     c.circle(cx, cy + 2.0, 2.0, color);
 }
 
-/// 重置图标：开口圆弧 + 箭头，`spin` 为整体旋转（弧度）。
+/// 重置圖示：開口圓弧 + 箭頭，`spin` 為整體旋轉（弧度）。
 pub fn reset(c: &Card, cx: f32, cy: f32, spin: f32, color: Color32) {
     let r = 5.6;
     let a0 = -1.1 + spin;
@@ -521,7 +521,7 @@ pub fn reset(c: &Card, cx: f32, cy: f32, spin: f32, color: Color32) {
     c.arc(cx, cy, r, a0, a1, 1.8, color);
     let (s, co) = a0.sin_cos();
     let tip = (cx + co * r, cy + s * r);
-    // 箭头沿切线方向（逆时针）
+    // 箭頭沿切線方向（逆時針）
     let t = (s, -co);
     let n = (co, s);
     c.poly(
@@ -548,8 +548,8 @@ pub fn target(c: &Card, x: f32, y: f32, color: Color32) {
     c.poly(&[(x + 5.6, y - 7.4), (x + 7.4, y - 5.6), (x + 4.4, y - 4.4)], color);
 }
 
-/// 办公椅（久坐提醒的图标）：侧面的实心转椅——微微后仰的靠背、扶手、坐垫、气压杆、带滚轮的底座。
-/// 和水滴一样是物体图标，宽约 24k、高约 30k，(x,y) 为中心。
+/// 辦公椅（久坐提醒的圖示）：側面的實心轉椅——微微後仰的靠背、扶手、坐墊、氣壓桿、帶滾輪的底座。
+/// 和水滴一樣是物體圖示，寬約 24k、高約 30k，(x,y) 為中心。
 pub fn chair(c: &Card, x: f32, y: f32, k: f32, color: Color32) {
     let p = |dx: f32, dy: f32| (x + dx * k, y + dy * k);
     let bar = |a: (f32, f32), b: (f32, f32), w: f32| {
@@ -558,18 +558,18 @@ pub fn chair(c: &Card, x: f32, y: f32, k: f32, color: Color32) {
         c.circle(p(b.0, b.1).0, p(b.0, b.1).1, w * k * 0.5, color);
     };
     bar((-9.0, -13.0), (-7.0, 0.5), 5.0);        // 靠背
-    bar((-7.0, 2.0), (8.5, 2.0), 4.6);           // 坐垫
+    bar((-7.0, 2.0), (8.5, 2.0), 4.6);           // 坐墊
     bar((-4.0, -4.5), (5.0, -4.5), 2.2);         // 扶手
-    bar((3.5, -4.5), (3.5, 0.0), 2.2);           // 扶手支撑
-    bar((0.5, 4.0), (0.5, 10.0), 2.6);           // 气压杆
+    bar((3.5, -4.5), (3.5, 0.0), 2.2);           // 扶手支撐
+    bar((0.5, 4.0), (0.5, 10.0), 2.6);           // 氣壓桿
     bar((-9.0, 11.0), (10.0, 11.0), 2.4);        // 底座
-    for dx in [-9.0f32, 10.0] {                  // 滚轮
+    for dx in [-9.0f32, 10.0] {                  // 滾輪
         c.circle(x + dx * k, y + 14.0 * k, 2.0 * k, color);
     }
 }
 
 pub fn droplet(c: &Card, cx: f32, cy: f32, size: f32, color: Color32) {
-    // 水滴 = 尖顶 + 与两条切线相接的圆底
+    // 水滴 = 尖頂 + 與兩條切線相接的圓底
     let r = size * 0.34;
     let center = (cx, cy + size * 0.5 - r);
     let tip = (cx, cy - size * 0.5);
@@ -638,7 +638,7 @@ pub fn pencil(c: &Card, cx: f32, cy: f32, size: f32, color: Color32) {
     c.poly(&[(cx - s * 0.40, cy + s * 0.42), (cx - s * 0.30, cy + s * 0.14), (cx - s * 0.12, cy + s * 0.32)], color);
 }
 
-/// 勾：`t` 0..1 逐笔画出。
+/// 勾：`t` 0..1 逐筆畫出。
 pub fn check(c: &Card, cx: f32, cy: f32, s: f32, t: f32, width: f32, color: Color32) {
     let a = (cx - s * 0.45, cy + s * 0.02);
     let b = (cx - s * 0.12, cy + s * 0.34);
@@ -666,7 +666,7 @@ pub fn checklist(c: &Card, cx: f32, cy: f32, size: f32, ink: Color32, plate: Col
     }
 }
 
-/// 下载托盘：向下箭头落进收纳盒。`drop` 为箭头下坠位移（拖入时轻微弹跳）。
+/// 下載系統匣：向下箭頭落進收納盒。`drop` 為箭頭下墜位移（拖入時輕微彈跳）。
 pub fn tray(c: &Card, cx: f32, cy: f32, size: f32, drop: f32, color: Color32, shade: Color32) {
     let u = size / 30.0;
     let ay = cy - 13.0 * u + drop * u;
@@ -690,7 +690,7 @@ pub fn tray(c: &Card, cx: f32, cy: f32, size: f32, drop: f32, color: Color32, sh
     c.poly(&notch, shade);
 }
 
-// ---------- 文件图标（取不到系统图标时的矢量版） ----------
+// ---------- 檔案圖示（取不到系統圖示時的向量版） ----------
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum FileKind {
     Folder,
@@ -730,7 +730,7 @@ pub fn file_glyph(c: &Card, kind: FileKind, cx: f32, cy: f32, size: f32) {
         c.fill(cx - 17.0 * s, cy - 5.5 * s, 34.0 * s, 1.2 * s, 0.6 * s, Color32::from_rgba_unmultiplied(255, 240, 200, 120));
         return;
     }
-    // 纸张 + 折角
+    // 紙張 + 折角
     let (w, h) = (26.0 * s, 33.0 * s);
     let (x0, y0) = (cx - w / 2.0, cy - h / 2.0);
     let fold = 7.5 * s;
@@ -788,7 +788,7 @@ pub fn file_glyph(c: &Card, kind: FileKind, cx: f32, cy: f32, size: f32) {
 const YELLOW_SOFT: Color32 = Color32::from_rgb(255, 214, 92);
 
 
-// 时段文字弱化，数字保持原有字号与字重。
+// 時段文字弱化，數字保持原有字號與字重。
 pub fn clock_width(c:&Card,text:&str,size:f32)->f32 {
     match text.split_once(' ') {
         Some((period,digits))=>c.text_w(period,size*0.72,W::Semibold)+4.0+c.text_w(digits,size,W::Bold),
@@ -806,7 +806,7 @@ pub fn clock(c:&Card,x:f32,y:f32,text:&str,size:f32) {
     c.text(x,y,digits,size,W::Bold,theme::WHITE,H::Left);
 }
 
-/// 图钉：固定的剪贴板条目。
+/// 圖釘：固定的剪貼簿條目。
 pub fn pin(c: &Card, cx: f32, cy: f32, size: f32, color: Color32) {
     let s = size / 10.0;
     c.fill(cx - 2.4 * s, cy - 5.0 * s, 4.8 * s, 4.2 * s, 1.0 * s, color);
@@ -814,7 +814,7 @@ pub fn pin(c: &Card, cx: f32, cy: f32, size: f32, color: Color32) {
     c.seg((cx, cy + 1.0 * s), (cx, cy + 5.2 * s), 1.1, color);
 }
 
-/// 剪贴板：空状态插图。
+/// 剪貼簿：空狀態插圖。
 pub fn clipboard_glyph(c: &Card, cx: f32, cy: f32, size: f32, color: Color32, shade: Color32) {
     let u = size / 22.0;
     c.fill(cx - 9.0 * u, cy - 9.0 * u, 18.0 * u, 22.0 * u, 3.0 * u, shade);
@@ -830,21 +830,21 @@ const CHASE_ROWS: [f32; 23] = [
     8.2, 11.0, 16.0,
 ];
 
-/// 进度条追光：**一片**解析式彗尾，不是「光带 + 亮珠 + 几层光晕」的叠罗汉。
+/// 進度條追光：**一片**解析式彗尾，不是「光帶 + 亮珠 + 幾層光暈」的疊羅漢。
 ///
-/// 每个顶点直接采样五个连续函数并就地做 source-over 合成：
-/// 1. `halo`：沿光带铺开的宽高斯外晕，把光"洇"到轨道上下；
-/// 2. `under`：已播放段的底色光，横贯整段、很淡；
-/// 3. `band`：贴着中轴的细光带，**在头部收窄**，尾巴那头再张开；
-/// 4. `core`：播放头附近的中等亮核；
-/// 5. `needle`：压在播放头正上方的一颗极小的近白高光——头部之所以"尖"全靠它。
-/// 五者共用同一条横向拖尾曲线，所以从头到尾是一次连续过渡，
-/// 没有矩形拼接、没有台阶色带、没有可见的圆环接缝。
+/// 每個頂點直接取樣五個連續函式並就地做 source-over 合成：
+/// 1. `halo`：沿光帶鋪開的寬高斯外暈，把光"洇"到軌道上下；
+/// 2. `under`：已播放段的底色光，橫貫整段、很淡；
+/// 3. `band`：貼著中軸的細光帶，**在頭部收窄**，尾巴那頭再張開；
+/// 4. `core`：播放頭附近的中等亮核；
+/// 5. `needle`：壓在播放頭正上方的一顆極小的近白高光——頭部之所以"尖"全靠它。
+/// 五者共用同一條橫向拖尾曲線，所以從頭到尾是一次連續過渡，
+/// 沒有矩形拼接、沒有臺階色帶、沒有可見的圓環接縫。
 ///
-/// 光**朝后**：亮核在 `head`，尾巴一路向左按 `exp(-(d/tail)^1.35)` 衰减，
-/// 头前只有约 3 DIP 的收边（两头一阶导都为 0，接得上，不会顿一下）。
+/// 光**朝後**：亮核在 `head`，尾巴一路向左按 `exp(-(d/tail)^1.35)` 衰減，
+/// 頭前只有約 3 DIP 的收邊（兩頭一階導都為 0，接得上，不會頓一下）。
 ///
-/// `hot`：暂停 0.45 / 播放 0.62 / 按住拖动 1.0，只影响亮度与尾巴长度。
+/// `hot`：暫停 0.45 / 播放 0.62 / 按住拖動 1.0，隻影響亮度與尾巴長度。
 pub fn chase(c: &Card, x0: f32, head: f32, y: f32, thick: f32, tint: Color32, hot: f32) {
     let th = thick.max(1.0);
     let hot = hot.clamp(0.0, 1.0);
@@ -852,18 +852,18 @@ pub fn chase(c: &Card, x0: f32, head: f32, y: f32, thick: f32, tint: Color32, ho
     if span < 0.5 {
         return;
     }
-    // 拖尾特征长度：播放约 46 DIP，拖动时拉长到 56 DIP（越用力尾巴越长）。
+    // 拖尾特徵長度：播放約 46 DIP，拖動時拉長到 56 DIP（越用力尾巴越長）。
     let tail = 30.0 + 26.0 * hot;
-    let sy = th * 0.46; // 细光带半高
-    let by = th * 1.15 + 1.4 * hot; // 外晕半径（贴着轨道，不要糊成一片雾）
-    let cx = th * 1.1; // 亮核横向尺度
-    let cy = th * 0.9; // 亮核纵向尺度
-    let nx = th * 0.85; // 尖端高光的横向尺度
-    let ny = th * 0.32; // 竖向尺度（压扁 → 收成横向的楔形尖头）
-    let ramp = 6.0; // 轨道左端收边（够宽才不会在起点切出一条垂直硬边）
-    let lead = 6.0f32; // 头部前方收边（越宽过渡越软）
+    let sy = th * 0.46; // 細光帶半高
+    let by = th * 1.15 + 1.4 * hot; // 外暈半徑（貼著軌道，不要糊成一片霧）
+    let cx = th * 1.1; // 亮核橫向尺度
+    let cy = th * 0.9; // 亮核縱向尺度
+    let nx = th * 0.85; // 尖端高光的橫向尺度
+    let ny = th * 0.32; // 豎向尺度（壓扁 → 收成橫向的楔形尖頭）
+    let ramp = 6.0; // 軌道左端收邊（夠寬才不會在起點切出一條垂直硬邊）
+    let lead = 6.0f32; // 頭部前方收邊（越寬過渡越軟）
 
-    // 按屏幕像素宽度过滤细光带，移动时亮度不会集中到单行像素。
+    // 按螢幕畫素寬度過濾細光帶，移動時亮度不會集中到單行畫素。
     let pixel = 1.0 / (c.s * c.ui.ctx().pixels_per_point()).max(0.1);
     let filter_variance = pixel * pixel / 6.0;
     let filtered = |offset: f32, width: f32| {
@@ -883,8 +883,8 @@ pub fn chase(c: &Card, x0: f32, head: f32, y: f32, thick: f32, tint: Color32, ho
     let c_core = mix(tint, Color32::WHITE, 0.90);
     let c_needle = mix(tint, Color32::WHITE, 0.97);
 
-    // 列：尾巴 1 DIP 一列（平滑曲线够用），头部 6 DIP 单独加密到 0.6 DIP，
-    // 并且**保证有一列正好落在 head 上**——尖点不被插值削平，头才立得住。
+    // 列：尾巴 1 DIP 一列（平滑曲線夠用），頭部 6 DIP 單獨加密到 0.6 DIP，
+    // 並且**保證有一列正好落在 head 上**——尖點不被插值削平，頭才立得住。
     let n_back = (span / 1.0).ceil().max(2.0) as usize;
     let n_fwd = (lead / 0.6).ceil().max(2.0) as usize;
     let mut xs = Vec::with_capacity(n_back + n_fwd + 1);
@@ -900,31 +900,31 @@ pub fn chase(c: &Card, x0: f32, head: f32, y: f32, thick: f32, tint: Color32, ho
     mesh.vertices.reserve(cols * CHASE_ROWS.len());
     for off in CHASE_ROWS {
         for &x in &xs {
-            let d = head - x; // >0 在头后（左），<0 在头前
-            // 横向：向后指数拖尾，向前 6 DIP 内平滑收边
+            let d = head - x; // >0 在頭後（左），<0 在頭前
+            // 橫向：向後指數拖尾，向前 6 DIP 內平滑收邊
             let back = (-(d.max(0.0) / tail).powf(1.35)).exp();
-            // 前端收边随 |off| 提前：越靠上下越早收，前端自然成一个尖角，
-            // 而不是一条垂直切平的钝口。
-            let d_front = d - off.abs();  // 收角 45°：每往后 1 DIP，半宽张 1 DIP
+            // 前端收邊隨 |off| 提前：越靠上下越早收，前端自然成一個尖角，
+            // 而不是一條垂直切平的鈍口。
+            let d_front = d - off.abs();  // 收角 45°：每往後 1 DIP，半寬張 1 DIP
             let fwd = if d_front >= 0.0 {
                 1.0
             } else {
                 let q = (-d_front / lead).min(1.0);
-                // 两端导数为 0 的平滑收边（smoothstep 的补），斜坡均匀，不会出现台阶
+                // 兩端導數為 0 的平滑收邊（smoothstep 的補），斜坡均勻，不會出現臺階
                 (1.0 - q).powi(2) * (1.0 + 2.0 * q)
             };
             let s = ((x - x0) / ramp).clamp(0.0, 1.0);
             let start = s * s * (3.0 - 2.0 * s);
             let prof = back * fwd * start;
-            // 纵向：所有层都在头部收敛成一点（锥形收尖），往尾巴那头再张开
+            // 縱向：所有層都在頭部收斂成一點（錐形收尖），往尾巴那頭再張開
             let t_along = (d.max(0.0) / tail).min(1.0);
             let taper = 0.48 + 0.52 * t_along;
             let taper_halo = 0.40 + 0.60 * t_along;
             let halo = (-(off / (by * taper_halo)).powi(2)).exp();
             let band = filtered(off, sy * taper / 1.2_f32.sqrt());
             let core = (-((d / (cx * (0.6 + 0.4 * t_along))).powi(2) + (off / (cy * (0.5 + 0.5 * t_along))).powi(2)) * 1.4).exp();
-            // 尖端：很扁很亮的一道，自己按高斯在头前几 DIP 内收掉，不被 6 DIP 的
-            // 前收边切齐——否则会看见一条垂直的刀口
+            // 尖端：很扁很亮的一道，自己按高斯在頭前幾 DIP 內收掉，不被 6 DIP 的
+            // 前收邊切齊——否則會看見一條垂直的刀口
             let needle = (-(d / nx).powi(2) * 1.2).exp() * filtered(off, ny / 1.2_f32.sqrt());
 
             let mut acc = [0.0f32; 3];
@@ -940,8 +940,8 @@ pub fn chase(c: &Card, x0: f32, head: f32, y: f32, thick: f32, tint: Color32, ho
                 inv *= 1.0 - sa;
             };
             put(c_halo, a_halo * prof * halo);
-            // 已播放段的底光不跟着尾巴衰减：整段都要看得见「已播放」，
-            // 只是越靠近头部越亮——衰减交给上面那几层彗尾。
+            // 已播放段的底光不跟著尾巴衰減：整段都要看得見「已播放」，
+            // 只是越靠近頭部越亮——衰減交給上面那幾層彗尾。
             put(c_under, a_under * fwd * start * band);
             put(c_band, a_band * prof * band);
             put(c_core, a_core * core * fwd);

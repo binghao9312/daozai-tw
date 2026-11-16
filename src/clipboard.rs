@@ -1,25 +1,25 @@
-//! 剪贴板记录：最近复制的文字，在置物架页的「剪贴板」里查看、再次复制、固定。
+//! 剪貼簿記錄：最近複製的文字，在置物架頁的「剪貼簿」裡檢視、再次複製、固定。
 //!
-//! - 只记文字；图片和文件不记录。
-//! - 最近记录与固定条目都保存在本机 `clipboard.json`。
-//! - 密码管理器等标记为「不进剪贴板历史」的内容一律跳过
+//! - 只記文字；圖片和檔案不記錄。
+//! - 最近記錄與固定條目都儲存在本機 `clipboard.json`。
+//! - 密碼管理器等標記為「不進剪貼簿歷史」的內容一律跳過
 //!   （`ExcludeClipboardContentFromMonitorProcessing` / `CanIncludeInClipboardHistory = 0`）。
-//! - Windows 上用 `AddClipboardFormatListener` 等系统通知，没有轮询；
-//!   监听线程只在剪贴板真正变化时醒来。
+//! - Windows 上用 `AddClipboardFormatListener` 等系統通知，沒有輪詢；
+//!   監聽執行緒只在剪貼簿真正變化時醒來。
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-/// 未固定条目的上限；固定的不占这个名额。
+/// 未固定條目的上限；固定的不佔這個名額。
 pub const MAX_RECENT: usize = 30;
-/// 单条最长字符数，超过的不记录（大段日志、整份文件内容）。
+/// 單條最長字元數，超過的不記錄（大段日誌、整份檔案內容）。
 pub const MAX_CHARS: usize = 20_000;
 pub const MAX_PINNED: usize = 20;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Clip {
     pub text: String,
-    /// 本地时间 `HH:MM`。
+    /// 本地時間 `HH:MM`。
     pub at: String,
     pub pinned: bool,
 }
@@ -27,13 +27,13 @@ pub struct Clip {
 #[derive(Debug, Default)]
 pub struct History {
     pub items: Vec<Clip>,
-    /// 每次变化 +1，界面据此判断是否需要重绘。
+    /// 每次變化 +1，介面據此判斷是否需要重繪。
     pub version: u64,
     path: Option<std::path::PathBuf>,
 }
 
 impl History {
-    /// 新内容放最前；同样的文字只留一条（移到最前、保留固定状态）。
+    /// 新內容放最前；同樣的文字只留一條（移到最前、保留固定狀態）。
     pub fn push(&mut self, text: &str, at: &str) -> bool {
         if text.trim().is_empty() || text.chars().count() > MAX_CHARS { return false; }
         let pinned = match self.items.iter().position(|c| c.text == text) {
@@ -55,7 +55,7 @@ impl History {
         }
     }
 
-    /// 清空未固定的条目，固定的保留。
+    /// 清空未固定的條目，固定的保留。
     pub fn clear_recent(&mut self) {
         self.items.retain(|c| c.pinned);
         self.changed();
@@ -106,7 +106,7 @@ impl History {
     }
 }
 
-/// 界面与监听线程共用。
+/// 介面與監聽執行緒共用。
 #[derive(Clone)]
 pub struct Shared {
     pub history: Arc<Mutex<History>>,
@@ -136,14 +136,14 @@ impl Default for Shared {
     fn default() -> Self { Self::new(true) }
 }
 
-/// 列表里的一行预览：换行与连续空白压成一个空格。
+/// 列表裡的一行預覽：換行與連續空白壓成一個空格。
 pub fn preview(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-// ---------------------------------------------------------------- Windows 监听
+// ---------------------------------------------------------------- Windows 監聽
 
-/// 剪贴板监听的持有者；销毁时让监听线程退出并注销系统监听，不等待线程结束。
+/// 剪貼簿監聽的持有者；銷燬時讓監聽執行緒退出並登出系統監聽，不等待執行緒結束。
 pub struct Watcher {
     #[cfg(windows)]
     stop: Arc<win::Stop>,
@@ -159,7 +159,7 @@ pub fn watch(shared: Shared, repaint: impl Fn() + Send + 'static) -> Option<Watc
     let stop = Arc::new(win::Stop::default());
     let thread_stop = stop.clone();
     std::thread::Builder::new().name("daozai-clipboard".into()).spawn(move || {
-        // 启动失败（极少见）时剪贴板页只是没有新记录，不影响其他功能。
+        // 啟動失敗（極少見）時剪貼簿頁只是沒有新記錄，不影響其他功能。
         let _ = win::run(shared, Box::new(repaint), &thread_stop);
     }).ok()?;
     Some(Watcher { stop })
@@ -195,7 +195,7 @@ mod win {
 
     struct State { shared: Shared, repaint: Box<dyn Fn() + Send> }
 
-    /// 监听线程建好消息窗口后登记线程号；持有者销毁时先置位再读线程号，两边总有一方看到对方。
+    /// 監聽執行緒建好訊息視窗後登記執行緒號；持有者銷燬時先置位再讀執行緒號，兩邊總有一方看到對方。
     #[derive(Default)]
     pub struct Stop { requested: std::sync::atomic::AtomicBool, thread: std::sync::atomic::AtomicU32 }
     impl Stop {
@@ -229,14 +229,14 @@ mod win {
         DefWindowProcW(hwnd, msg, wp, lp)
     }
 
-    /// 密码管理器、远程桌面等会给敏感内容加上这些格式，表示不要进入剪贴板历史。
+    /// 密碼管理器、遠端桌面等會給敏感內容加上這些格式，表示不要進入剪貼簿歷史。
     unsafe fn excluded() -> bool {
         let exclude = RegisterClipboardFormatW(w!("ExcludeClipboardContentFromMonitorProcessing"));
         let ignore = RegisterClipboardFormatW(w!("Clipboard Viewer Ignore"));
         if (exclude != 0 && IsClipboardFormatAvailable(exclude).is_ok()) || (ignore != 0 && IsClipboardFormatAvailable(ignore).is_ok()) {
             return true;
         }
-        // 值为 DWORD 0 表示不允许进入历史。
+        // 值為 DWORD 0 表示不允許進入歷史。
         let history = RegisterClipboardFormatW(w!("CanIncludeInClipboardHistory"));
         if history == 0 || IsClipboardFormatAvailable(history).is_err() { return false; }
         let Ok(handle) = GetClipboardData(history) else { return true; };
@@ -250,7 +250,7 @@ mod win {
 
     unsafe fn read_text(hwnd: HWND) -> Option<(String, bool)> {
         if IsClipboardFormatAvailable(CF_UNICODETEXT.0 as u32).is_err() { return None; }
-        // 其他程序可能正占用剪贴板，稍等重试几次。
+        // 其他程式可能正佔用剪貼簿，稍等重試幾次。
         let mut opened = false;
         for _ in 0..5 {
             if OpenClipboard(hwnd).is_ok() { opened = true; break; }
@@ -283,7 +283,7 @@ mod win {
             let wc = WNDCLASSW { lpfnWndProc: Some(proc), hInstance: instance.into(), lpszClassName: class, ..Default::default() };
             RegisterClassW(&wc);
             let hwnd = CreateWindowExW(WINDOW_EX_STYLE(0), class, PCWSTR::null(), WINDOW_STYLE(0), 0, 0, 0, 0, HWND_MESSAGE, None, instance, None)?;
-            // 消息窗口建好后线程已有消息队列，此后投递的 WM_QUIT 不会丢。
+            // 訊息視窗建好後執行緒已有訊息佇列，此後投遞的 WM_QUIT 不會丟。
             if !stop.register() { let _ = DestroyWindow(hwnd); return Ok(()); }
             STATE.with(|state| *state.borrow_mut() = Some(State { shared, repaint }));
             AddClipboardFormatListener(hwnd)?;
@@ -307,7 +307,7 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn dropping_the_watcher_ends_the_listener_thread(){
-        // 先停后启和启动后再停两种顺序都必须让线程退出，不能留下常驻的监听窗口。
+        // 先停後啟和啟動後再停兩種順序都必須讓執行緒退出，不能留下常駐的監聽視窗。
         for stop_first in [true,false] {
             let stop=Arc::new(win::Stop::default());let thread_stop=stop.clone();
             let shared=Shared{history:Default::default(),enabled:Arc::new(AtomicBool::new(false))};

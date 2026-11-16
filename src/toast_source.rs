@@ -1,4 +1,4 @@
-//! 仅在通知缺少应用标识时，按编号和创建时间核对 Windows 记录的发送方；不查询通知正文。
+//! 僅在通知缺少應用標識時，按編號和建立時間核對 Windows 記錄的傳送方；不查詢通知正文。
 use std::{ffi::{c_char,c_int,c_void,CStr,CString},path::Path,ptr};
 type RowCallback=unsafe extern "C" fn(*mut c_void,c_int,*mut *mut c_char,*mut *mut c_char)->c_int;
 #[link(name="winsqlite3")]
@@ -13,7 +13,7 @@ pub(super) fn sender(id:u32,created:i64)->Option<String>{
 }
 fn sender_in(path:&Path,id:u32,created:i64)->Option<String>{
     let name=CString::new(path.to_string_lossy().as_bytes()).ok()?;
-    // 参数均为数值，创建时间必须同时匹配，避免通知编号复用时混淆应用。
+    // 引數均為數值，建立時間必須同時匹配，避免通知編號複用時混淆應用。
     let sql=CString::new(format!("SELECT h.PrimaryId FROM Notification n JOIN NotificationHandler h ON h.RecordId=n.HandlerId WHERE n.Id={id} AND n.ArrivalTime={created} AND n.Type='toast' LIMIT 1")).ok()?;
     unsafe extern "C" fn found(data:*mut c_void,count:c_int,values:*mut *mut c_char,_:*mut *mut c_char)->c_int{
         if count>0 && !values.is_null(){unsafe{if !(*values).is_null(){*data.cast::<Option<String>>()=Some(CStr::from_ptr(*values).to_string_lossy().into_owned());}}}0

@@ -1,4 +1,4 @@
-//! 默认浏览器登录：官网生成一次性请求，岛仔轮询对应的授权结果。
+//! 預設瀏覽器登入：官網生成一次性請求，島仔輪詢對應的授權結果。
 use super::{Auth,Session,Snapshot,Failure,slot,query,save_session};
 use serde_json::Value;
 use std::io::Read;

@@ -1,4 +1,4 @@
-//! Apple Music 系统会话中的歌手与专辑字段。
+//! Apple Music 系統會話中的歌手與專輯欄位。
 pub(super) fn is_source(source:&str)->bool{
     source.eq_ignore_ascii_case("AppleMusic.exe") || source.eq_ignore_ascii_case("AppleInc.AppleMusicWin_nzyj5cx40ttqa!App")
 }

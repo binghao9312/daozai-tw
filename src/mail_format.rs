@@ -1,22 +1,22 @@
-//! 邮件正文的轻量排版：把邮件拆成「标题 / 段落 / 列表 / 引用 / 分隔线」，
-//! 让阅读窗口不再是一整段纯文本。不引入 HTML 渲染引擎，只保留能提升可读性的结构。
+//! 郵件正文的輕量排版：把郵件拆成「標題 / 段落 / 列表 / 引用 / 分隔線」，
+//! 讓閱讀視窗不再是一整段純文字。不引入 HTML 渲染引擎，只保留能提升可讀性的結構。
 
 use crate::mail;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Kind {
-    /// 正文里的大标题
+    /// 正文裡的大標題
     Title,
-    /// 小标题
+    /// 小標題
     Heading,
     Body,
     Bullet,
-    /// 有序列表项，文本自带 `1. ` 这样的序号
+    /// 有序列表項，文字自帶 `1. ` 這樣的序號
     Numbered,
     Quote,
-    /// 段落之间的空隙（不是一条线）
+    /// 段落之間的空隙（不是一條線）
     Gap,
-    /// 真正的分隔线
+    /// 真正的分隔線
     Divider,
 }
 
@@ -27,8 +27,8 @@ pub struct Line {
     pub rich: bool,
 }
 
-/// 正文排版行。HTML 原文优先；纯图片/空壳 HTML 会退回 text/plain，
-/// 避免营销邮件只剩一片空白。两者都按「实际文字量」择优。
+/// 正文排版行。HTML 原文優先；純圖片/空殼 HTML 會退回 text/plain，
+/// 避免營銷郵件只剩一片空白。兩者都按「實際文字量」擇優。
 pub fn lines(html: &str, text: &str) -> Vec<Line> {
     let html = clean(html);
     let text = clean(text);
@@ -40,12 +40,12 @@ pub fn lines(html: &str, text: &str) -> Vec<Line> {
             .map(|l| l.text.chars().count())
             .sum()
     };
-    // 只在 HTML 明显是空壳（纯图片、只剩追踪像素）时回退；结构化排版本身
-    // 会丢掉标签与空白，短邮件里字符数天然略少于 text/plain，不能用 >= 比较。
+    // 只在 HTML 明顯是空殼（純圖片、只剩追蹤畫素）時回退；結構化排版本身
+    // 會丟掉標籤與空白，短郵件裡字元數天然略少於 text/plain，不能用 >= 比較。
     if rich.is_empty() || score(&rich) * 2 < score(&plain) { plain } else { rich }
 }
 
-/// 零宽空格、零宽连接符、软连字符都不占位，留着只会让断行和复制变得古怪。
+/// 零寬空格、零寬連線符、軟連字元都不佔位，留著只會讓斷行和複製變得古怪。
 fn clean(text: &str) -> std::borrow::Cow<'_, str> {
     let noisy = |c: char| matches!(c, '\u{200b}' | '\u{200c}' | '\u{200d}' | '\u{2060}' | '\u{feff}' | '\u{00ad}');
     if text.contains(noisy) {
@@ -55,8 +55,8 @@ fn clean(text: &str) -> std::borrow::Cow<'_, str> {
     }
 }
 
-/// 列表项与阅读窗口共用。真实 HTML 邮件必须走 `from_html`：
-/// multipart 邮件的 text/plain 版本通常已把标题、列表和段落全部压平。
+/// 列表項與閱讀視窗共用。真實 HTML 郵件必須走 `from_html`：
+/// multipart 郵件的 text/plain 版本通常已把標題、列表和段落全部壓平。
 pub fn item_lines(item: &mail::Item) -> Vec<Line> {
     lines(&item.html, &item.summary)
 }
@@ -83,7 +83,7 @@ fn from_text(text: &str) -> Vec<Line> {
             gap = true;
             continue;
         }
-        // 同一种列表的相邻项之间不额外留白，列表切换或段落之间才留一点。
+        // 同一種列表的相鄰項之間不額外留白，列表切換或段落之間才留一點。
         let list_run = matches!(
             (kind, out.last().map(|l| l.kind)),
             (Kind::Bullet, Some(Kind::Bullet)) | (Kind::Numbered, Some(Kind::Numbered))
@@ -100,7 +100,7 @@ fn from_text(text: &str) -> Vec<Line> {
     out
 }
 
-/// 行首标记 → 块类型。`## ` 标题、`• ` 列表、`1. ` 有序列表、`> ` 引用、`---` 分隔线。
+/// 行首標記 → 塊型別。`## ` 標題、`• ` 列表、`1. ` 有序列表、`> ` 引用、`---` 分隔線。
 fn split_marked(line: &str) -> (Kind, &str) {
     if let Some(rest) = line.strip_prefix("## ") {
         (Kind::Heading, rest)
@@ -119,7 +119,7 @@ fn split_marked(line: &str) -> (Kind, &str) {
     }
 }
 
-/// `1. ` / `12. ` 这类有序列表前缀。位数限三位，免得把 `2026.10 版本` 当成列表。
+/// `1. ` / `12. ` 這類有序列表字首。位數限三位，免得把 `2026.10 版本` 當成列表。
 fn is_numbered(line: &str) -> bool {
     let digits = line.chars().take_while(char::is_ascii_digit).count();
     digits > 0 && digits <= 3 && line[digits..].starts_with(". ")
@@ -151,7 +151,7 @@ pub(crate) fn decode(text: &str) -> String {
             "hellip" => Some('…'),
             "copy" => Some('©'),
             "reg" => Some('®'),
-            // 零宽字符与软连字符交给 `clean` 统一清除，这里先映射成实体本身。
+            // 零寬字元與軟連字元交給 `clean` 統一清除，這裡先對映成實體本身。
             "zwnj" => Some('\u{200c}'),
             "zwj" => Some('\u{200d}'),
             "shy" => Some('\u{00ad}'),
@@ -177,8 +177,8 @@ pub(crate) fn decode(text: &str) -> String {
     out
 }
 
-/// 布局表格：明确声明 presentation，或「零间距 + 没有可见边框」。
-/// 只看开始标签的属性，免得带 cellpadding 的真实数据表格被当成排版外壳。
+/// 佈局表格：明確宣告 presentation，或「零間距 + 沒有可見邊框」。
+/// 只看開始標籤的屬性，免得帶 cellpadding 的真實資料表格被當成排版外殼。
 fn is_layout_table(attrs: &str) -> bool {
     use std::sync::OnceLock;
     static BORDER: OnceLock<regex::Regex> = OnceLock::new();
@@ -204,8 +204,8 @@ fn is_layout_table(attrs: &str) -> bool {
         .is_match(&lower)
 }
 
-/// 图片的 `alt` 只有在真正描述内容时才值得占一行；`logo`、`icon`、追踪像素
-/// 这类装饰性替代文字会让正文多出一串噪音。
+/// 圖片的 `alt` 只有在真正描述內容時才值得佔一行；`logo`、`icon`、追蹤畫素
+/// 這類裝飾性替代文字會讓正文多出一串噪音。
 fn image_alt(tag: &str) -> Option<String> {
     use std::sync::OnceLock;
     static ALT: OnceLock<regex::Regex> = OnceLock::new();
@@ -220,7 +220,7 @@ fn image_alt(tag: &str) -> Option<String> {
     }
 }
 
-/// 按元素层级跳过隐藏块，避免嵌套标签提前结束隐藏范围。
+/// 按元素層級跳過隱藏塊，避免巢狀標籤提前結束隱藏範圍。
 pub(crate) fn visible_html(html:&str)->String {
     use std::sync::OnceLock;
     static TAG:OnceLock<regex::Regex>=OnceLock::new();
@@ -260,25 +260,25 @@ fn from_html(html: &str) -> Vec<Line> {
     static SOFT: OnceLock<regex::Regex> = OnceLock::new();
     static TAGS: OnceLock<regex::Regex> = OnceLock::new();
 
-    // 注释里可能塞着整段 Outlook 条件代码（按钮文案会因此出现两次），整段丢弃。
+    // 註釋裡可能塞著整段 Outlook 條件程式碼（按鈕文案會因此出現兩次），整段丟棄。
     let comment = COMMENT.get_or_init(|| regex::Regex::new(r"(?s)<!--.*?-->").expect("comment"));
-    // 用 table 做排版（而不是装数据）时，单元格之间不能插「·」，否则会串成一句。
-    // 判断依据放在闭包里：既看 role="presentation"，也看「零间距且没有可见边框」，
-    // 否则带 cellpadding 的真实数据表格会被误伤。
+    // 用 table 做排版（而不是裝資料）時，單元格之間不能插「·」，否則會串成一句。
+    // 判斷依據放在閉包裡：既看 role="presentation"，也看「零間距且沒有可見邊框」，
+    // 否則帶 cellpadding 的真實資料表格會被誤傷。
     let layout = LAYOUT.get_or_init(|| regex::Regex::new(r"(?is)<table\b([^>]*)>(.*?)</table\s*>").expect("layout"));
     let script = SCRIPT.get_or_init(|| {
         regex::Regex::new(r"(?is)<(?:script|style|head)[^>]*>.*?</(?:script|style|head)>").expect("script")
     });
-    // 有序列表按出现顺序编号；ol 之外的 li 仍然走项目符号。
+    // 有序列表按出現順序編號；ol 之外的 li 仍然走專案符號。
     let ordered = ORDERED.get_or_init(|| regex::Regex::new(r"(?is)<ol\b[^>]*>(.*?)</ol\s*>").expect("ol"));
     let ordered_item = ORDERED_ITEM.get_or_init(|| regex::Regex::new(r"(?is)<li\b[^>]*>").expect("li"));
     let mark = MARK.get_or_init(|| {
         regex::Regex::new(r"(?is)<hr\s*/?>|<h[12][^>]*>|<h[3-6][^>]*>|<li[^>]*>|<blockquote[^>]*>").expect("mark")
     });
     let strong = STRONG.get_or_init(|| regex::Regex::new(r"(?i)</?(?:strong|b)\b[^>]*>").expect("strong"));
-    // 表头和数据单元格一样按「·」分隔，但保留粗体以便和正文区分。
+    // 表頭和資料單元格一樣按「·」分隔，但保留粗體以便和正文區分。
     let header_cell = HEADER_CELL.get_or_init(|| regex::Regex::new(r"(?i)<th\b[^>]*>|</th\s*>").expect("th"));
-    // 图片本身渲染不了，只把有信息量的 alt 留成占位，装饰图直接丢掉。
+    // 圖片本身渲染不了，只把有訊息量的 alt 留成佔位，裝飾圖直接丟掉。
     let image = IMAGE.get_or_init(|| regex::Regex::new(r"(?is)<img\b[^>]*>").expect("img"));
     let cell = CELL.get_or_init(|| regex::Regex::new(r"(?i)</t[dh]>").expect("cell"));
     let hard = HARD.get_or_init(|| {

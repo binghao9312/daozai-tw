@@ -1,4 +1,4 @@
-//! 设置窗口独立外观，不改变岛体的绘制样式。
+//! 設定視窗獨立外觀，不改變島體的繪製樣式。
 use eframe::egui::{self,Color32};
 
 #[derive(Clone,Copy,Debug,Default,PartialEq,Eq)]

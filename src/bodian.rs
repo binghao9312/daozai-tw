@@ -1,4 +1,4 @@
-//! 波点 1.1.7：只读已验证播放引擎的属性缓存与本机歌曲数据库。
+//! 波點 1.1.7：只讀已驗證播放引擎的屬性快取與本機歌曲資料庫。
 use super::{MediaKind,NowPlaying};
 use std::{ffi::{c_char,c_void,CString},io::Read,path::PathBuf,sync::Arc,time::{Duration,Instant}};
 
@@ -53,7 +53,7 @@ impl Process {
                 let keys=self.pointer(pointer+16)?;let mut map=serde_json::Map::new();
                 for i in 0..count {
                     let key=self.string(self.pointer(keys+i*8)?)?;
-                    // 不读取或保存带签名的音频地址，只取当前歌曲的标识。
+                    // 不讀取或儲存帶簽名的音訊地址，只取當前歌曲的標識。
                     if matches!(key.as_str(),"title"|"current"|"playing"|"id") {map.insert(key,self.node(values+i*16,depth+1)?);}
                 }
                 Some(map.into())
@@ -70,7 +70,7 @@ impl Process {
         if count==0{return None;}
         let entries=self.pointer(list.checked_add(8)?)?;
         *cursor%=count;
-        // 每轮最多读取 128 项；命中后从当前曲目开始下一轮，避免长队列反复全表扫描。
+        // 每輪最多讀取 128 項；命中後從當前曲目開始下一輪，避免長佇列反覆全表掃描。
         for _ in 0..count.min(128){
             let entry=self.node(entries.checked_add(*cursor*16)?,0)?;
             if entry["current"].as_bool()==Some(true){return Some(entry);}
@@ -115,7 +115,7 @@ fn snapshot(values:&serde_json::Value)->Option<(String,u64,f64,f64,bool)>{
 }
 
 fn playback(process:&Process,target:Target,cursor:&mut usize)->Option<(String,u64,f64,f64,bool)>{
-    // 已验证版本的事件注册表持有 mpv 客户端；仅遍历这张小表，不扫描进程内存。
+    // 已驗證版本的事件登錄檔持有 mpv 客戶端；僅遍歷這張小表，不掃描程序記憶體。
     let head=process.pointer(target.events+0xa1d8)?;let mut node=process.pointer(head)?;
     for _ in 0..8 {
         if node==head{return None;}
@@ -236,7 +236,7 @@ pub(super) fn control(command:super::Transport)->bool{
     let id=match command{super::Transport::Toggle=>1,super::Transport::Next=>3,super::Transport::Prev=>4,_=>return false};
     (||->Option<()> {
         let target=Target::discover()?;let process=Process::open(target.pid)?;
-        // 仅使用已实测版本的四个原生媒体热键；用户重新注册热键后不猜测新的编号。
+        // 僅使用已實測版本的四個原生媒體熱鍵；使用者重新註冊熱鍵後不猜測新的編號。
         if !process.module(target.main,0x69fea107,0x57000) || !process.module(target.keys,0x69fea0d4,0x1e000){return None;}
         let manager=process.pointer(target.keys+0x19510)?;
         let registrars=process.pointer(manager)?;let registrar=process.pointer(process.pointer(registrars)?+40)?;
@@ -357,7 +357,7 @@ mod tests {
     }
 }
 
-/// 进程快照一次要十几毫秒：有波点窗口线索时 3 秒查一次，没有线索时（多数用户没装波点）30 秒才兜底查一次。
+/// 程序快照一次要十幾毫秒：有波點視窗線索時 3 秒查一次，沒有線索時（多數使用者沒裝波點）30 秒才兜底查一次。
 const DISCOVER_HINTED:Duration=Duration::from_secs(3);
 const DISCOVER_FALLBACK:Duration=Duration::from_secs(30);
 fn discovery_due(last:Option<Instant>,hint:impl FnOnce()->bool)->bool{
@@ -365,7 +365,7 @@ fn discovery_due(last:Option<Instant>,hint:impl FnOnce()->bool)->bool{
     since.is_none_or(|since|since>=DISCOVER_FALLBACK) || since.is_some_and(|since|since>=DISCOVER_HINTED) && hint()
 }
 
-/// 便宜的线索：波点（Flutter 程序）的主窗口属于 bodian_pc.exe。窗口类名若被改，仍有 30 秒一次的兜底查找。
+/// 便宜的線索：波點（Flutter 程式）的主視窗屬於 bodian_pc.exe。視窗類名若被改，仍有 30 秒一次的兜底查詢。
 fn window_hint()->bool{
     use windows::{core::{w,PCWSTR},Win32::{Foundation::HWND,UI::WindowsAndMessaging::{FindWindowExW,GetWindowThreadProcessId}}};
     let mut after=HWND::default();

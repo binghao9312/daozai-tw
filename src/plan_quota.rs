@@ -57,7 +57,7 @@ fn glm_error(v:&Value,http:Option<u16>)->(String,u64){
     let numeric=|v:&Value|v.as_u64().or_else(||v.as_str()?.parse::<u64>().ok());
     let code=v.pointer("/error/code").and_then(numeric).or_else(||v.get("code").and_then(numeric));
     let reason=v["msg"].as_str().or_else(||v["message"].as_str()).or_else(||v.pointer("/error/message").and_then(Value::as_str)).unwrap_or_default().to_ascii_lowercase();
-    // HTTP 429 也可能表示套餐到期，先按业务码区分；服务端原文不进入界面或缓存。
+    // HTTP 429 也可能表示套餐到期，先按業務碼區分；服務端原文不進入介面或快取。
     let (message,retry)=match code{
         Some(1003)=>("GLM 金鑰已過期，請在所選地區控制檯重新獲取套餐 Key",0),
         Some(401|1000|1001)=>("GLM 金鑰認證失敗，請核對 Key、有效期及所選地區",0),
@@ -175,7 +175,7 @@ fn parse_glm(v: &Value, s: &mut Snapshot) -> Result<(), String> {
     if !rows.iter().any(|row|matches!(row["type"].as_str(),Some("TOKENS_LIMIT"|"CREDIT_LIMIT")) && percent(&row["percentage"]).is_some()){
         return Err("GLM 未返回可識別的程式設計額度（工具額度不能代替程式設計額度）".into());
     }
-    // 复用原 ZCode 已支持的周期和重置时间解析，保留两种登录来源的相同口径。
+    // 複用原 ZCode 已支援的週期和重置時間解析，保留兩種登入來源的相同口徑。
     *s=super::zcode::coding(&serde_json::json!({"data":data}))?;
     if let Some(level)=data["level"].as_str().map(str::trim).filter(|v|!v.is_empty()&&v.len()<=64){s.plan=level.into();}
     Ok(())

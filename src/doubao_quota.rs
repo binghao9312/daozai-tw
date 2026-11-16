@@ -1,4 +1,4 @@
-//! 豆包网页会员额度。基于 0011-joe 的 #42 实现，登录状态仅在本机加密保存。
+//! 豆包網頁會員額度。基於 0011-joe 的 #42 實現，登入狀態僅在本機加密儲存。
 use super::{Account, Config, Provider, Snapshot, Window};
 use serde_json::{json, Value};
 use std::{fs, io::Read, path::PathBuf, sync::{mpsc, Arc, atomic::{AtomicBool, Ordering}}};
@@ -19,7 +19,7 @@ fn integer(value: &Value) -> Option<i64> {
     value.as_i64().or_else(|| value.as_str()?.parse().ok())
 }
 
-/// 额度字段兼容数字和带千位分隔符的展示字符串。
+/// 額度欄位相容數字和帶千位分隔符的展示字串。
 fn amount(value: &Value) -> Option<f64> {
     value.as_f64().or_else(|| value.as_str()?.replace(',', "").trim().parse().ok())
         .filter(|number| number.is_finite() && *number >= 0.0)
@@ -77,7 +77,7 @@ pub fn parse(value: &Value) -> Result<Snapshot, String> {
             }
         }
     }
-    // 同周期存在多个权益池时，圆环保留限制最紧的一项，其余仍进入完整明细。
+    // 同週期存在多個權益池時，圓環保留限制最緊的一項，其餘仍進入完整明細。
     windows.sort_by(|a, b| a.seconds.cmp(&b.seconds).then_with(|| a.remaining.total_cmp(&b.remaining)));
     let mut primary: Vec<Window> = Vec::new();
     for window in windows {
@@ -180,7 +180,7 @@ pub fn fetch(agent: &ureq::Agent, account: &Account) -> Result<Snapshot, (String
     request(agent, ENDPOINT, &header)
 }
 
-/// 验证结果不包含已落盘的凭据；只有仍打开的连接窗口才提交保存。
+/// 驗證結果不包含已落盤的憑據；只有仍開啟的連線視窗才提交儲存。
 pub struct Validated { alias: String, header: String, snapshot: Snapshot, expected: Option<String> }
 pub struct Connected { pub id: String, pub snapshot: Snapshot, pub cleanup_error: Option<String> }
 impl Validated {

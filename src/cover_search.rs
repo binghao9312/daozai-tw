@@ -1,10 +1,10 @@
-//! 封面兜底：播放器没给封面（系统缩略图缺失、电台 / FM 等模式）时，按歌名和歌手在线找一张。
-//! 与播放器、播放模式无关；只在等过一会儿仍没有封面时才请求，每首歌最多请求两次。
+//! 封面兜底：播放器沒給封面（系統縮圖缺失、電臺 / FM 等模式）時，按歌名和歌手線上找一張。
+//! 與播放器、播放模式無關；只在等過一會兒仍沒有封面時才請求，每首歌最多請求兩次。
 use super::NowPlaying;
 use eframe::egui::ColorImage;
 use std::{sync::{mpsc,Arc},time::{Duration,Instant}};
 
-/// 先给系统缩略图和播放器本地封面一点时间，避免每次换歌都去网上搜。
+/// 先給系統縮圖和播放器本地封面一點時間，避免每次換歌都去網上搜。
 const WAIT:Duration=Duration::from_secs(4);
 const RETRY:Duration=Duration::from_secs(30);
 
@@ -24,7 +24,7 @@ impl CoverSearch {
     pub(crate) fn fill_with(&mut self,media:&NowPlaying,now:Instant,load:impl FnOnce(String,String,f64)->Found+Send+'static)->Found {
         if media.artwork.is_some() || !media.is_music() {return None;}
         let key=format!("{}|{}",media.title,media.artist);
-        // 换歌时丢弃旧请求，迟到的封面不能贴到新歌上。
+        // 換歌時丟棄舊請求，遲到的封面不能貼到新歌上。
         if key!=self.key {*self=Self{key,missing_since:Some(now),worker:self.worker.take(),..Default::default()};}
         if let Some(receiver)=&self.pending {
             match receiver.try_recv() {
@@ -38,7 +38,7 @@ impl CoverSearch {
         if self.image.is_none() && self.pending.is_none() && waited && due && self.worker.as_ref().is_none_or(|w|w.is_finished()) {
             let (sender,receiver)=mpsc::channel();
             let (title,artist,duration)=(media.title.clone(),media.artist.clone(),media.duration);
-            // 与其他封面下载共用并发上限，网络卡住时不会越积越多。
+            // 與其他封面下載共用併發上限，網路卡住時不會越積越多。
             self.worker=crate::resources::COVER.spawn(move||{let _=sender.send(load(title,artist,duration));});
             if self.worker.is_some(){
                 self.attempts+=1;self.retry_at=None;self.pending=Some(receiver);
@@ -48,7 +48,7 @@ impl CoverSearch {
     }
 }
 
-/// 搜索结果里挑同一首歌：有歌手时歌名、歌手都要对上；没有歌手时歌名完全一致且时长相差 3 秒内才用，宁缺毋错。
+/// 搜尋結果裡挑同一首歌：有歌手時歌名、歌手都要對上；沒有歌手時歌名完全一致且時長相差 3 秒內才用，寧缺毋錯。
 pub(crate) fn pick(songs:&[serde_json::Value],title:&str,artist:&str,duration:f64)->Option<String> {
     songs.iter().find_map(|song|{
         let name=song.get("name")?.as_str()?;
@@ -79,7 +79,7 @@ fn search(title:String,artist:String,duration:f64)->Found {
     let value:serde_json::Value=serde_json::from_slice(&bytes).ok()?;
     if value.get("code").and_then(|v|v.as_i64())!=Some(200){return None;}
     let cover=pick(value.pointer("/result/songs")?.as_array()?,&title,&artist,duration)?;
-    // 只接受网易云图片域名，按 256 缩略图下载，复用现有的大小与尺寸上限。
+    // 只接受網易雲圖片域名，按 256 縮圖下載，複用現有的大小與尺寸上限。
     super::netease_playback::fetch_cover(&cover)
 }
 

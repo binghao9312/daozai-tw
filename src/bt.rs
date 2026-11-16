@@ -1,4 +1,4 @@
-//! 经典蓝牙与低功耗蓝牙设备的连接状态和电量。
+//! 經典藍芽與低功耗藍芽裝置的連線狀態和電量。
 
 use std::time::{Duration,Instant};
 
@@ -44,7 +44,7 @@ fn device_kind(name: &str, classic: bool, class: Option<u32>) -> DeviceKind {
 }
 
 impl Device {
-    /// 通知条正文：`名称 · 电量 80%`，设备没上报电量时只写名称。
+    /// 通知條正文：`名稱 · 電量 80%`，裝置沒上報電量時只寫名稱。
     pub fn summary(&self) -> String {
         match self.battery {
             Some(b) => format!("{} · 電量 {b}%", self.name),
@@ -61,7 +61,7 @@ impl Cache {
         for device in &mut devices {device.battery=self.devices.iter().find(|old|old.id==device.id).and_then(|old|old.battery);}
         if devices.is_empty(){self.battery_at=None;}
         else if changed || self.battery_at.is_none_or(|at|now.duration_since(at)>=Duration::from_secs(60)) {
-            // 失败同样限频，避免设备驱动异常时每两秒重新枚举整机。
+            // 失敗同樣限頻，避免裝置驅動異常時每兩秒重新列舉整機。
             self.battery_at=Some(now);
             if let Ok(levels)=read(&devices){for device in &mut devices {device.battery=levels.iter().find(|(id,_)|id==&device.id).map(|(_,level)|*level);}}
         }
@@ -69,7 +69,7 @@ impl Cache {
     }
 }
 
-/// 释放服务时唤醒后台线程，停止后续扫描。
+/// 釋放服務時喚醒後臺執行緒，停止後續掃描。
 pub struct Service {
     pub rx: std::sync::mpsc::Receiver<Vec<Device>>,
     stop: std::sync::mpsc::Sender<()>,
@@ -167,7 +167,7 @@ fn read_batteries(devices:&[Device])->Result<Vec<(String,u8)>,()> {
                 batteries.push((upper.clone(), level));
             }
         }
-        // 每次枚举后释放设备列表句柄。
+        // 每次列舉後釋放裝置列表控制代碼。
         let _ = SetupDiDestroyDeviceInfoList(set);
     }
     Ok(devices.iter().filter_map(|device|batteries.iter().find(|(node,_)|node.contains(&device.id)).map(|(_,level)|(device.id.clone(),*level))).collect())

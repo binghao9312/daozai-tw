@@ -1,4 +1,4 @@
-//! 通过 Chrome 本人确认的原生连接读取 Gemini 会话，不启动或关闭浏览器。
+//! 透過 Chrome 本人確認的原生連線讀取 Gemini 會話，不啟動或關閉瀏覽器。
 use super::{cookie,email,Session};
 use serde_json::{json,Value};
 use std::{fs,io::ErrorKind,net::{Ipv4Addr,SocketAddr,TcpStream},sync::atomic::{AtomicBool,Ordering},time::{Duration,Instant}};

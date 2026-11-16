@@ -1,9 +1,9 @@
-//! 左右停靠：岛体贴在屏幕左 / 右边缘，收起时是竖向胶囊，展开后面板从边缘滑出。
+//! 左右停靠：島體貼在螢幕左 / 右邊緣，收起時是豎向膠囊，展開後面板從邊緣滑出。
 //!
-//! 展开后的页面内容与顶部停靠完全相同（419 × 140 的横向面板），只是锚点换到侧边；
-//! 收起态换成竖排：时间（时 / 分两行）、电池、播放状态、专注倒计时、通知铃铛。
-//! AI 额度竖排：环形额度一行一个，余额类图标在上、金额在下。
-//! 吉祥物和岛上歌词是横向内容，侧边停靠时不显示。
+//! 展開後的頁面內容與頂部停靠完全相同（419 × 140 的橫向面板），只是錨點換到側邊；
+//! 收起態換成豎排：時間（時 / 分兩行）、電池、播放狀態、專注倒計時、通知鈴鐺。
+//! AI 額度豎排：環形額度一行一個，餘額類圖示在上、金額在下。
+//! 吉祥物和島上歌詞是橫向內容，側邊停靠時不顯示。
 
 use crate::app::{App, Env, Phase, BAR_H_MIN, BAR_W_MIN, PILL_GAP, PW};
 use crate::model::{Dock, IslandShape};
@@ -11,18 +11,18 @@ use crate::paint::{self, Card, H};
 use crate::theme::{self, size, W};
 use eframe::egui::{Color32, Pos2, Rect, Vec2};
 
-/// 侧边停靠时的透明画布（窗口）大小，逻辑点。
+/// 側邊停靠時的透明畫布（視窗）大小，邏輯點。
 pub const SIDE_W: f32 = 500.0;
 pub const SIDE_H: f32 = 600.0;
-/// 收起时竖向胶囊的厚度。
+/// 收起時豎向膠囊的厚度。
 pub const SIDE_BAR_W: f32 = 36.0;
-/// 岛体中心能离开屏幕竖直中线的预留：展开面板（最高约 236）与肩部、阴影留在屏幕内。
+/// 島體中心能離開螢幕豎直中線的預留：展開面板（最高約 236）與肩部、陰影留在螢幕內。
 pub const SIDE_HALF_EXTENT: f32 = 150.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum SideItem {
     Clock, Weather, Battery, Music, Focus, Bell,
-    /// AI 额度：账号下标（None 为「+N」）与高度。
+    /// AI 額度：帳號下標（None 為「+N」）與高度。
     Quota(usize, f32),
 }
 
@@ -36,7 +36,7 @@ impl App {
     pub(crate) fn dock(&self) -> Dock { self.settings.dock }
     pub(crate) fn side(&self) -> bool { self.settings.dock.is_side() }
 
-    /// 竖向胶囊里依次显示的内容。
+    /// 豎向膠囊裡依次顯示的內容。
     pub(crate) fn side_items(&self) -> Vec<SideItem> {
         let mut items = Vec::new();
         if self.settings.show_clock {items.push(SideItem::Clock);}
@@ -49,12 +49,12 @@ impl App {
         items
     }
 
-    /// 收起时竖向胶囊的长度。
+    /// 收起時豎向膠囊的長度。
     pub(crate) fn side_bar_len(&self) -> f32 {
         14.0 + self.side_items().iter().map(|i| i.height(self.settings.clock_seconds)).sum::<f32>()
     }
 
-    /// 收起态尺寸（屏幕宽 × 高）。极简模式是贴边的一小段竖线。
+    /// 收起態尺寸（螢幕寬 × 高）。極簡模式是貼邊的一小段豎線。
     pub(crate) fn side_base_size(&self, minimal: bool) -> (f32, f32) {
         if minimal { (BAR_H_MIN, BAR_W_MIN) } else { (SIDE_BAR_W, self.side_bar_len().min(SIDE_H-24.0)) }
     }
@@ -63,8 +63,8 @@ impl App {
         if self.settings.island_shape == IslandShape::Pill { PILL_GAP } else { 0.0 }
     }
 
-    /// 宽 `w`、高 `h` 的岛体在画布 `win` 里的位置：顶部停靠水平居中贴顶，
-    /// 左右停靠贴边、竖直居中。
+    /// 寬 `w`、高 `h` 的島體在畫布 `win` 裡的位置：頂部停靠水平居中貼頂，
+    /// 左右停靠貼邊、豎直居中。
     pub(crate) fn island_rect(&self, win: Rect, w: f32, h: f32) -> Rect {
         let gap = self.side_gap();
         match self.dock() {
@@ -74,12 +74,12 @@ impl App {
         }
     }
 
-    /// 展开面板（页面内容）的左上角。
+    /// 展開面板（頁面內容）的左上角。
     pub(crate) fn content_origin(&self, win: Rect) -> Pos2 {
         self.island_rect(win, PW, self.expanded_height()).min
     }
 
-    /// 侧边停靠的命中区域：收起时是胶囊外扩几点并一直延伸到屏幕边缘，展开时是整个面板。
+    /// 側邊停靠的命中區域：收起時是膠囊外擴幾點並一直延伸到螢幕邊緣，展開時是整個面板。
     pub(crate) fn side_hit_rect(&self, win: Rect, p: f32) -> Rect {
         let rect = if p > 0.04 || self.open {
             self.island_rect(win, PW, self.expanded_height()).expand2(Vec2::new(4.0, 2.0))
@@ -87,7 +87,7 @@ impl App {
             let (w, h) = (self.w.pos, self.h.pos);
             self.island_rect(win, w, h).expand2(Vec2::new(4.0, 6.0))
         };
-        // 光标推到屏幕最边上也要能唤出岛（胶囊离边缘有一小段空隙）。
+        // 游標推到螢幕最邊上也要能喚出島（膠囊離邊緣有一小段空隙）。
         match self.dock() {
             Dock::Left => Rect::from_min_max(Pos2::new(win.left(), rect.top()), rect.max),
             Dock::Right => Rect::from_min_max(rect.min, Pos2::new(win.right(), rect.bottom())),
@@ -95,7 +95,7 @@ impl App {
         }
     }
 
-    /// 毛玻璃取样点（画布坐标）：岛体外侧上下左右各取几处估计身后明暗。
+    /// 毛玻璃取樣點（畫布座標）：島體外側上下左右各取幾處估計身後明暗。
     pub fn backdrop_points(&self) -> Vec<(f32, f32)> {
         match self.dock() {
             Dock::Top => {
@@ -112,7 +112,7 @@ impl App {
         }
     }
 
-    /// 竖向胶囊的内容。`c` 的原点是胶囊左上角。
+    /// 豎向膠囊的內容。`c` 的原點是膠囊左上角。
     pub(crate) fn side_bar(&mut self, c: &Card, width: f32, height: f32, env: &Env) {
         let items = self.side_items();
         let total: f32 = items.iter().map(|i| i.height(self.settings.clock_seconds)).sum();
@@ -152,7 +152,7 @@ impl App {
     }
 }
 
-/// 竖排时间：「09:41」→ 「09」「41」；12 小时制去掉上午 / 下午等文字。
+/// 豎排時間：「09:41」→ 「09」「41」；12 小時制去掉上午 / 下午等文字。
 pub(crate) fn side_clock(text: &str) -> (String, String) {
     let digits: String = text.chars().filter(|c| c.is_ascii_digit() || *c == ':').collect();
     match digits.split_once(':') {

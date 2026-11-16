@@ -1,4 +1,4 @@
-//! 只读解密本机 Electron 登录缓存，不续期、不回写原客户端文件。
+//! 只讀解密本機 Electron 登入快取，不續期、不回寫原客戶端檔案。
 use base64::{engine::general_purpose::STANDARD,Engine};
 use ring::aead;
 use std::path::Path;

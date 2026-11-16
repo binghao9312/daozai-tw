@@ -1,15 +1,15 @@
-//! Exchange ActiveSync 14.0（企业微信、自建或第三方 Exchange）：只读取日历，不发送日程修改命令。
-//! 服务器要求设备策略时只如实回报「部分执行」：岛仔不执行锁屏密码、远程擦除等管控。
+//! Exchange ActiveSync 14.0（企業微信、自建或第三方 Exchange）：只讀取日曆，不傳送日程修改命令。
+//! 伺服器要求裝置策略時只如實回報「部分執行」：島仔不執行鎖屏密碼、遠端擦除等管控。
 use super::{Config, Failure, Fetched, Provider};
 use chrono::{DateTime, Utc};
 use std::io::Read;
 
-// MS-ASWBXML 的 AirSync、Calendar、FolderHierarchy 代码页。
+// MS-ASWBXML 的 AirSync、Calendar、FolderHierarchy 內碼表。
 const AIR: u8 = 0;
 const CAL: u8 = 4;
 const FOLDER: u8 = 7;
 const PROVISION: u8 = 14;
-/// 设备未登记策略（142）、策略已更新（143）、策略标识无效（144）：需要重新握手。
+/// 裝置未登記策略（142）、策略已更新（143）、策略標識無效（144）：需要重新握手。
 const NEEDS_PROVISION: [&str; 3] = ["142", "143", "144"];
 
 #[derive(Clone, Debug, Default)]
@@ -86,7 +86,7 @@ fn endpoint(cfg: &Config) -> Result<url::Url, Failure> {
     let base = url::Url::parse(&cfg.base()).map_err(|_| invalid())?;
     let local = base.host_str().is_some_and(|h| h.parse::<std::net::IpAddr>().is_ok_and(|ip| ip.is_loopback()));
     if !(base.scheme() == "https" || base.scheme() == "http" && local) || !base.username().is_empty() || base.password().is_some() { return Err(Failure::text("日曆伺服器地址不安全")); }
-    // 用户可能直接粘贴完整的 ActiveSync 地址；只填主机名时补上标准路径。
+    // 使用者可能直接貼上完整的 ActiveSync 地址；只填主機名時補上標準路徑。
     if base.path().trim_end_matches('/').to_ascii_lowercase().ends_with("/microsoft-server-activesync") {
         let mut full = base; full.set_query(None); full.set_fragment(None);
         return Ok(full);
@@ -94,11 +94,11 @@ fn endpoint(cfg: &Config) -> Result<url::Url, Failure> {
     base.join("/Microsoft-Server-ActiveSync").map_err(|_| invalid())
 }
 
-/// 一次同步内的连接状态：服务器要求时完成设备策略握手，之后的请求带上策略标识。
+/// 一次同步內的連線狀態：伺服器要求時完成裝置策略握手，之後的請求帶上策略標識。
 struct Session<'a> { agent: ureq::Agent, cfg: &'a Config, password: &'a str, policy: Option<String>, provisioned: bool }
 impl<'a> Session<'a> {
     fn new(cfg: &'a Config, password: &'a str) -> Result<Self, Failure> { Ok(Self { agent: super::agent()?, cfg, password, policy: None, provisioned: false }) }
-    /// 发送命令；遇到 449 或 142–144 时先握手再重试一次。
+    /// 傳送命令；遇到 449 或 142–144 時先握手再重試一次。
     fn send(&mut self, name: &str, root: &Node) -> Result<Node, Failure> {
         match self.raw(name, root) {
             Err(failure) if failure.status == Some(449) && !self.provisioned => { self.provision()?; self.raw(name, root) }
@@ -114,7 +114,7 @@ impl<'a> Session<'a> {
         let label = self.cfg.provider.label();
         let refused = || Failure::text(format!("{label}要求裝置滿足安全策略（如鎖屏密碼、遠端擦除），島仔不執行這些管控；請聯絡管理員允許不受管控的裝置"));
         let first = command(&self.agent, self.cfg, self.password, "Provision", &provision_request(None), None)?;
-        // 服务器下发远程擦除时绝不执行，直接停止同步。
+        // 伺服器下發遠端擦除時絕不執行，直接停止同步。
         if first.child(PROVISION, 0x0c).is_some() { return Err(refused()); }
         let policy = first.child(PROVISION, 6).and_then(|n| n.child(PROVISION, 7)).ok_or_else(invalid)?;
         if first.text(PROVISION, 0x0b) != "1" || policy.text(PROVISION, 0x0b) != "1" { return Err(refused()); }
@@ -127,21 +127,21 @@ impl<'a> Session<'a> {
     }
 }
 
-/// 设备策略请求。确认时如实回报「部分执行」（2）：岛仔只读日历，不执行任何设备管控。
+/// 裝置策略請求。確認時如實回報「部分執行」（2）：島仔只讀日曆，不執行任何裝置管控。
 fn provision_request(acknowledge: Option<&str>) -> Node {
     let mut policy = vec![node(PROVISION, 8, "MS-EAS-Provisioning-WBXML", vec![])];
     if let Some(key) = acknowledge { policy.extend([node(PROVISION, 9, key, vec![]), node(PROVISION, 0x0b, "2", vec![])]); }
     node(PROVISION, 5, "", vec![node(PROVISION, 6, "", vec![node(PROVISION, 7, "", policy)])])
 }
 
-/// 响应顶层的状态码（FolderSync 与 Sync 的状态标签不同）。
+/// 響應頂層的狀態碼（FolderSync 與 Sync 的狀態標籤不同）。
 fn top_status(n: &Node) -> &str {
     match n.page { FOLDER => n.text(FOLDER, 0x0c), AIR => n.text(AIR, 0x0e), _ => "" }
 }
 
 fn command(agent: &ureq::Agent, cfg: &Config, password: &str, name: &str, root: &Node, policy: Option<&str>) -> Result<Node, Failure> {
     let mut target = endpoint(cfg)?;
-    // 固定匿名设备标识，完整快照按顺序读取，不保存同步键或日程正文。
+    // 固定匿名裝置標識，完整快照按順序讀取，不儲存同步鍵或日程正文。
     target.query_pairs_mut().extend_pairs([("Cmd", name), ("User", cfg.username.as_str()), ("DeviceId", "DaozaiCalendar01"), ("DeviceType", "Daozai")]);
     let mut request = agent.post(target.as_str())
         .set("Authorization", &super::basic_auth(&cfg.username, password))
@@ -174,11 +174,11 @@ fn sync_request(id: &str, key: &str) -> Node {
     node(AIR, 5, "", vec![node(AIR, 0x1c, "", vec![node(AIR, 0x0f, "", fields)])])
 }
 
-/// FolderSync 返回的一个文件夹。
+/// FolderSync 返回的一個資料夾。
 struct Folder { id: String, parent: String, kind: String }
 
-/// 默认日历（8）、新建日历（13）一定同步；挂在日历下面的通用（1）或未知类型（18）子文件夹也是日历
-/// （共享、订阅日历常这样组织）。邮件、联系人、任务等文件夹一律不碰，不下载邮件内容。
+/// 預設日曆（8）、新建日曆（13）一定同步；掛在日曆下面的通用（1）或未知型別（18）子資料夾也是日曆
+/// （共享、訂閱日曆常這樣組織）。郵件、聯絡人、任務等資料夾一律不碰，不下載郵件內容。
 fn is_calendar(folder: &Folder, all: &[Folder]) -> bool {
     if matches!(folder.kind.as_str(), "8" | "13") { return true; }
     if !matches!(folder.kind.as_str(), "1" | "18") { return false; }
@@ -191,7 +191,7 @@ fn is_calendar(folder: &Folder, all: &[Folder]) -> bool {
     false
 }
 
-/// 完整读取一个日历文件夹的全部日程（按页跟随，直到没有更多）。
+/// 完整讀取一個日曆資料夾的全部日程（按頁跟隨，直到沒有更多）。
 fn sync_folder(session: &mut Session, id: &str, label: &str) -> Result<std::collections::BTreeMap<String, Node>, Failure> {
     let mut key = "0".to_string();
     let mut items = std::collections::BTreeMap::new();
@@ -238,14 +238,14 @@ pub(super) fn fetch(cfg: &Config, password: &str, lo: DateTime<Utc>, hi: DateTim
     for folder in &all {
         if folder.id.is_empty() || !is_calendar(folder, &all) {continue;}
         report.calendars+=1;
-        // 单个日历读取失败（权限、只读共享等）不影响其他日历；全部失败才报错。
+        // 單個日曆讀取失敗（許可權、只讀共享等）不影響其他日曆；全部失敗才報錯。
         let items = match sync_folder(&mut session, &folder.id, label) {
             Ok(items) => items,
             Err(error) => {report.failed+=1;report.status=report.status.or(error.status);report.problem(error.message.clone());first_error.get_or_insert(error);continue;}
         };
         let mut ics = String::from("BEGIN:VCALENDAR\nVERSION:2.0\n");
         for (server_id, item) in &items {
-            // 个别日程的重复规则暂不支持时只跳过这一条，不拖垮整个日历。
+            // 個別日程的重複規則暫不支援時只跳過這一條，不拖垮整個日曆。
             match event_ics(item, &format!("{}:{}:{server_id}", cfg.provider.key(), folder.id)) {
                 Ok(event)=>ics.push_str(&event),Err(_)=>{report.received+=1;report.invalid+=1;report.problem("部分 Exchange 日程格式暫無法解析");}
             }
@@ -312,7 +312,7 @@ fn event_ics(item: &Node, fallback_uid: &str) -> Result<String, Failure> {
             return Err(Failure::text("暫不支援含夏令時切換的重複日程"));
         }
     }
-    // 按日历时区展开重复规则，避免 UTC 日期跨日后把周几或月日算错。
+    // 按日曆時區展開重複規則，避免 UTC 日期跨日後把周幾或月日算錯。
     let recurring = item.child(CAL, 0x1b).is_some();
     let recurrence_zone = if recurring && offset != 0 && !all_day {
         if offset % 3600 != 0 || !(-12*3600..=14*3600).contains(&offset) { return Err(Failure::text("暫不支援此時區的重複日程")); }
@@ -457,7 +457,7 @@ mod tests {
         assert_eq!(result.events.len(), 1);
         server.join().unwrap();
     }
-    /// 本地模拟 Exchange：按顺序处理请求，返回 (状态码, 响应)；记录每个请求的命令、策略标识和正文。
+    /// 本地模擬 Exchange：按順序處理請求，返回 (狀態碼, 響應)；記錄每個請求的命令、策略標識和正文。
     fn mock(replies: Vec<Box<dyn Fn(&Node) -> (u16, Option<Node>) + Send>>) -> (String, std::thread::JoinHandle<Vec<(String, Option<String>, Node)>>) {
         use std::{io::Write, net::TcpListener};
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -530,7 +530,7 @@ mod tests {
         let error = super::super::fetch_month(&custom(&base), "pw", chrono::NaiveDate::from_ymd_opt(2026, 11, 1).unwrap()).err().unwrap();
         assert!(error.message.contains("不執行"), "{}", error.message);
         assert_eq!(worker.join().unwrap().len(), 2, "收到遠端擦除後不再繼續請求");
-        // 服务器用状态 142 表示设备未登记策略：同样先握手再同步。
+        // 伺服器用狀態 142 表示裝置未登記策略：同樣先握手再同步。
         let (base, worker) = mock(vec![
             Box::new(|_| (200, Some(node(FOLDER, 0x16, "", vec![node(FOLDER, 0x0c, "142", vec![])])))),
             Box::new(|_| (200, Some(policy_reply("1", "temp", false)))),
@@ -541,7 +541,7 @@ mod tests {
         ]);
         assert!(super::super::fetch_month(&custom(&base), "pw", chrono::NaiveDate::from_ymd_opt(2026, 11, 1).unwrap()).is_ok());
         assert_eq!(worker.join().unwrap()[3].1.as_deref(), Some("final"));
-        // 管理员不允许不受管控的设备：如实提示，不伪装成已执行策略。
+        // 管理員不允許不受管控的裝置：如實提示，不偽裝成已執行策略。
         let (base, worker) = mock(vec![Box::new(|_| (449, None)), Box::new(|_| (200, Some(policy_reply("1", "temp", false)))), Box::new(|_| (200, Some(policy_reply("2", "", false))))]);
         let error = super::super::fetch_month(&custom(&base), "pw", chrono::NaiveDate::from_ymd_opt(2026, 11, 1).unwrap()).err().unwrap();
         assert!(error.message.contains("管理員"), "{}", error.message);
@@ -565,12 +565,12 @@ mod tests {
         fn event(server: &str, uid: &str, unsupported: bool) -> Node {
             let mut item = sample();
             item.children.retain(|n| n.tag != 0x28);item.children.push(node(CAL, 0x28, uid, vec![]));
-            // 非公历（农历）重复规则目前不支持，用来验证单条解析失败只跳过这一条。
+            // 非公曆（農曆）重複規則目前不支援，用來驗證單條解析失敗只跳過這一條。
             if unsupported { item.children.push(node(CAL, 0x1b, "", vec![node(CAL, 0x1c, "1", vec![]), node(CAL, 0x37, "15", vec![])])); }
             node(AIR, 7, "", vec![node(AIR, 0x0d, server, vec![]), item])
         }
         let mut replies: Vec<Box<dyn Fn(&Node) -> (u16, Option<Node>) + Send>> = vec![Box::new(move |_| (200, Some(hierarchy.clone())))];
-        // 每个被选中的日历两页（初始 + 读取）；无权限日历直接返回失败状态。
+        // 每個被選中的日曆兩頁（初始 + 讀取）；無許可權日曆直接返回失敗狀態。
         for _ in 0..2 { replies.push(Box::new(move |r| { assert_eq!(id(r), "personal"); (200, Some(page(r, vec![event("a", "uid-personal", false), event("b", "uid-lunar", true)]))) })); }
         for _ in 0..2 { replies.push(Box::new(move |r| { assert_eq!(id(r), "shared"); (200, Some(page(r, vec![event("c", "uid-shared", false)]))) })); }
         replies.push(Box::new(move |r| { assert_eq!(id(r), "deny"); (200, Some(node(AIR, 5, "", vec![node(AIR, 0x1c, "", vec![node(AIR, 0x0f, "", vec![node(AIR, 0x0e, "8", vec![]), node(AIR, 0x0b, "0", vec![])])])]))) }));

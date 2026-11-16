@@ -1,5 +1,5 @@
-//! Gemini 网页订阅额度，接口与字段映射参考 CodexBar 的 gemini-web 插件。
-//! 浏览器连接只在用户点击时读取会话；会话由 Windows DPAPI 加密保存。
+//! Gemini 網頁訂閱額度，介面與欄位對映參考 CodexBar 的 gemini-web 外掛。
+//! 瀏覽器連線只在使用者點選時讀取會話；會話由 Windows DPAPI 加密儲存。
 use super::{Account,Snapshot,Window};
 use serde_json::{json,Value};
 use std::{fs,io::Read,path::PathBuf,sync::{mpsc,Arc,atomic::{AtomicBool,Ordering}}};
@@ -51,7 +51,7 @@ fn request_url(email:&str)->String{
 }
 fn redirect_target(current:&str,location:&str)->Option<String>{
     let target=url::Url::parse(current).ok()?.join(location).ok()?;
-    // Google 会把邮箱形式的 authuser 规范化为账号编号；只跟随同站的用量查询。
+    // Google 會把信箱形式的 authuser 規範化為帳號編號；只跟隨同站的用量查詢。
     (target.scheme()=="https" && target.host_str()==Some("gemini.google.com") && target.port_or_known_default()==Some(443) && target.username().is_empty() && target.password().is_none() && target.path().ends_with("/_/BardChatUi/graphql/schemas/GEMINI_WEB_GRAPHQL/executeQuery")).then(||target.into())
 }
 fn request(agent:&ureq::Agent,url:&str,session:&Session)->Result<Snapshot,(String,u64)>{

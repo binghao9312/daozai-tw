@@ -1,4 +1,4 @@
-//! 消息客户端的统一身份、通知策略和账号归属记录。
+//! 訊息客戶端的統一身份、通知策略和帳號歸屬記錄。
 use crate::{model::Settings,paint::Card};
 use eframe::egui;
 use std::collections::HashMap;
@@ -18,7 +18,7 @@ pub enum Messenger {Discord,Wechat,Qq,WeCom,Feishu,DingTalk}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub enum Capture {Taskbar,SystemToast}
 
-/// 只注册已经实现的客户端；新增后端在这里声明识别信息和行为边界。
+/// 只註冊已經實現的客戶端；新增後端在這裡宣告識別訊息和行為邊界。
 pub struct Adapter {
     pub client:Messenger,
     pub name:&'static str,
@@ -94,7 +94,7 @@ const DINGTALK:Adapter=Adapter{
 impl Messenger {
     pub const ALL:[Self;6]=[Self::Discord,Self::Wechat,Self::Qq,Self::WeCom,Self::Feishu,Self::DingTalk];
     pub const OFFICE:[Self;3]=[Self::WeCom,Self::Feishu,Self::DingTalk];
-    /// 实际参与监听、通知识别和设置的客户端。默认只有 Discord；旧版中国 IM 需要 `cn-messengers` 功能才会注册。
+    /// 實際參與監聽、通知識別和設定的客戶端。預設只有 Discord；舊版中國 IM 需要 `cn-messengers` 功能才會註冊。
     pub const REGISTERED:&'static [Self]=if cfg!(feature="cn-messengers") {let all:&'static [Self]=&Self::ALL;all} else {let discord:&'static [Self]=&[Self::Discord];discord};
     pub fn adapter(self)->&'static Adapter{match self{Self::Discord=>&DISCORD,Self::Wechat=>&WECHAT,Self::Qq=>&QQ,Self::WeCom=>&WECOM,Self::Feishu=>&FEISHU,Self::DingTalk=>&DINGTALK}}
     pub fn name(self)->&'static str{self.adapter().name}
@@ -104,7 +104,7 @@ impl Messenger {
             let adapter=client.adapter();
             adapter.notification_id.eq_ignore_ascii_case(id) || adapter.aliases.iter().any(|alias|alias.eq_ignore_ascii_case(id))
         }){return Some(client);}
-        // Discord 的 AppUserModelId 会随渠道和安装方式变化（如 com.squirrel.Discord.Discord），只要包含 Discord 即归属 Discord。
+        // Discord 的 AppUserModelId 會隨渠道和安裝方式變化（如 com.squirrel.Discord.Discord），只要包含 Discord 即歸屬 Discord。
         (Self::REGISTERED.contains(&Self::Discord) && id.to_ascii_lowercase().contains("discord")).then_some(Self::Discord)
     }
     pub fn enabled(self,settings:&Settings)->bool{settings.notifications && (self.adapter().enabled)(settings)}
@@ -129,12 +129,12 @@ pub fn suppresses_toast(app:&str,id:&str,mask:u8)->bool{
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub enum NotificationFilter {All,Only(Messenger)}
 impl NotificationFilter {
-    /// QQ 专用过滤只属于旧版客户端，默认功能关闭时不得过滤掉 Discord 通知。
+    /// QQ 專用過濾只屬於舊版客戶端，預設功能關閉時不得過濾掉 Discord 通知。
     pub fn for_settings(settings:&Settings)->Self{if cfg!(feature="cn-messengers") && settings.qq_only{Self::Only(Messenger::Qq)}else{Self::All}}
     pub fn allows(self,id:&str)->bool{match self{Self::All=>true,Self::Only(client)=>Messenger::from_notification_id(id)==Some(client)}}
 }
 
-/// 来源和原始窗口必须一起保留，未知账号不能在点击时绑定到剩余客户端。
+/// 來源和原始視窗必須一起保留，未知帳號不能在點選時繫結到剩餘客戶端。
 #[derive(Clone,Copy,Debug,PartialEq,Eq,Hash)]
 pub struct Unread {pub source:Messenger,pub pid:u32,pub window:isize}
 impl Unread {
@@ -145,7 +145,7 @@ impl Unread {
     }
 }
 
-/// 进程创建时间用来区分进程号复用，不等同于客户端内部的登录账号标识。
+/// 程序建立時間用來區分程序號複用，不等同於客戶端內部的登入帳號標識。
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub struct Target {pub unread:Unread,pub(crate) started:u64}
 
@@ -172,7 +172,7 @@ impl AccountHistory {
     pub(crate) fn new(client:Messenger)->Self{Self{client,previous:None,current:None,single_since:None,targets:HashMap::new()}}
     pub(crate) fn observe(&mut self,at:i64,accounts:Option<Vec<Target>>){
         let accounts=accounts.filter(|accounts|accounts.iter().all(|target|target.unread.source==self.client));
-        // 连续单账号区间可覆盖延迟到达的通知，多开、采样失败或长时间暂停后重新计时。
+        // 連續單帳號區間可覆蓋延遲到達的通知，多開、取樣失敗或長時間暫停後重新計時。
         self.single_since=match(self.current.as_ref(),accounts.as_ref()){
             (Some((last,Some(previous))),Some(current)) if at>*last && at.checked_sub(*last).is_some_and(|gap|gap<=30_000_000)=>{
                 match(previous.as_slice(),current.as_slice()){([a],[b]) if a==b=>Some(self.single_since.unwrap_or(*last)),_=>None}
@@ -182,7 +182,7 @@ impl AccountHistory {
         self.previous=self.current.take();self.current=Some((at,accounts));
     }
     pub(crate) fn target(&mut self,id:u32,created:i64,ready:impl FnOnce(Target)->bool)->Option<Target>{
-        // 原地更新通知时可以降为未识别，但不能改绑到另一个账号。
+        // 原地更新通知時可以降為未識別，但不能改綁到另一個帳號。
         if let Some(&(at,target))=self.targets.get(&id){if at==created{
             let target=target.filter(|target|self.stable_account().is_some_and(|(_,_,current)|current==*target)).filter(|target|ready(*target));
             self.targets.insert(id,(created,target));return target;
@@ -244,7 +244,7 @@ mod tests {
             assert_eq!(Messenger::from_notification_id(adapter.notification_id),Some(client));
             assert!(!adapter.process_names.is_empty());
             #[cfg(windows)]{
-                // Discord 走系统通知，同时保留任务栏闪动作为补充（原生窗口闪动监听）。
+                // Discord 走系統通知，同時保留工作列閃動作為補充（原生視窗閃動監聽）。
                 assert_eq!(adapter.native.taskbar.is_some(),adapter.capture==Capture::Taskbar||client==Messenger::Discord);
             }
         }

@@ -1,9 +1,9 @@
-//! 岛仔：Windows 顶部「灵动岛」。
+//! 島仔：Windows 頂部「靈動島」。
 //!
-//! - `app` / `pages`：与平台无关的界面与动效（外壳与录制器共用）
-//! - `anim` / `paint` / `shape` / `theme`：弹簧、矢量绘制、面板轮廓、配色字体
-//! - `model` / `lyrics` / `smtc` / `icons`：数据、歌词、系统媒体、文件图标
-//! - `native` / `tray`：仅 Windows 的窗口区域、命中穿透与托盘
+//! - `app` / `pages`：與平臺無關的介面與動效（外殼與錄製器共用）
+//! - `anim` / `paint` / `shape` / `theme`：彈簧、向量繪製、面板輪廓、配色字型
+//! - `model` / `lyrics` / `smtc` / `icons`：資料、歌詞、系統媒體、檔案圖示
+//! - `native` / `tray`：僅 Windows 的視窗區域、命中穿透與系統匣
 
 pub mod display_layout;
 pub mod diagnostics_tool;

@@ -1,4 +1,4 @@
-//! 自动避让设置与正在运行的应用选择。
+//! 自動避讓設定與正在執行的應用選擇。
 use eframe::egui::{self,Color32,Rect,Vec2};
 use crate::{extras::{settings_card,settings_label,setting_row},model::Settings};
 use std::sync::mpsc::{self,Receiver};

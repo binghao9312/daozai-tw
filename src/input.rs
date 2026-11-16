@@ -1,4 +1,4 @@
-//! 输入提示同时核对切换按键与实际输入状态。
+//! 輸入提示同時核對切換按鍵與實際輸入狀態。
 use std::time::{Duration,Instant};
 #[derive(Clone,Copy,Debug,Default,PartialEq,Eq)]
 pub struct State {
@@ -34,7 +34,7 @@ impl State {
                     let ok=SendMessageTimeoutW(ime,WM_IME_CONTROL,WPARAM(command),LPARAM(0),SMTO_ABORTIFHUNG|SMTO_ERRORONEXIT,30,Some(&mut value));
                     (ok.0!=0).then_some(value)
                 };
-                // 查询前台输入法线程，避免跨进程获取输入上下文失败。
+                // 查詢前臺輸入法執行緒，避免跨程序獲取輸入上下文失敗。
                 native=query(0x0005).and_then(|open|if open==0{Some(false)}else{query(0x0001).map(|mode|mode&1!=0)});
             }
         }
@@ -108,7 +108,7 @@ impl SwitchKeys {
         let before=self.held;
         if down{self.held|=bit;}else{self.held&=!bit;}
         let chord=if down{self.held}else{before};
-        // Shift、Ctrl+Shift、Alt+Shift；组合中输入过其他键则不视为切换。
+        // Shift、Ctrl+Shift、Alt+Shift；組合中輸入過其他鍵則不視為切換。
         if !self.used&&chord&1!=0&&chord&8==0 {self.pending=Some((context,now));}
     }
     fn allows(&mut self,context:(usize,usize),now:Instant)->bool{

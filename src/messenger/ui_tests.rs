@@ -1,4 +1,4 @@
-//! 仅使用合成事件验证办公软件提醒，不启动或操控实际客户端。
+//! 僅使用合成事件驗證辦公軟體提醒，不啟動或操控實際客戶端。
 use super::*;
 use crate::app::{Cmd,Messenger,Unread};
 fn enable(app:&mut App){

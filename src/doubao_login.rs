@@ -1,4 +1,4 @@
-//! 豆包独立官网登录及本机客户端导入，不依赖浏览器扩展。
+//! 豆包獨立官網登入及本機客戶端匯入，不依賴瀏覽器擴充套件。
 use super::{cookie, ENDPOINT, MAX_BODY};
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, fs, net::{Ipv4Addr, SocketAddr, TcpStream}, os::windows::process::CommandExt,
@@ -49,7 +49,7 @@ fn find_browser() -> Option<PathBuf> {
 struct Browser { child: Child, profile: PathBuf }
 impl Drop for Browser {
     fn drop(&mut self) {
-        // 只结束本次使用独立目录启动的进程树，不按浏览器进程名清理。
+        // 只結束本次使用獨立目錄啟動的程序樹，不按瀏覽器程序名清理。
         if self.child.try_wait().ok().flatten().is_none() {
             let _ = Command::new("taskkill.exe").args(["/PID", &self.child.id().to_string(), "/T", "/F"])
                 .creation_flags(0x08000000).stdout(Stdio::null()).stderr(Stdio::null()).status();
@@ -120,7 +120,7 @@ pub(super) fn browser(cancel: &AtomicBool) -> Result<String, String> {
             if let Ok(value) = cdp(*port, url, "Storage.getCookies") {
                 if let Some(cookies) = value["cookies"].as_array() {
                     if let Ok(header) = header(cookies) {
-                        // 登录 Cookie 会分批写入，等同账号标识补齐再验证额度。
+                        // 登入 Cookie 會分批寫入，等同帳號標識補齊再驗證額度。
                         if super::session_value(&header, "uid_tt").is_some() && super::session_value(&header, "sessionid_ss").is_some() {
                             check_cancel(cancel)?;
                             return Ok(header);

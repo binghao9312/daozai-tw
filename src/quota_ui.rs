@@ -1,4 +1,4 @@
-//! 同心额度环、账号选择及账号设置。
+//! 同心額度環、帳號選擇及帳號設定。
 use crate::{app::{App,Cmd},extras::{setting_row,settings_card,settings_control_row},paint::{Card,H},quota::{self,Accent,Account,Amount,Config,Provider,Snapshot},theme::{self,W}};
 use eframe::egui::{self,Color32};
 use std::collections::{HashMap,HashSet};
@@ -28,9 +28,9 @@ pub(crate) struct State {
 impl State {
     fn balance_text(&self,id:&str)->Option<String>{let s=self.rows.get(id)?.as_ref().ok()?;s.wallet.as_ref().map(|w|w.primary().compact()).or_else(||s.credits.as_ref().map(|c|c.compact())).or_else(||s.relay.as_ref().map(|q|q.compact()))}
     fn balance_loading(&self,id:&str)->bool{self.balance_text(id).is_none()&&(self.busy.contains(id)||!self.rows.contains_key(id))}
-    /// 环类账号跟随在图标右侧的数字：有具体点数时取主周期剩余点数（如 Kiro 的 904）。
+    /// 環類帳號跟隨在圖示右側的數字：有具體點數時取主週期剩餘點數（如 Kiro 的 904）。
     fn ring_tail_text(&self,id:&str)->Option<String>{self.rows.get(id)?.as_ref().ok()?.rings().first()?.amount.as_ref().map(Amount::short)}
-    /// 常驻胶囊里紧跟图标的文字：余额类给余额，点数类给剩余点数。
+    /// 常駐膠囊裡緊跟圖示的文字：餘額類給餘額，點數類給剩餘點數。
     fn tail_text(&self,id:&str)->Option<String>{self.balance_text(id).or_else(||self.ring_tail_text(id))}
     pub fn load()->Self {
         if cfg!(test){return Self::default();}
@@ -136,12 +136,12 @@ pub(crate) fn bar_tooltip(response:egui::Response,text:String)->egui::Response{
     }else{ctx.data_mut(|data|data.remove::<f64>(id));}
     response
 }
-/// 这些厂商的图标自带品牌配色（官方方形标），直接使用原图；其余统一压成白色标识。
+/// 這些廠商的圖示自帶品牌配色（官方方形標），直接使用原圖；其餘統一壓成白色標識。
 fn keeps_brand_color(provider:Provider)->bool{matches!(provider,Provider::WorkBuddy|Provider::ZCode|Provider::MiniMax|Provider::Kiro|Provider::Doubao)}
 fn logo_texture(ctx:&egui::Context,provider:Provider,pixels:u32)->Option<egui::TextureHandle>{
     let key=egui::Id::new(("quota-logo",provider.name(),pixels));
     if let Some(texture)=ctx.data_mut(|data|data.get_temp::<egui::TextureHandle>(key)){return Some(texture);}
-    // WorkBuddy 图标来自官方 WorkBuddyAI 客户端的 workbuddy-app-icon SVG，保留原始配色。
+    // WorkBuddy 圖示來自官方 WorkBuddyAI 客戶端的 workbuddy-app-icon SVG，保留原始配色。
     let mut image=if provider==Provider::Doubao{
         let bitmap=image::load_from_memory(include_bytes!("../assets/ai-icons/doubao.png")).ok()?.resize_exact(pixels,pixels,image::imageops::FilterType::Lanczos3).to_rgba8();
         egui::ColorImage::from_rgba_unmultiplied([pixels as usize,pixels as usize],bitmap.as_raw())
@@ -149,7 +149,7 @@ fn logo_texture(ctx:&egui::Context,provider:Provider,pixels:u32)->Option<egui::T
         let bytes:&[u8]=match provider{Provider::ZCode=>include_bytes!("../assets/ai-icons/zcode.svg"),Provider::Codex=>include_bytes!("../assets/ai-icons/codex.svg"),Provider::Claude=>include_bytes!("../assets/ai-icons/claude.svg"),Provider::Kimi=>include_bytes!("../assets/ai-icons/kimi.svg"),Provider::GrokBot=>include_bytes!("../assets/ai-icons/grokbot.svg"),Provider::Gemini=>include_bytes!("../assets/ai-icons/gemini.svg"),Provider::WorkBuddy=>include_bytes!("../assets/ai-icons/workbuddy.svg"),Provider::DeepSeek=>include_bytes!("../assets/ai-icons/deepseek.svg"),Provider::Kiro=>include_bytes!("../assets/ai-icons/kiro.svg"),Provider::OpenCodeGo=>include_bytes!("../assets/ai-icons/opencode.svg"),Provider::MiniMax=>include_bytes!("../assets/ai-icons/minimax.svg"),Provider::Glm=>include_bytes!("../assets/ai-icons/glm.svg"),_=>include_bytes!("../assets/ai-icons/api-key.svg")};
         egui_extras::image::load_svg_bytes_with_size(bytes,Some(egui::load::SizeHint::Size(pixels,pixels))).ok()?
     };
-    // 白色标识使用矢量覆盖率，避免透明边缘再次变暗。
+    // 白色標識使用向量覆蓋率，避免透明邊緣再次變暗。
     for pixel in &mut image.pixels{if keeps_brand_color(provider){continue;}*pixel=if provider==Provider::DeepSeek{Color32::from_rgba_unmultiplied(77,107,254,pixel.a())}else{Color32::from_white_alpha(pixel.a())};}
     let texture=ctx.load_texture(format!("quota-logo-{}-{pixels}",provider.name()),image,egui::TextureOptions::LINEAR);
     if (!provider.balance()||provider.relay())&&!keeps_brand_color(provider){crate::skin_paint::mark_monochrome(texture.id());}else{crate::skin_paint::mark_colored(texture.id());}
@@ -358,7 +358,7 @@ impl App {
         if !self.quota.config.enabled || !self.quota.config.compact || !self.settings.visible_pages[6] || self.settings.minimal || self.t<self.notification_bell_until{return vec![];}
         self.quota.config.pinned_indices()
     }
-    /// 常驻胶囊里每个额度槽的实际宽度：图标右侧跟数字的账号需要额外占位。
+    /// 常駐膠囊裡每個額度槽的實際寬度：圖示右側跟數字的帳號需要額外佔位。
     pub(crate) fn quota_balance_layout(&self,ctx:&egui::Context)->Vec<(usize,f32)>{
         self.quota_bar_indices().iter().enumerate().filter_map(|(position,index)|{
             let account=&self.quota.config.accounts[*index];
@@ -396,7 +396,7 @@ impl App {
                 }
                 if c.hit(x-(27.0+extra)/2.0,1.0,27.0+extra,28.0,("quota-pin",&a.id)).clicked(){chosen=Some(a.id.clone());}continue;
             }
-            // 有具体点数的额度（如 Kiro）在环右侧跟一段剩余点数，与余额类的排布一致。
+            // 有具體點數的額度（如 Kiro）在環右側跟一段剩餘點數，與餘額類的排布一致。
             let extra=(layout.widths[crate::bar_layout::quota_slot(position)]-27.0).max(0.0);
             let x=if extra>0.0{x-extra/2.0}else{x};
             ring(c,a,snapshot,x,15.0,27.0,accent_colors(&self.quota.config,a));
@@ -600,7 +600,7 @@ impl App {
                         let (rect,_)=ui.allocate_exact_size(egui::vec2(26.0,28.0),egui::Sense::hover());let c=Card::new(ui,rect.min,ui.clip_rect());
                         if a.provider==Provider::DeepSeek{deepseek_badge(&c,if ui.visuals().dark_mode{crate::model::Skin::Classic}else{crate::model::Skin::GlassLight},13.0,14.0,26.0);}else if matches!(a.provider,Provider::ZCode|Provider::Kiro){logo(&c,a.provider,13.0,14.0,26.0);}else{c.circle(13.0,14.0,13.0,crate::paint::mix(accent_colors(&self.quota.config,&a)[0],Color32::BLACK,0.75));logo(&c,a.provider,13.0,14.0,20.0);}
                         ui.label(egui::RichText::new(if a.provider.relay(){"中轉站"}else{a.provider.name()}).strong());
-                        // 从右往左排：按钮先靠右放好，名称输入框占用剩余宽度，按钮再宽也不会顶出卡片。
+                        // 從右往左排：按鈕先靠右放好，名稱輸入框佔用剩餘寬度，按鈕再寬也不會頂出卡片。
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center),|ui|{
                             if ui.add_enabled(self.quota.api_connecting.is_none()&&self.quota.workbuddy_connecting.is_none()&&self.quota.deepseek_connecting.is_none()&&self.quota.gemini_connecting.is_none()&&self.quota.doubao_connecting.is_none()&&self.quota.login.is_none(),egui::Button::new("移除")).clicked(){remove=Some(a.id.clone());}
                             if ui.selectable_label(self.quota.config.selected==a.id,"當前").clicked(){self.quota.config.selected=a.id.clone();}
@@ -1038,11 +1038,11 @@ mod tests {
     }
 }
 
-// ---------------------------------------------------------------- 左右停靠：竖向额度
-// 侧边停靠时额度竖排在胶囊里：环形额度一个圆环一行；余额类（DeepSeek、WorkBuddy）图标在上、金额在下。
+// ---------------------------------------------------------------- 左右停靠：豎向額度
+// 側邊停靠時額度豎排在膠囊裡：環形額度一個圓環一行；餘額類（DeepSeek、WorkBuddy）圖示在上、金額在下。
 pub(crate) const SIDE_QUOTA_RING_H:f32=30.0;
 
-/// 侧边竖排的金额：4.1、999、9.99k、99.9万、999万、0.12亿……截断不进位，避免显示得比实际多。
+/// 側邊豎排的金額：4.1、999、9.99k、99.9萬、999萬、0.12億……截斷不進位，避免顯示得比實際多。
 pub(crate) fn side_amount(value:f64,symbol:&str)->String{
     if !value.is_finite(){return format!("{symbol}--");}
     let n=value.abs();
@@ -1078,7 +1078,7 @@ impl App {
             if let Some(text)=self.quota.balance_text(&a.id){
                 let wallet=snapshot.as_ref().and_then(|s|s.wallet.as_ref());
                 let color=if stale{theme::GRAY}else if wallet.is_some_and(|w|!w.available||w.primary().total<=0.0){Color32::from_rgb(255,166,77)}else{theme::WHITE};
-                // 竖向胶囊只有 34 点宽：用更短的写法（最多约 4 位有效字符），放不下再缩小字号。
+                // 豎向膠囊只有 34 點寬：用更短的寫法（最多約 4 位有效字元），放不下再縮小字號。
                 let short=snapshot.as_ref().and_then(|s|s.wallet.as_ref().map(|w|side_amount(w.primary().total,w.primary().symbol()))
                     .or_else(||s.credits.as_ref().map(|c|side_amount(c.remaining,""))).or_else(||s.relay.as_ref().map(|q|q.compact().split(" · ").next().unwrap_or("未知").to_owned()))).unwrap_or_else(||text.clone());
                 let size=[9.5,8.5,7.5].into_iter().find(|&size|c.text_w(&short,size,W::Bold)<=34.0).unwrap_or(7.5);

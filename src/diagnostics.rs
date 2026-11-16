@@ -1,4 +1,4 @@
-//! 启动错误与 Rust 异常保存在本机，不自动上传账号或应用数据。
+//! 啟動錯誤與 Rust 異常儲存在本機，不自動上傳帳號或應用資料。
 
 use std::path::{Path, PathBuf};
 
@@ -34,16 +34,16 @@ pub fn report(title: &str, details: &str) {
     eprintln!("{text}");
 }
 
-/// 仅记录最近一次启动停留的阶段，不记录账号或用户内容。
+/// 僅記錄最近一次啟動停留的階段，不記錄帳號或使用者內容。
 pub fn startup(stage:&str) {
     let directory=daozai::model::config_dir().join("diagnostics");
     if std::fs::create_dir_all(&directory).is_ok() {
         let _=std::fs::write(directory.join("last-startup.log"),format!(
-            "島仔 {}\n程序：{}\n啟動階段：{stage}\n",env!("CARGO_PKG_VERSION"),std::process::id()));
+            "島仔 {}\n程式：{}\n啟動階段：{stage}\n",env!("CARGO_PKG_VERSION"),std::process::id()));
     }
 }
 
-/// 记录实际使用的图形设备，避免把电脑里的显卡列表误当作当前渲染设备。
+/// 記錄實際使用的圖形裝置，避免把電腦裡的顯示卡列表誤當作當前渲染裝置。
 pub fn graphics(cc:&eframe::CreationContext<'_>) {
     use eframe::glow::HasContext;
     let details=if let Some(gl)=&cc.gl {unsafe{format!("廠商：{}\n渲染器：{}\nOpenGL：{}\n",
@@ -59,7 +59,7 @@ static STARTED: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::n
 
 fn diagnostics_dir() -> PathBuf { daozai::model::config_dir().join("diagnostics") }
 
-/// 自动重启的频率限制：本次至少运行 30 秒（避免启动即崩的死循环），且一小时内最多 3 次。
+/// 自動重啟的頻率限制：本次至少執行 30 秒（避免啟動即崩的死迴圈），且一小時內最多 3 次。
 fn restart_allowed(history: &str, now: u64, uptime: std::time::Duration) -> bool {
     if uptime < std::time::Duration::from_secs(30) { return false; }
     let recent = history.lines().filter_map(|line| line.split_whitespace().next()?.parse::<u64>().ok())
@@ -67,7 +67,7 @@ fn restart_allowed(history: &str, now: u64, uptime: std::time::Duration) -> bool
     recent < 3
 }
 
-/// 启动一个新的岛仔：它会先等当前进程退出，再走正常的单实例启动流程。
+/// 啟動一個新的島仔：它會先等當前程序退出，再走正常的單例項啟動流程。
 pub fn spawn_replacement() -> bool {
     let Ok(exe) = std::env::current_exe() else { return false };
     let mut command = std::process::Command::new(exe);
@@ -76,14 +76,14 @@ pub fn spawn_replacement() -> bool {
     command.spawn().is_ok()
 }
 
-/// 异常退出后自动重新拉起（受频率限制）；返回是否已安排重启。
+/// 異常退出後自動重新拉起（受頻率限制）；返回是否已安排重啟。
 fn relaunch_after_failure(reason: &str) -> bool {
     let uptime = STARTED.get().map(|at| at.elapsed()).unwrap_or_default();
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
     let path = diagnostics_dir().join("auto-restart.log");
     let history = std::fs::read_to_string(&path).unwrap_or_default();
     if !restart_allowed(&history, now, uptime) { return false; }
-    // 只保留最近 20 条，避免常驻程序无限累积。
+    // 只保留最近 20 條，避免常駐程式無限累積。
     let mut lines: Vec<&str> = history.lines().collect();
     if lines.len() > 19 { lines.drain(..lines.len() - 19); }
     let reason: String = reason.chars().filter(|c| !c.is_control()).take(160).collect();
@@ -94,7 +94,7 @@ fn relaunch_after_failure(reason: &str) -> bool {
     spawn_replacement()
 }
 
-/// 自动重启的新进程：等上一个岛仔退出（最多 15 秒）再继续，避免单实例检查把自己挡住。
+/// 自動重啟的新程序：等上一個島仔退出（最多 15 秒）再繼續，避免單例項檢查把自己擋住。
 pub fn wait_for_previous_instance() {
     let mut args = std::env::args();
     while let Some(arg) = args.next() {
@@ -114,8 +114,8 @@ pub fn wait_for_previous_instance() {
     }
 }
 
-/// 进程级崩溃（例如显卡驱动里访问了无效内存）：Rust 的 panic 记录覆盖不到，这里记下崩在哪个模块；
-/// 崩在显卡的 OpenGL 驱动里时，下次启动改用兼容渲染；随后按频率限制自动重启。
+/// 程序級崩潰（例如顯示卡驅動裡訪問了無效記憶體）：Rust 的 panic 記錄覆蓋不到，這裡記下崩在哪個模組；
+/// 崩在顯示卡的 OpenGL 驅動裡時，下次啟動改用相容渲染；隨後按頻率限制自動重啟。
 #[cfg(windows)]
 mod native_crash {
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -124,7 +124,7 @@ mod native_crash {
     const EXCEPTION_CONTINUE_SEARCH: i32 = 0;
     static HANDLING: AtomicBool = AtomicBool::new(false);
 
-    /// 异常地址所在的模块文件名与模块内偏移。
+    /// 異常地址所在的模組檔名與模組內偏移。
     unsafe fn module_at(address: usize) -> (String, usize) {
         let mut module = HMODULE::default();
         let flags = GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT;
@@ -149,16 +149,16 @@ mod native_crash {
             daozai::renderer::request_fallback(&module);
             details.push_str("判斷：崩在顯示卡的 OpenGL 驅動裡，下次啟動自動改用相容渲染（Direct3D 12）。\n");
         }
-        let restarted = super::relaunch_after_failure(&format!("程序崩潰（{module}）"));
+        let restarted = super::relaunch_after_failure(&format!("程式崩潰（{module}）"));
         details.push_str(if restarted { "已自動重新啟動島仔。\n" } else { "未自動重啟（執行不足 30 秒或一小時內已重啟 3 次）。\n" });
-        let _ = super::write_report(&super::diagnostics_dir(), "島仔意外退出（程序崩潰）", &details);
-        // 交给系统继续处理，Windows 事件日志里仍会留下崩溃记录。
+        let _ = super::write_report(&super::diagnostics_dir(), "島仔意外退出（程式崩潰）", &details);
+        // 交給系統繼續處理，Windows 事件日誌裡仍會留下崩潰記錄。
         EXCEPTION_CONTINUE_SEARCH
     }
 
     pub fn install() { unsafe { SetUnhandledExceptionFilter(Some(filter)); } }
 
-    /// 验收用：`DAOZAI_TEST_CRASH=native` 时，运行指定秒数后在岛仔自身触发一次访问违规。
+    /// 驗收用：`DAOZAI_TEST_CRASH=native` 時，執行指定秒數後在島仔自身觸發一次訪問違規。
     pub fn test_crash_hook() {
         let Ok(value) = std::env::var("DAOZAI_TEST_CRASH") else { return };
         let Some(seconds) = value.strip_prefix("native:").and_then(|s| s.parse::<u64>().ok()) else { return };
@@ -174,11 +174,11 @@ pub fn install() {
     #[cfg(windows)]
     { native_crash::install(); native_crash::test_crash_hook(); }
     std::panic::set_hook(Box::new(|info| {
-        // 不写入 panic 的数据载荷，避免把邮件、凭据或登录信息带进日志。
+        // 不寫入 panic 的資料載荷，避免把郵件、憑據或登入訊息帶進日誌。
         let location = info.location().map(|p| format!("{}:{}:{}", p.file(), p.line(), p.column()))
             .unwrap_or_else(|| "未知".into());
         let details = format!("程式碼位置：{location}\n呼叫棧：\n{}", std::backtrace::Backtrace::force_capture());
-        // 主线程出错会让整个岛仔退出：记下原因后直接自动重启，不弹窗打断。后台线程出错不影响主界面，仍按原样提示。
+        // 主執行緒出錯會讓整個島仔退出：記下原因後直接自動重啟，不彈窗打斷。後臺執行緒出錯不影響主介面，仍按原樣提示。
         if std::thread::current().name() == Some("main") && relaunch_after_failure("程式異常") {
             let _ = write_report(&diagnostics_dir(), "島仔發生異常，已自動重新啟動。", &details);
             return;
@@ -204,7 +204,7 @@ mod tests {
         let content = std::fs::read_to_string(&path).unwrap();
         assert!(content.contains(env!("CARGO_PKG_VERSION")));
         assert!(content.contains("OpenGL 初始化失敗"));
-        // 重复失败只保留最后一份，避免常驻程序无限累积日志。
+        // 重複失敗只保留最後一份，避免常駐程式無限累積日誌。
         write_report(&directory, "第二次失敗", "新的錯誤").unwrap();
         assert!(!std::fs::read_to_string(&path).unwrap().contains("OpenGL"));
         std::fs::remove_file(path).unwrap();

@@ -1,4 +1,4 @@
-//! 常驻岛的番茄水位、休息茶杯与倒计时。
+//! 常駐島的番茄水位、休息茶杯與倒計時。
 use crate::{app::{Phase,Pomo},paint::{self,Card,H},theme::{self,W}};
 use eframe::egui::{self,Color32};
 

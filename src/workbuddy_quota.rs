@@ -1,4 +1,4 @@
-//! WorkBuddy 官方客户端积分汇总，浏览器授权连接。
+//! WorkBuddy 官方客戶端積分彙總，瀏覽器授權連線。
 use super::{Account,Snapshot};
 use serde_json::Value;
 use std::{io::Read,sync::mpsc,time::Duration};
@@ -90,7 +90,7 @@ fn query(agent:&ureq::Agent,s:&Session,id:&str)->Result<Snapshot,Failure>{
 fn with_transport_retry<T>(agent:&ureq::Agent,origin:&str,request:impl Fn(&ureq::Agent)->Result<T,Failure>)->Result<T,Failure>{
     let result=request(agent);
     if !matches!(result,Err(Failure::Transport)){return result;}
-    // 仅在本地代理映射到基准测试地址且连接失败时重新解析；TLS 仍校验原官网域名。
+    // 僅在本地代理對映到基準測試地址且連線失敗時重新解析；TLS 仍校驗原官網域名。
     use std::net::{Ipv4Addr,SocketAddr,ToSocketAddrs};
     let host=origin.trim_start_matches("https://");
     let mapped=(host,443).to_socket_addrs().ok().is_some_and(|mut addresses|addresses.any(|a|matches!(a,SocketAddr::V4(v) if v.ip().octets()[0]==198 && matches!(v.ip().octets()[1],18|19))));
@@ -105,7 +105,7 @@ fn with_transport_retry<T>(agent:&ureq::Agent,origin:&str,request:impl Fn(&ureq:
         .resolver(move |name:&str|if name==endpoint{Ok(ips.clone())}else{Err(std::io::Error::other("官網地址不匹配"))}).build();
     request(&direct)
 }
-// 只读取客户端当前会话；未知加密格式交给独立官网登录，不改写客户端文件。
+// 只讀取客戶端當前會話；未知加密格式交給獨立官網登入，不改寫客戶端檔案。
 fn local_snapshot(agent:&ureq::Agent,expected:Option<&str>)->Result<(String,Snapshot),String>{
     let base=std::env::var_os("LOCALAPPDATA").ok_or("未找到本機使用者目錄")?;
     let path=std::path::PathBuf::from(base).join("CodeBuddyExtension/Data/Public/auth/workbuddy-desktop-ai.info");
@@ -159,7 +159,7 @@ pub fn fetch(agent:&ureq::Agent,account:&Account)->Result<Snapshot,(String,u64)>
                         match refresh_auth(agent,&session){
                             Ok(next)=>{
                                 session.auth=Some(next);
-                                // 刷新令牌可能轮换，先保存，再查询积分，避免网络中断丢失新令牌。
+                                // 重新整理令牌可能輪換，先儲存，再查詢積分，避免網路中斷丟失新令牌。
                                 if std::fs::read(&path).ok().as_deref()==Some(bytes.as_slice()){
                                     save_session(id,&session).map_err(|e|(e,30))?;
                                 }

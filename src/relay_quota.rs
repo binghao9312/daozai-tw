@@ -136,7 +136,7 @@ pub fn parse_new_api(v:&Value)->Result<Snapshot,String> {
 pub fn parse_new_api_user(v:&Value,status:&Value)->Result<Snapshot,String>{
     if v["success"]!=true||!v["error"].is_null(){return Err("無法讀取賬戶餘額，請核對使用者 Token、使用者 ID 和查詢許可權".into());}
     let d=&v["data"];let remaining=required(d,"quota")?;let used=nonnegative(d,"used_quota")?;
-    // 账户配额按站点公开配置换算；未提供有效配置时保留原始单位。
+    // 賬戶配額按站點公開配置換算；未提供有效配置時保留原始單位。
     let conversion=(||{
         if status["success"]!=true{return None;}
         let s=&status["data"];let per=numeric(&s["quota_per_unit"]).filter(|n|*n>0.0)?;
@@ -314,7 +314,7 @@ fn detect_with(mut query:impl FnMut(&str,Duration)->Result<Value,ProbeError>,can
         if value["code"]==false||value["success"]==false||value["isValid"]==false||!value["error"].is_null(){return Err(("站點拒絕額度查詢，請核對 API Key 與查詢許可權".into(),60));}
         Ok(Some(value))
     };
-    // 优先专用额度协议；兼容计费接口不证明站点品牌，也不证明账户或 Key 范围。
+    // 優先專用額度協議；相容計費介面不證明站點品牌，也不證明賬戶或 Key 範圍。
     for (kind,path) in [(Kind::General,"/user/balance"),(Kind::NewApi,"/api/usage/token/"),(Kind::Sub2Api,"/v1/usage"),(Kind::OneApi,"/dashboard/billing/subscription")] {
         let Some(value)=next(path)?else{continue;};
         let result=match kind{
@@ -336,7 +336,7 @@ pub fn detect_cancellable(agent:impl Fn(Duration)->ureq::Agent,base_url:&str,key
     if key.is_empty()||key.len()>8192||key.chars().any(|c|c.is_whitespace()||c.is_control()){return Err(("請輸入有效的 API Key".into(),0));}
     detect_with(|path,timeout|query(&agent(timeout),&endpoint(&base,path),key,Some(timeout)),cancelled,AUTO_TIMEOUT)
 }
-/// 已保存的协议直接查询；刷新和手动指定类型均不自动切换协议。
+/// 已儲存的協議直接查詢；重新整理和手動指定型別均不自動切換協議。
 pub fn request_cancellable(agent:&ureq::Agent,kind:Kind,base_url:&str,key:&str,cancelled:impl Fn()->bool)->Result<Snapshot,(String,u64)> {
     if cancelled(){return Err(("已取消連線".into(),0));}
     let base=validate_base_url(base_url).map_err(|e|(e,0))?;

@@ -1,4 +1,4 @@
-//! 自动检查正式版更新，下载与安装由用户确认。
+//! 自動檢查正式版更新，下載與安裝由使用者確認。
 use eframe::egui;
 use std::{io::{Read, Write}, path::PathBuf, sync::{mpsc::{self, Receiver}, Arc, atomic::{AtomicBool, Ordering}}, time::{Duration, Instant}};
 
@@ -118,7 +118,7 @@ impl State {
                 }
             }
         }
-        // 复用主界面的低频轮询；只在实际检查时启动线程，不增加常驻计时线程。
+        // 複用主介面的低頻輪詢；只在實際檢查時啟動執行緒，不增加常駐計時執行緒。
         if !cfg!(test) && self.should_check(Instant::now()) { self.begin_check(ctx, true, check); }
         if self.rx.is_some() && !self.automatic_check { ctx.request_repaint_after(Duration::from_millis(100)); }
     }
@@ -270,16 +270,16 @@ impl State {
 
 }
 
-/// 只统计岛仔自己的文件（KB）。共享安装文件夹里的其他软件不算在内。
-/// 诊断脚本已内嵌在程序里（`--collect-diagnostics`），安装目录不再附带单独的诊断文件。
+/// 只統計島仔自己的檔案（KB）。共享安裝資料夾裡的其他軟體不算在內。
+/// 診斷指令碼已內嵌在程式裡（`--collect-diagnostics`），安裝目錄不再附帶單獨的診斷檔案。
 fn own_files_kb(dir: &std::path::Path) -> u32 {
     let bytes: u64 = ["daozai.exe", "Uninstall.exe", "LICENSE", "THIRD_PARTY_NOTICES.txt"].iter()
         .filter_map(|name| std::fs::metadata(dir.join(name)).ok()).filter(|meta| meta.is_file()).map(|meta| meta.len()).sum();
     bytes.div_ceil(1024).min(u64::from(u32::MAX)) as u32
 }
 
-/// 启动时为安装版登记真实大小：旧版安装器没有写 `EstimatedSize`，
-/// 软件管家会统计整个安装文件夹；装进共享文件夹时会显示几十 GB。只在登记的安装位置就是本程序所在目录时写入。
+/// 啟動時為安裝版登記真實大小：舊版安裝器沒有寫 `EstimatedSize`，
+/// 軟體管家會統計整個安裝資料夾；裝進共享資料夾時會顯示幾十 GB。只在登記的安裝位置就是本程式所在目錄時寫入。
 #[cfg(windows)]
 pub fn record_install_size() {
     use windows::{core::w, Win32::System::Registry::{RegGetValueW, RegSetKeyValueW, HKEY_CURRENT_USER, REG_DWORD, RRF_RT_REG_SZ}};
@@ -328,7 +328,7 @@ unsafe fn update_window_region(rect: egui::Rect, scale: f32) -> windows::Win32::
 }
 
 fn update_agent(proxy: Option<&str>, timeout: Duration) -> Result<ureq::Agent, String> {
-    // 整体 timeout 会覆盖读取超时，分别限制连接和无数据等待。
+    // 整體 timeout 會覆蓋讀取超時，分別限制連線和無資料等待。
     let mut builder = ureq::AgentBuilder::new().try_proxy_from_env(false)
         .timeout_connect(Duration::from_secs(20)).timeout_read(timeout).timeout_write(timeout);
     if let Some(proxy) = proxy {
@@ -421,7 +421,7 @@ fn launch_installer(work: &std::path::Path) -> Result<(), String> {
         .arg(work.join("apply.ps1")).arg("-WorkPath").arg(work).arg("-TargetExe").arg(target)
         .arg("-ParentProcessId").arg(std::process::id().to_string()))
         .map_err(|_| "無法啟動更新程式，請透過瀏覽器下載安裝")?;
-    // 脚本先确认缓存和安装目录可用，再允许主程序退出。
+    // 指令碼先確認快取和安裝目錄可用，再允許主程式退出。
     for _ in 0..100 {
         if work.join("ready").exists() { return Ok(()); }
         if child.try_wait().ok().flatten().is_some() { break; }

@@ -1,4 +1,4 @@
-//! Kiro 额度：只读登录缓存与 GetUsageLimits，不回写、不续期；令牌是否失效以服务端 401/403 为准（本地 expiresAt 只是客户端的续期计划时间）。
+//! Kiro 額度：只讀登入快取與 GetUsageLimits，不回寫、不續期；令牌是否失效以服務端 401/403 為準（本地 expiresAt 只是客戶端的續期計劃時間）。
 use super::{Account, Amount, Config, Provider, Snapshot, Window};
 use serde_json::{json, Value};
 use std::{io::Read, path::{Path, PathBuf}, sync::mpsc};
@@ -59,7 +59,7 @@ pub(crate) fn add(config:&mut Config,path:&Path,alias:&str)->Result<(),String>{
     let next=config.accounts.iter().filter(|a|a.provider==Provider::Kiro).count()+1;
     let id=format!("Kiro-{}",std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos());
     if config.selected.is_empty(){config.selected=id.clone();}
-    // 首次查询后绑定服务端用户标识，客户端注册及令牌不作为用户身份。
+    // 首次查詢後繫結服務端使用者標識，客戶端註冊及令牌不作為使用者身份。
     config.accounts.push(Account{id,provider:Provider::Kiro,alias:if alias.trim().is_empty(){format!("Kiro · 帳號 {next}")}else{alias.trim().into()},source:path,slot:None,enabled:true,pinned:config.accounts.is_empty()});
     Ok(())
 }
@@ -87,8 +87,8 @@ fn query(agent:&ureq::Agent,path:&Path)->Result<Snapshot,(String,u64)>{
 }
 fn query_with(path:&Path,request:impl FnOnce(&Login)->Result<Snapshot,(String,u64)>)->Result<Snapshot,(String,u64)>{
     let root=super::login_json(path).map_err(|e|(e,0))?;let l=login(&root).map_err(|e|(e,0))?;
-    // expiresAt 只是 Kiro 客户端的续期计划时间，客户端懒续期，过了这个点令牌在服务端通常仍然有效；
-    // 直接带令牌请求，由服务端 401/403 判定失效。Kiro 续期后改写缓存文件，每次查询都重新读取，能自动恢复。
+    // expiresAt 只是 Kiro 客戶端的續期計劃時間，客戶端懶續期，過了這個點令牌在服務端通常仍然有效；
+    // 直接帶令牌請求，由服務端 401/403 判定失效。Kiro 續期後改寫快取檔案，每次查詢都重新讀取，能自動恢復。
     let snapshot=request(&l)?;
     let current=super::login_json(path).and_then(|root|login(&root)).map_err(|e|(e,0))?;
     if current.access_token!=l.access_token||current.profile_arn!=l.profile_arn||current.region!=l.region{return Err(("Kiro 登入訊息已變化，請重新重新整理額度".into(),0));}
