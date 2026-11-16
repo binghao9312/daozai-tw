@@ -1,5 +1,7 @@
 //! 无窗口交互测试：直接向 egui 注入输入事件，验证悬停展开、切页、按钮。
 use crate::app::{App, Env, Options, PH, PW, WIN_H, WIN_W};
+// 旧版 IM（企业微信、飞书、钉钉、QQ）交互测试，依赖 cn-messengers 功能。
+#[cfg(feature="cn-messengers")]
 #[path="messenger/ui_tests.rs"]
 mod enterprise_messenger;
 #[path="calendar/ui_compatibility_tests.rs"]
@@ -3797,6 +3799,7 @@ fn mascot_integrated_expression_gallery(){
     }
 }
 #[test]
+#[cfg(feature="cn-messengers")]
 fn minimal_island_hides_messenger_notices_until_expanded(){
     // 群友截图：极简刘海下来电 / 新消息后，细线变成带微信图标的方块。极简刘海照常弹横幅，收起后只留细线，未读不常挂。
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
@@ -3808,8 +3811,9 @@ fn minimal_island_hides_messenger_notices_until_expanded(){
         let idle=h.region;
         match source {
             Messenger::Wechat=>h.app.receive_wechat_reminder_from(4242,0x1234),
-            Messenger::Qq=>h.app.receive_notification("QQ".into(),"QQ".into(),"QQ · 新訊息".into()),
-            Messenger::WeCom|Messenger::Feishu|Messenger::DingTalk|Messenger::Discord=>h.app.receive_messenger_reminder(crate::app::Unread::of(source)),
+            Messenger::Qq=>h.app.receive_notification("QQ".into(),"QQ".into(),"QQ · 新消息".into()),
+            Messenger::WeCom|Messenger::Feishu|Messenger::DingTalk=>h.app.receive_messenger_reminder(crate::app::Unread::of(source)),
+            Messenger::Discord=>unreachable!("本测试只覆盖旧版 IM 的极简横幅"),
         }
         for _ in 0..30 {h.frame(vec![]);}
         assert!(h.app.notice.as_ref().and_then(|a|a.messenger())==Some(source),"{source:?} {shape:?}：極簡劉海照常彈橫幅");
@@ -6530,6 +6534,7 @@ fn external_notice_respects_permissions_masks_preview_and_never_reemits(){
 }
 
 #[test]
+#[cfg(feature="cn-messengers")]
 fn qq_only_notifications_filter_by_app_id_before_display_and_respect_preview(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.frame(vec![]);
     h.app.settings.read_notifications=true;h.app.settings.qq_only=true;h.app.settings.save();
@@ -7216,6 +7221,7 @@ fn minimal_side_pill_returns_to_line_while_wechat_is_unread(){
 }
 
 #[test]
+#[cfg(feature="cn-messengers")]
 fn automatic_minimal_hides_unread_hit_area_until_reopened(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     for dock in [crate::model::Dock::Top,crate::model::Dock::Left,crate::model::Dock::Right] {
@@ -7538,6 +7544,7 @@ fn messenger_notice_status_gallery(){
 }
 
 #[test]
+#[cfg(feature="cn-messengers")]
 fn qq_unknown_reminders_survive_viewing_other_accounts(){
     let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();h.app.settings.read_notifications=true;
@@ -7547,15 +7554,17 @@ fn qq_unknown_reminders_survive_viewing_other_accounts(){
 }
 
 #[test]
+#[cfg(feature="cn-messengers")]
 fn messenger_window_replacement_removes_stale_banner_targets_without_clearing_other_accounts(){
     use crate::app::{Cmd,Messenger,Unread};
     let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for source in Messenger::ALL{
+    for source in Messenger::ALL.into_iter().filter(|source|*source!=Messenger::Discord){
         let mut h=H::new();h.app.settings.read_notifications=true;h.app.settings.wechat_notifications=true;h.app.settings.wecom_notifications=true;h.app.settings.feishu_notifications=true;h.app.settings.dingtalk_notifications=true;
         let old=Unread{source,pid:100,window:11};let other=Unread{source,pid:200,window:22};let current=Unread{window:33,..old};
         let receive=|app:&mut App,unread:Unread|match source{
-            Messenger::Wechat|Messenger::WeCom|Messenger::Feishu|Messenger::DingTalk|Messenger::Discord=>app.receive_messenger_reminder(unread),
-            Messenger::Qq=>app.receive_notification_from("QQ".into(),"QQ".into(),"有新訊息".into(),Some(unread)),
+            Messenger::Wechat|Messenger::WeCom|Messenger::Feishu|Messenger::DingTalk=>app.receive_messenger_reminder(unread),
+            Messenger::Qq=>app.receive_notification_from("QQ".into(),"QQ".into(),"有新消息".into(),Some(unread)),
+            Messenger::Discord=>unreachable!("本测试只覆盖旧版 IM"),
         };
         receive(&mut h.app,old);h.frame(vec![]);receive(&mut h.app,other);receive(&mut h.app,current);
         assert_eq!(h.app.pending_messengers,[current,other]);
@@ -7567,6 +7576,7 @@ fn messenger_window_replacement_removes_stale_banner_targets_without_clearing_ot
 }
 
 #[test]
+#[cfg(feature="cn-messengers")]
 fn qq_bound_notices_open_their_original_account_and_clear_independently(){
     use crate::app::{Cmd,Messenger,Unread};
     let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
@@ -7584,6 +7594,7 @@ fn qq_bound_notices_open_their_original_account_and_clear_independently(){
 }
 
 #[test]
+#[cfg(feature="cn-messengers")]
 fn qq_unknown_notice_can_close_without_dismissing_a_bound_account(){
     use crate::app::{Messenger,Unread};
     let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
@@ -7597,6 +7608,7 @@ fn qq_unknown_notice_can_close_without_dismissing_a_bound_account(){
 }
 
 #[test]
+#[cfg(feature="cn-messengers")]
 fn qq_expired_unidentified_notice_can_be_reopened_and_explicitly_cleared(){
     use crate::app::{Messenger,Unread};
     let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
@@ -7609,6 +7621,7 @@ fn qq_expired_unidentified_notice_can_be_reopened_and_explicitly_cleared(){
 }
 
 #[test]
+#[cfg(feature="cn-messengers")]
 fn qq_unknown_reminders_are_not_numbered_as_another_known_account(){
     use crate::app::{Messenger,Unread};
     let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
@@ -7637,6 +7650,7 @@ fn unavailable_messenger_status_stays_visible_when_the_island_is_collapsed(){
 }
 
 #[test]
+#[cfg(feature="cn-messengers")]
 fn exited_messenger_unreads_clear_their_badges_and_notifications(){
     use crate::app::{Messenger,Unread};
     let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
@@ -7676,6 +7690,7 @@ fn stale_exit_results_preserve_new_windows_and_unidentified_accounts(){
 }
 
 #[test]
+#[cfg(feature="cn-messengers")]
 fn messenger_notifications_keep_separate_badges_until_the_client_is_viewed(){
     use crate::app::{Cmd,Messenger,Unread};
     let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
@@ -7730,6 +7745,7 @@ fn messenger_capsule_grows_during_opening(){
 }
 
 #[test]
+#[cfg(feature="cn-messengers")]
 fn messenger_accounts_get_number_tags_and_clear_one_by_one(){
     use crate::app::{Cmd,Messenger,Unread};
     let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
@@ -7803,6 +7819,7 @@ fn messenger_notifications_align_with_system_banner(){
 }
 
 #[test]
+#[cfg(feature="cn-messengers")]
 fn messenger_notifications_side_docks_keep_one_column(){
     let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     for dock in [crate::model::Dock::Left,crate::model::Dock::Right]{

@@ -1708,6 +1708,8 @@ impl App {
                         let master_hint=|ui:&mut egui::Ui|if !master {
                             ui.label(egui::RichText::new("提醒總開關已關閉（上方「系統提示」），開啟後這裡才會生效").size(12.0).color(Color32::from_rgb(230,150,40)));
                         };
+                        // 旧版中国 IM 的提醒只在 cn-messengers 功能开启时显示；默认只有 Discord。
+                        if cfg!(feature="cn-messengers") {
                         settings_label(ui,"微信提醒");
                         settings_card(ui,|ui|{
                             master_hint(ui);
@@ -1733,20 +1735,20 @@ impl App {
                                 }
                             });
                         });
-                        settings_label(ui,"QQ 與 Windows 通知");
+                        }
+                        settings_label(ui,"Discord 与 Windows 通知");
                         settings_card(ui,|ui|{
                             master_hint(ui);
                             ui.add_enabled_ui(master,|ui|{
                             ui.label(egui::RichText::new(&self.listener_status).size(13.0));
                             if self.settings.read_notifications {
-                                if ui.button(if self.settings.qq_only{"斷開 QQ 通知"}else{"斷開系統通知"}).clicked(){self.pending.push(Cmd::DisconnectNotifications);}
+                                if ui.button("断开系统通知").clicked(){self.pending.push(Cmd::DisconnectNotifications);}
                             }else{
                                 ui.horizontal_wrapped(|ui|{
-                                    if ui.button("只連線 QQ").clicked(){self.pending.push(Cmd::RequestQqNotifications);}
-                                    if ui.button("連線所有應用通知").clicked(){self.pending.push(Cmd::RequestNotifications);}
+                                    if ui.button("连接系统通知").clicked(){self.pending.push(Cmd::RequestNotifications);}
                                 });
                             }
-                            ui.label(egui::RichText::new("QQ 需開啟系統通知；新通知在島上顯示約 4.5 秒，預設隱藏正文。").size(12.0).color(settings_color(ctx,Color32::from_gray(180),Color32::from_gray(75))));
+                            ui.label(egui::RichText::new("Discord 需开启桌面通知；新通知在岛上显示约 4.5 秒，默认隐藏正文。点击提醒会唤起 Discord 主窗口。").size(12.0).color(settings_color(ctx,Color32::from_gray(180),Color32::from_gray(75))));
                             ui.separator();
                             setting_row(ui,"顯示通知正文","可能包含私密訊息；螢幕共享時建議關閉",&mut self.settings.notification_preview);
                             ui.label(egui::RichText::new("只接收 Windows 通知中心可見的內容；應用會在收到通知後出現在下方。").size(12.0).color(settings_color(ctx,Color32::from_gray(180),Color32::from_gray(75))));
@@ -2085,7 +2087,7 @@ impl App {
             if before!=format!("{:?}",self.settings){self.settings.save();}
             ctx.set_style(original_style);
         });
-        if !self.settings_open{self.window_layout().close();self.weather_source.close();}else{self.weather_tutorial_ui(ctx);}
+        if !self.settings_open{self.window_layout().close();self.weather_source.close();}
     }
 }
 

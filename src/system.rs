@@ -530,7 +530,7 @@ fn connect_inner(ctx:eframe::egui::Context,filter:crate::messenger::Notification
                 return Ok(());
             }
             let listener = UserNotificationListener::Current()?;
-            let channels=crate::messenger::Messenger::ALL.into_iter().filter(|client|client.adapter().capture==crate::messenger::Capture::SystemToast)
+            let channels=crate::messenger::Messenger::REGISTERED.iter().copied().filter(|client|client.adapter().capture==crate::messenger::Capture::SystemToast)
                 .filter(|client|filter.allows(client.adapter().notification_id)).map(channel_status).collect::<Vec<_>>().join("\n");
             let mut baseline=baseline;
             let mut accounts=crate::messenger::ToastAccounts::default();accounts.sample();
