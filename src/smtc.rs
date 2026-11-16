@@ -301,6 +301,49 @@ fn media_rank(media:&NowPlaying)->u8{
     match (media.is_music(),media.playing){(true,true)=>0,(true,false)=>1,(false,true)=>2,_=>3}
 }
 
+/// 會話選擇鍵：有來源正在播放時依 media_rank；全部暫停時優先保留上一個播放來源，
+/// 讓播放/暫停、上一首、下一首仍指向它，而不是任意一個暫停中的播放器。
+fn session_pick_key(media:&NowPlaying,previous:Option<&str>)->(u8,u8){
+    if media.playing{return (0,media_rank(media));}
+    if previous.is_some_and(|p|p.eq_ignore_ascii_case(&media.source)){return (1,0);}
+    (1,media_rank(media))
+}
+
+#[cfg(test)]
+mod session_pick_tests {
+    use super::*;
+
+    fn np(source:&str,playing:bool,music:bool)->NowPlaying{
+        NowPlaying{source:source.into(),title:"t".into(),playing,
+            playback_type:if music{MediaKind::Music}else{MediaKind::Video},..Default::default()}
+    }
+
+    fn pick<'a>(candidates:&'a [NowPlaying],previous:Option<&str>)->&'a NowPlaying{
+        candidates.iter().min_by_key(|m|session_pick_key(m,previous)).unwrap()
+    }
+
+    #[test]
+    fn paused_previous_source_stays_selected_over_other_paused_players(){
+        let c=[np("QQMusic.exe",false,true),np("Spotify.exe",false,true),np("chrome.exe",false,false)];
+        assert_eq!(pick(&c,Some("Spotify.exe")).source,"Spotify.exe");
+        assert_eq!(pick(&c,Some("chrome.exe")).source,"chrome.exe","暫停的影片也是上一個播放來源");
+    }
+
+    #[test]
+    fn any_playing_source_still_takes_over_from_a_paused_previous_one(){
+        let c=[np("Spotify.exe",false,true),np("QQMusic.exe",true,true)];
+        assert_eq!(pick(&c,Some("Spotify.exe")).source,"QQMusic.exe","別的播放器開始播放時照常切換");
+        let v=[np("Spotify.exe",false,true),np("chrome.exe",true,false)];
+        assert_eq!(pick(&v,Some("Spotify.exe")).source,"chrome.exe");
+    }
+
+    #[test]
+    fn without_a_previous_source_music_still_ranks_before_video(){
+        let c=[np("chrome.exe",false,false),np("ytm-rs.exe",false,true)];
+        assert_eq!(pick(&c,None).source,"ytm-rs.exe");
+    }
+}
+
 fn choose_media_for_source(system:Option<NowPlaying>,native:Option<NowPlaying>,previous:&str,native_pending:bool)->Option<NowPlaying>{
     // 暫停或載入下一首時保留控制物件，其他客戶端開始播放則照常切換。
     if previous.eq_ignore_ascii_case("cloudmusic.exe") && !system.as_ref().is_some_and(|m|m.playing && m.is_music())
@@ -335,7 +378,7 @@ fn query_system(artwork:&mut ArtworkCache) -> Result<Option<NowPlaying>,()> {
         if media.is_none() && session.SourceAppUserModelId().ok().is_some_and(|id|previous.as_deref()==Some(id.to_string().as_str())){unreadable_previous=true;}
         media.map(|media|(session,media))
     })
-        .min_by_key(|(_,media)|media_rank(media)).ok_or(())?;
+        .min_by_key(|(_,media)|session_pick_key(media,previous.as_deref())).ok_or(())?;
     music_log::player(&media.source);
     // 當前播放器正在過載時，不把暫停中的另一客戶端當成使用者切換了播放源。
     if media_rank(&media)>0 && unreadable_previous{return Err(());}
