@@ -94,27 +94,32 @@ const DINGTALK:Adapter=Adapter{
 impl Messenger {
     pub const ALL:[Self;6]=[Self::Discord,Self::Wechat,Self::Qq,Self::WeCom,Self::Feishu,Self::DingTalk];
     pub const OFFICE:[Self;3]=[Self::WeCom,Self::Feishu,Self::DingTalk];
+    /// 实际参与监听、通知识别和设置的客户端。默认只有 Discord；旧版中国 IM 需要 `cn-messengers` 功能才会注册。
+    pub const REGISTERED:&'static [Self]=if cfg!(feature="cn-messengers") {let all:&'static [Self]=&Self::ALL;all} else {let discord:&'static [Self]=&[Self::Discord];discord};
     pub fn adapter(self)->&'static Adapter{match self{Self::Discord=>&DISCORD,Self::Wechat=>&WECHAT,Self::Qq=>&QQ,Self::WeCom=>&WECOM,Self::Feishu=>&FEISHU,Self::DingTalk=>&DINGTALK}}
     pub fn name(self)->&'static str{self.adapter().name}
     pub fn from_notification_id(id:&str)->Option<Self>{
-        Self::ALL.into_iter().find(|client|{
-            let adapter=client.adapter();let id=id.trim();
+        let id=id.trim();
+        if let Some(client)=Self::REGISTERED.iter().copied().find(|client|{
+            let adapter=client.adapter();
             adapter.notification_id.eq_ignore_ascii_case(id) || adapter.aliases.iter().any(|alias|alias.eq_ignore_ascii_case(id))
-        })
+        }){return Some(client);}
+        // Discord 的 AppUserModelId 会随渠道和安装方式变化（如 com.squirrel.Discord.Discord），只要包含 Discord 即归属 Discord。
+        (Self::REGISTERED.contains(&Self::Discord) && id.to_ascii_lowercase().contains("discord")).then_some(Self::Discord)
     }
     pub fn enabled(self,settings:&Settings)->bool{settings.notifications && (self.adapter().enabled)(settings)}
 }
 
 pub fn taskbar_client(app:&str,id:&str)->Option<Messenger>{
     if let Some(client)=Messenger::from_notification_id(id){return (client.adapter().capture==Capture::Taskbar).then_some(client);}
-    Messenger::ALL.into_iter().find(|client|{
+    Messenger::REGISTERED.iter().copied().find(|client|{
         let adapter=client.adapter();adapter.capture==Capture::Taskbar
             && adapter.display_names.iter().any(|name|name.eq_ignore_ascii_case(app.trim()))
     })
 }
 
 pub fn toast_suppression(settings:&Settings)->u8{
-    Messenger::ALL.into_iter().filter(|client|client.adapter().capture==Capture::Taskbar && (*client==Messenger::Wechat || (client.adapter().enabled)(settings)))
+    Messenger::REGISTERED.iter().copied().filter(|client|client.adapter().capture==Capture::Taskbar && (*client==Messenger::Wechat || (client.adapter().enabled)(settings)))
         .fold(0,|mask,client|mask|(1<<(client as u8)))
 }
 pub fn suppresses_toast(app:&str,id:&str,mask:u8)->bool{
@@ -124,7 +129,8 @@ pub fn suppresses_toast(app:&str,id:&str,mask:u8)->bool{
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub enum NotificationFilter {All,Only(Messenger)}
 impl NotificationFilter {
-    pub fn for_settings(settings:&Settings)->Self{if settings.qq_only{Self::Only(Messenger::Qq)}else{Self::All}}
+    /// QQ 专用过滤只属于旧版客户端，默认功能关闭时不得过滤掉 Discord 通知。
+    pub fn for_settings(settings:&Settings)->Self{if cfg!(feature="cn-messengers") && settings.qq_only{Self::Only(Messenger::Qq)}else{Self::All}}
     pub fn allows(self,id:&str)->bool{match self{Self::All=>true,Self::Only(client)=>Messenger::from_notification_id(id)==Some(client)}}
 }
 
@@ -233,20 +239,35 @@ mod tests {
     }
     #[test]
     fn registered_adapters_have_distinct_identities_and_matching_backends(){
-        for client in Messenger::ALL{
+        for client in Messenger::REGISTERED.iter().copied(){
             let adapter=client.adapter();assert_eq!(adapter.client,client);
             assert_eq!(Messenger::from_notification_id(adapter.notification_id),Some(client));
             assert!(!adapter.process_names.is_empty());
             #[cfg(windows)]{
-                assert_eq!(adapter.native.taskbar.is_some(),adapter.capture==Capture::Taskbar);
+                // Discord 走系统通知，同时保留任务栏闪动作为补充（原生窗口闪动监听）。
+                assert_eq!(adapter.native.taskbar.is_some(),adapter.capture==Capture::Taskbar||client==Messenger::Discord);
             }
         }
-        assert_eq!(Messenger::from_notification_id(" qq "),Some(Messenger::Qq));
-        assert_eq!(Messenger::from_notification_id("Tencent.Weixin"),Some(Messenger::Wechat));
         for id in ["QQMusic","企业微信助手","FeishuMeeting","DingTalkHelper","unknown"]{assert_eq!(Messenger::from_notification_id(id),None,"未接入的应用不能误认为现有客户端");}
     }
     #[test]
+    fn only_discord_is_registered_by_default_and_matches_every_discord_app_identity(){
+        if cfg!(feature="cn-messengers"){return;}
+        assert_eq!(Messenger::REGISTERED,&[Messenger::Discord]);
+        for id in ["com.squirrel.Discord.Discord","com.squirrel.Discord.DiscordPTB","Discord","discord.exe","Discord.Canary"]{
+            assert_eq!(Messenger::from_notification_id(id),Some(Messenger::Discord),"{id}");
+        }
+        for id in ["Tencent.WeChat","Tencent.Weixin","QQ","com.electron.Feishu","WXWork","DingTalk","unknown"]{
+            assert_eq!(Messenger::from_notification_id(id),None,"默认功能关闭时 {id} 不能被注册");
+        }
+        assert_eq!(taskbar_client("微信","unknown"),None);
+        assert_eq!(taskbar_client("Discord","unknown"),None,"Discord 走系统通知渠道，不参与任务栏显示名匹配");
+        assert!(NotificationFilter::for_settings(&Settings{qq_only:true,..Default::default()}).allows("com.squirrel.Discord.Discord"),"QQ 专用过滤不能屏蔽 Discord");
+    }
+    #[cfg(feature="cn-messengers")]
+    #[test]
     fn taskbar_clients_do_not_duplicate_system_toasts_or_hide_other_apps(){
+        assert_eq!(Messenger::from_notification_id(" qq "),Some(Messenger::Qq));
         assert_eq!(taskbar_client("微信","unknown"),Some(Messenger::Wechat));
         assert_eq!(taskbar_client("unknown","Tencent.WeChat"),Some(Messenger::Wechat));
         assert_eq!(taskbar_client("企业微信","WeCom"),Some(Messenger::WeCom));

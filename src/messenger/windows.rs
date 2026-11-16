@@ -93,7 +93,7 @@ pub(crate) fn path_allowed(image:&str,paths:&[String])->bool{
 
 fn publisher_allowed(file:&str,company:&str)->bool{
     let company=company.to_lowercase();
-    Messenger::ALL.into_iter().any(|client|client.adapter().process_names.iter().any(|name|name.eq_ignore_ascii_case(file))
+    Messenger::REGISTERED.iter().copied().any(|client|client.adapter().process_names.iter().any(|name|name.eq_ignore_ascii_case(file))
         && client.adapter().publishers.iter().any(|publisher|company.contains(publisher)))
 }
 
@@ -250,7 +250,7 @@ struct TaskbarEntry {client:Messenger,source:Option<Box<dyn TaskbarSource>>,retr
 struct ToastEntry {client:Messenger,paths:Vec<String>,history:AccountHistory}
 pub struct ToastAccounts {entries:Vec<ToastEntry>}
 impl Default for ToastAccounts {
-    fn default()->Self{Self{entries:Messenger::ALL.into_iter().filter(|client|client.adapter().capture==Capture::SystemToast && client.adapter().native.accounts.is_some())
+    fn default()->Self{Self{entries:Messenger::REGISTERED.iter().copied().filter(|client|client.adapter().capture==Capture::SystemToast && client.adapter().native.accounts.is_some())
         .map(|client|ToastEntry{client,paths:client_paths(client),history:AccountHistory::new(client)}).collect()}}
 }
 impl ToastAccounts {
@@ -276,7 +276,7 @@ pub struct Runtime {
     taskbar:Vec<TaskbarEntry>,
 }
 impl Default for Runtime {
-    fn default()->Self{Self{processes:HashMap::new(),targets:HashMap::new(),taskbar:Messenger::ALL.into_iter()
+    fn default()->Self{Self{processes:HashMap::new(),targets:HashMap::new(),taskbar:Messenger::REGISTERED.iter().copied()
         .filter(|client|client.adapter().native.taskbar.is_some()).map(|client|TaskbarEntry{client,source:None,retry:None,status:String::new()}).collect()}}
 }
 impl Runtime {
@@ -442,6 +442,7 @@ pub(crate) fn client_in_foreground(source:Messenger)->bool{unsafe{foreground_mai
 mod tests {
     use super::*;
     #[test]
+#[cfg(feature="cn-messengers")]
     fn client_publishers_are_checked_against_the_actual_executable_name(){
         assert!(publisher_allowed("WXWork.exe","Tencent"));
         assert!(publisher_allowed("Feishu.exe","Beijing Feishu Technology Co., Ltd."));
@@ -489,6 +490,7 @@ mod tests {
         assert_eq!(runtime.qq_account_pid(101,&accounts,&parents),None,"原账号退出后不能转绑剩余账号");
     }
     #[test]
+#[cfg(feature="cn-messengers")]
     fn confirming_a_view_only_rearms_that_clients_account(){
         use std::{cell::RefCell,rc::Rc};
         struct Source{client:Messenger,seen:Rc<RefCell<Vec<(Messenger,u32)>>>}
@@ -546,6 +548,7 @@ mod tests {
     }
     fn qq_target(pid:u32)->Target{Target{unread:crate::app::Unread{source:crate::app::Messenger::Qq,pid,window:pid as isize},started:u64::from(pid)}}
     #[test]
+#[cfg(feature="cn-messengers")]
     fn qq_open_regression_unknown_click_after_an_account_exits(){
         let (a,b)=(qq_target(100),qq_target(200));
         let mut history=AccountHistory::new(Messenger::Qq);
@@ -601,6 +604,7 @@ mod tests {
         assert_eq!(accounts.target(2,35_000_000,|_|panic!("图标减少后也不能改绑旧通知")),None);
     }
     #[test]
+#[cfg(feature="cn-messengers")]
     fn qq_account_observation_tracks_the_original_native_window(){unsafe{
         use windows::Win32::System::LibraryLoader::GetModuleHandleW;
         unsafe extern "system" fn proc(h:HWND,m:u32,w:WPARAM,l:LPARAM)->LRESULT{DefWindowProcW(h,m,w,l)}

@@ -118,6 +118,7 @@ mod tests{
         assert_eq!((gone,take_wake_steps()),(Err(OpenError::Unavailable),vec!["提醒窗口已不属于该账号".to_string()]));
     }}
     #[test]
+#[cfg(feature="cn-messengers")]
     fn qq_single_tray_account_ignores_its_auxiliary_main_windows(){unsafe{
         use windows::Win32::{Foundation::LRESULT,System::LibraryLoader::GetModuleHandleW,UI::Shell::*};
         unsafe extern "system" fn proc(h:HWND,m:u32,w:WPARAM,l:LPARAM)->LRESULT{DefWindowProcW(h,m,w,l)}

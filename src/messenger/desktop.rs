@@ -87,9 +87,16 @@ unsafe fn feishu_main_frame(pid:u32)->Option<HWND>{
     let _=EnumWindows(Some(visit),LPARAM((&mut search as *mut Search)as isize));
     match search.found.as_slice(){[one]=>Some(*one),_=>None}
 }
+/// Discord 主窗口标题为「频道 - 服务器 - Discord」或仅「Discord」（私信与设置页等）。
 fn discord_title(title:&str)->bool {
     let t=title.trim();
-    t.eq_ignore_ascii_case("Discord") || t.ends_with("- Discord") || t.contains("Discord")
+    t.eq_ignore_ascii_case("Discord") || t.contains("- Discord")
+}
+/// Discord 托盘唤起：Squirrel 安装的 Update.exe 会以 --processStart 启动并显示已有的主窗口。
+fn discord_update_exe()->Option<std::path::PathBuf> {
+    let local=std::env::var_os("LOCALAPPDATA")?;
+    let path=std::path::PathBuf::from(local).join("Discord").join("Update.exe");
+    path.is_file().then_some(path)
 }
 unsafe fn discord_main_frame(pid:u32)->Option<HWND>{
     struct Search{pid:u32,found:Vec<HWND>}
@@ -156,7 +163,7 @@ fn open(unread:Unread,paths:&[String],_:bool)->Result<(),OpenError>{unsafe{
     match wake_route(unread.source,IsWindowVisible(window).as_bool(),IsIconic(window).as_bool()) {
         WakeRoute::Restore=>{let _=ShowWindowAsync(window,SW_RESTORE);}
         WakeRoute::Show=>{let _=ShowWindowAsync(window,SW_SHOW);}
-        WakeRoute::Relaunch=>return relaunch(window,unread.pid,paths),
+        WakeRoute::Relaunch=>return if unread.source==Messenger::Discord {relaunch_discord(window)} else {relaunch(window,unread.pid,paths)},
         WakeRoute::Focus=>{}
     }
     if SetForegroundWindow(window).as_bool(){wake_step("系统已接受");Ok(())}else{wake_step("系统拒绝切前台");Err(OpenError::Unavailable)}
@@ -172,6 +179,21 @@ fn wake_route(source:Messenger,visible:bool,iconic:bool)->WakeRoute {
     else if visible {WakeRoute::Focus}
     else if source==Messenger::Feishu || source==Messenger::Discord {WakeRoute::Relaunch}
     else {WakeRoute::Show}
+}
+
+/// Discord 缩到系统匣时，执行 `%LOCALAPPDATA%\Discord\Update.exe --processStart Discord.exe` 让它显示原主窗口。
+unsafe fn relaunch_discord(window:HWND)->Result<(),OpenError>{
+    let Some(update)=discord_update_exe() else{wake_step("找不到 Discord Update.exe");return Err(OpenError::Unavailable);};
+    wake_step("窗口在托盘中，由 Discord Update.exe 唤起");
+    let started=std::process::Command::new(&update).args(["--processStart","Discord.exe"])
+        .stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn();
+    if started.is_err(){wake_step("启动 Discord 失败");return Err(OpenError::Unavailable);}
+    let until=std::time::Instant::now()+std::time::Duration::from_secs(3);
+    while std::time::Instant::now()<until {
+        if IsWindowVisible(window).as_bool(){let _=SetForegroundWindow(window);wake_step("Discord 已显示主窗口");return Ok(());}
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    wake_step("Discord 3 秒内没有显示主窗口");Err(OpenError::Unavailable)
 }
 
 /// 启动提醒窗口所属进程自己的程序（单实例：不会多开，飞书把已有主窗口显示出来），再等窗口出现。
@@ -233,6 +255,16 @@ mod tests{
         assert_eq!(result,Ok(()));assert!(IsWindowVisible(window).as_bool());
         assert!(steps.iter().any(|s|s.contains("由客户端自己显示")));
     }}
+    #[test]
+    fn discord_wakes_minimized_windows_by_restore_and_tray_windows_by_update_exe(){
+        assert_eq!(wake_route(Messenger::Discord,true,true),WakeRoute::Restore,"最小化的 Discord 用 SW_RESTORE 还原");
+        assert_eq!(wake_route(Messenger::Discord,true,false),WakeRoute::Focus,"可见窗口只需前置");
+        assert_eq!(wake_route(Messenger::Discord,false,false),WakeRoute::Relaunch,"缩到系统匣时交给 Update.exe");
+        assert!(discord_title("general - My Server - Discord"));
+        assert!(discord_title("Discord"));
+        assert!(!discord_title("Discord 频道设置对话框的外部说明文字"),"标题必须是 Discord 主窗口格式");
+        assert!(!discord_title("Chrome 下载"));
+    }
     #[test]
     fn main_window_rules_exclude_login_popups_and_cross_client_windows(){
         let frame=WS_OVERLAPPEDWINDOW.0;

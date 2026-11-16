@@ -592,6 +592,7 @@ impl Drop for Listener {
 mod tests {
     use super::*;
     #[test]
+#[cfg(feature="cn-messengers")]
     fn all_taskbar_clients_first_flash_after_minimizing_a_viewed_account_is_not_swallowed(){unsafe{
         use crate::messenger::Messenger;
         use windows::Win32::System::LibraryLoader::GetModuleHandleW;

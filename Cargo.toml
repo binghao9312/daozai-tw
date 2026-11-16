@@ -23,6 +23,8 @@ required-features = ["record"]
 
 [features]
 record = []
+# 旧版中国 IM 客户端（微信、QQ、企业微信、飞书、钉钉）的监听与设置；默认关闭，只保留 Discord。
+cn-messengers = []
 
 [patch.crates-io]
 imap = { path = "vendor/imap" }

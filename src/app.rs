@@ -896,17 +896,8 @@ impl App {
         let focus_seconds=settings.focus_minutes as f32*60.0;
         let initial_lyrics=settings.lyrics_enabled;
         let weather_source=crate::weather_source_ui::State::load();
-        let mut weather=crate::weather::State::load(&settings.weather_city,settings.weather_position.as_ref());
-        if weather_source.displayed==crate::weather_source_ui::Provider::Qweather {weather.snapshot=weather_source.runtime.snapshot();}
-        else if weather_source.displayed==crate::weather_source_ui::Provider::Cwa {
-            if let Some(client)=&weather_source.cwa_client {
-                if let Some(county) = &weather_source.config.location.as_ref().map(|l| l.position.label.clone()) {
-                    if let Some(snapshot) = client.fetch_all(county) {
-                        weather.snapshot = Some(snapshot);
-                    }
-                }
-            }
-        }
+        // 中央氣象署資料由天氣刷新排程在背景取得，啟動時不阻塞介面。
+        let weather=crate::weather::State::load(&settings.weather_city,settings.weather_position.as_ref());
         let initial_page = 0;
         Self {
             opts,
