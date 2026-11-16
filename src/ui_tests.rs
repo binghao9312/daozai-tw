@@ -1,6 +1,6 @@
-//! 无窗口交互测试：直接向 egui 注入输入事件，验证悬停展开、切页、按钮。
+//! 無視窗互動測試：直接向 egui 注入輸入事件，驗證懸停展開、切頁、按鈕。
 use crate::app::{App, Env, Options, PH, PW, WIN_H, WIN_W};
-// 旧版 IM（企业微信、飞书、钉钉、QQ）交互测试，依赖 cn-messengers 功能。
+// 舊版 IM（企業微信、飛書、釘釘、QQ）互動測試，依賴 cn-messengers 功能。
 #[cfg(feature="cn-messengers")]
 #[path="messenger/ui_tests.rs"]
 mod enterprise_messenger;
@@ -269,7 +269,7 @@ fn weather_solar_entry_preview(){
     let (w,hgt)=(crate::app::CANVAS_W,WIN_H);
     let mut raster=feature_raster_sized(w,hgt);
     let click=H::local(330.0,94.0);
-    // 第 60 帧按下、61 帧松开；之后按时间点导出。
+    // 第 60 幀按下、61 幀鬆開；之後按時間點匯出。
     let shots=[(70,"weather-entry-a"),(85,"weather-entry-b"),(110,"weather-entry-c"),(160,"weather-entry-d")];
     for frame in 0..161 {
         h.t+=1.0/60.0;
@@ -354,7 +354,7 @@ fn weather_cities_switch_from_the_island_title_and_keep_their_own_cache(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.app.settings.pet=false;
     let hz=crate::weather::Position{lat:30.27,lon:120.15,label:"杭州".into(),region:"浙江 · 中國".into()};
     let bj=crate::weather::Position{lat:39.90,lon:116.40,label:"北京".into(),region:"北京 · 中國".into()};
-    // 设置页添加两个城市：只加入列表，搜索框清空。
+    // 設定頁新增兩個城市：只加入列表，搜尋框清空。
     for city in [&hz,&bj] {
         h.app.weather.city_input=city.label.clone();h.app.weather.selected_city=Some(city.clone());
         assert!(h.app.add_weather_city());
@@ -365,7 +365,7 @@ fn weather_cities_switch_from_the_island_title_and_keep_their_own_cache(){
     h.app.weather.city_input=hz.label.clone();h.app.weather.selected_city=Some(hz.clone());
     assert!(!h.app.add_weather_city(),"重複城市不再新增");
     assert_eq!(crate::model::Settings::load().weather_saved,vec![hz.clone(),bj.clone()],"城市列表應儲存到設定");
-    // 打开天气页，点标题展开下拉框，选「杭州」。
+    // 開啟天氣頁，點標題展開下拉框，選「杭州」。
     h.app.weather.snapshot=Some(crate::weather::Snapshot{place:"北京".into(),position:Some(bj.clone()),temp:-3.0,code:71,day:true,at:chrono::Utc::now().timestamp(),..Default::default()});
     h.app.show_page(8);h.hover(H::local(250.0,65.0),1.0);
     assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()=="當地")),"標題保持「當地天氣」");
@@ -378,11 +378,11 @@ fn weather_cities_switch_from_the_island_title_and_keep_their_own_cache(){
     h.click(row);h.hover(row,0.3);
     assert_eq!(h.app.settings.weather_city,"杭州");assert!(!h.app.weather.picker_open);assert!(!h.app.weather.solar_open);
     assert!(h.app.weather.snapshot.is_none(),"杭州沒有快取時不能顯示北京的天氣");
-    // 点面板外收起，不触发日照视图。
+    // 點面板外收起，不觸發日照檢視。
     h.click(H::local(209.0,147.0));h.hover(H::local(330.0,200.0),0.4);assert!(h.app.weather.picker_open,"無資料時入口在頁面中下方");
     h.click(H::local(330.0,200.0));h.hover(H::local(330.0,200.0),0.3);
     assert!(!h.app.weather.picker_open);assert!(!h.app.weather.solar_open,"點外面只收起下拉框");
-    // 删除当前城市：回到自动定位。
+    // 刪除當前城市：回到自動定位。
     h.app.remove_weather_city(&hz);
     assert_eq!(h.app.settings.weather_saved,vec![bj.clone()]);assert!(h.app.settings.weather_city.is_empty());assert!(h.app.settings.weather_position.is_none());
 }
@@ -1284,7 +1284,7 @@ fn island_position_drag_tracks_screen_coordinates_and_saves_on_release(){
     let bounds=crate::display_layout::Bounds{left:-2560,top:-400,right:0,bottom:1040};
     for dock in crate::model::Dock::ALL {for ppp in [1.0,1.5] {
         let mut h=H::new();h.app.settings.dock=dock;h.app.settings.island_offset=-40;h.app.settings.save();
-        // 起点离居中足够远，90 点位移不会落进居中吸附范围。
+        // 起點離居中足夠遠，90 點位移不會落進居中吸附範圍。
         let start=island_drag_header(&mut h,bounds,ppp);
         let before=island_drag_frame(&mut h,bounds,ppp,Some(start),Some(true));
         let delta=if dock.is_side(){Vec2::new(0.0,90.0)}else{Vec2::new(90.0,0.0)};
@@ -1379,10 +1379,10 @@ fn island_position_drag_switches_between_all_three_edges_and_saves_on_release(){
         let screen=island_drag_frame(&mut h,bounds,ppp,Some(end),None);
         let resident=h.hit.center()-screen.min.to_vec2();
         for _ in 0..30{island_drag_frame(&mut h,bounds,ppp,Some(resident),None);}
-        assert!(!h.app.open,"鬆手後游標留在島上不能立即展開");
+        assert!(!h.app.open,"鬆手後遊標留在島上不能立即展開");
         for _ in 0..30{island_drag_frame(&mut h,bounds,ppp,None,None);}
         for _ in 0..60{island_drag_frame(&mut h,bounds,ppp,Some(resident),None);}
-        assert!(h.app.open,"游標離開再懸停，應能正常展開");
+        assert!(h.app.open,"遊標離開再懸停，應能正常展開");
         assert_eq!(h.app.settings.display_id,"");
     }}}}
 }
@@ -1401,7 +1401,7 @@ fn island_position_drag_keeps_the_edge_in_the_middle_and_does_not_flap_at_corner
         (Pos2::new(1920.0,500.0),Dock::Right),(Pos2::new(1918.0,3.0),Dock::Right),
         (Pos2::new(1500.0,0.0),Dock::Top)] {
         for _ in 0..5{island_drag_frame(&mut h,bounds,1.0,Some(point),None);}
-        assert_eq!(h.app.settings.dock,dock,"游標={point:?}");
+        assert_eq!(h.app.settings.dock,dock,"遊標={point:?}");
         assert!(!h.app.open);
     }
     island_drag_frame(&mut h,bounds,1.0,None,Some(false));
@@ -1418,11 +1418,11 @@ fn island_position_drag_lifts_on_hold_glides_smoothly_and_snaps_to_center(){
     let mut h=H::new();h.app.settings.island_offset=-30;h.app.settings.save();
     let start=island_drag_header(&mut h,bounds,1.0);
     island_drag_frame(&mut h,bounds,1.0,Some(start),Some(true));
-    // 原地按住片刻即拿起：面板开始收起，位置不变。
+    // 原地按住片刻即拿起：面板開始收起，位置不變。
     for _ in 0..20{island_drag_frame(&mut h,bounds,1.0,Some(start),None);}
     assert!(!h.app.open && h.app.progress()<0.5,"按住不動也應拿起島體");
     assert_eq!(h.app.settings.island_offset,-30);
-    // 窗口平滑跟随：一帧跳过去的光标，窗口要分几帧追上，且不按整数刻度跳。
+    // 視窗平滑跟隨：一幀跳過去的游標，視窗要分幾幀追上，且不按整數刻度跳。
     let travel=1920.0/2.0-crate::display_layout::ISLAND_HALF_EXTENT;
     let to=|units:f32|Pos2::new(start.x+(units+30.0)/100.0*travel,start.y);
     island_drag_frame(&mut h,bounds,1.0,Some(to(-10.0)),None);
@@ -1431,14 +1431,14 @@ fn island_position_drag_lifts_on_hold_glides_smoothly_and_snaps_to_center(){
     assert!(mid> -0.30 && mid< -0.10,"視窗應在途中，而不是瞬間到位：{mid}");
     for _ in 0..40{island_drag_frame(&mut h,bounds,1.0,Some(to(-10.0)),None);}
     assert!((h.app.placement_offset()+0.10).abs()<0.003,"持有後應追上游標");
-    // 居中附近吸附，离开吸附范围后恢复跟随。
+    // 居中附近吸附，離開吸附範圍後恢復跟隨。
     assert!(h.app.center_guide>0.2 && h.app.center_guide<0.9 && h.app.center_lock_a<0.05,"接近居中時準線漸顯，但還沒點亮：{}",h.app.center_guide);
     island_drag_frame(&mut h,bounds,1.0,Some(to(2.0)),None);
     assert_eq!(h.app.settings.island_offset,0,"靠近居中應吸附");
     assert!(h.app.center_locked,"吸附後應標記為已居中");
     for _ in 0..30{island_drag_frame(&mut h,bounds,1.0,Some(to(2.0)),None);}
     assert!(h.app.center_guide>0.9 && h.app.center_lock_a>0.9,"居中時準線應清晰可見並切換為已居中配色");
-    // 吸住后有滞回：稍微拖出一点仍停在中间，拖得更远才松开。
+    // 吸住後有滯回：稍微拖出一點仍停在中間，拖得更遠才鬆開。
     island_drag_frame(&mut h,bounds,1.0,Some(to(7.0)),None);
     assert_eq!(h.app.settings.island_offset,0,"居中後輕微偏移不應鬆開");
     island_drag_frame(&mut h,bounds,1.0,Some(to(12.0)),None);
@@ -1585,10 +1585,10 @@ fn web_video_is_hidden_without_changing_music_preferences(){
     let (tx,rx)=std::sync::mpsc::channel();h.app.ly.rx=Some(rx);
     h.media=crate::smtc::NowPlaying{title:"小唐的Token的抖音 - 抖音".into(),playing:true,duration:17.0,..Default::default()};
     h.frame(vec![]);
-    assert!(h.app.media.title.is_empty() && !h.app.media.playing,"视频标题和播放状态不应进入岛内音乐页面");
-    assert!(h.app.ly.key.is_empty(),"视频不应建立歌曲取词任务");
-    assert!(h.app.ly.lyrics.is_none() && h.app.ly.error.is_none(),"切到视频应清除上一首歌词和歌词错误");
-    assert!(tx.send(Ok(crate::lyrics::parse_lrc("[00:01.00]late song"))).is_err(),"视频不能接收旧歌曲迟到的查询结果");
+    assert!(h.app.media.title.is_empty() && !h.app.media.playing,"影片標題和播放狀態不應進入島內音樂頁面");
+    assert!(h.app.ly.key.is_empty(),"影片不應建立歌曲取詞任務");
+    assert!(h.app.ly.lyrics.is_none() && h.app.ly.error.is_none(),"切到影片應清除上一首歌詞和歌詞錯誤");
+    assert!(tx.send(Ok(crate::lyrics::parse_lrc("[00:01.00]late song"))).is_err(),"影片不能接收舊歌曲遲到的查詢結果");
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
     h.click(H::local(74.0,118.0));
     assert!(h.app.show_lyrics,"影片頁面的標籤不應切換使用者的歌曲歌詞偏好");
@@ -2257,7 +2257,7 @@ fn music_lyrics_keep_syncing_when_only_the_collapsed_lyrics_are_enabled() {
     h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:7.0,duration:120.0,playing:true,..Default::default()};
     let (tx,rx)=std::sync::mpsc::channel();
     h.app.ly.key="Track|Artist|120".into();h.app.ly.loading=true;h.app.ly.rx=Some(rx);
-    tx.send(Ok(crate::lyrics::parse_lrc("[00:05]当前歌词\n[00:10]下一句"))).unwrap();
+    tx.send(Ok(crate::lyrics::parse_lrc("[00:05]當前歌詞\n[00:10]下一句"))).unwrap();
     h.frame(vec![]);
     assert!(!h.app.ly.loading);
     assert_eq!(h.app.island_lyric().map(|(_,line)|line),Some("當前歌詞"));
@@ -3756,7 +3756,7 @@ fn mascot_atlas_respects_visibility_and_skin_switches(){
                 egui::Shape::Mesh(mesh) if mesh.texture_id==atlas=>Some(mesh),_=>None,
             }).expect("新表情應畫在常駐島上");
             assert!(h.region.contains_rect(drawn.calc_bounds()),"新表情不能撐出島體");
-            // 每个表情单独一张序列图：横向铺满整张，纹理只有一列大小。
+            // 每個表情單獨一張序列圖：橫向鋪滿整張，紋理只有一列大小。
             assert!(drawn.vertices[0].uv.x.abs()<0.001);
             assert_eq!(h.ctx.tex_manager().read().meta(atlas).unwrap().size,[144,1440],"只保留正在播放的表情");
         }
@@ -3801,7 +3801,7 @@ fn mascot_integrated_expression_gallery(){
 #[test]
 #[cfg(feature="cn-messengers")]
 fn minimal_island_hides_messenger_notices_until_expanded(){
-    // 群友截图：极简刘海下来电 / 新消息后，细线变成带微信图标的方块。极简刘海照常弹横幅，收起后只留细线，未读不常挂。
+    // 群友截圖：極簡劉海下來電 / 新訊息後，細線變成帶微信圖示的方塊。極簡劉海照常彈橫幅，收起後只留細線，未讀不常掛。
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     use crate::app::Messenger;
     for (source,shape) in [(Messenger::Wechat,crate::model::IslandShape::Notch),(Messenger::Wechat,crate::model::IslandShape::Pill),(Messenger::Qq,crate::model::IslandShape::Pill)] {
@@ -3811,9 +3811,9 @@ fn minimal_island_hides_messenger_notices_until_expanded(){
         let idle=h.region;
         match source {
             Messenger::Wechat=>h.app.receive_wechat_reminder_from(4242,0x1234),
-            Messenger::Qq=>h.app.receive_notification("QQ".into(),"QQ".into(),"QQ · 新消息".into()),
+            Messenger::Qq=>h.app.receive_notification("QQ".into(),"QQ".into(),"QQ · 新訊息".into()),
             Messenger::WeCom|Messenger::Feishu|Messenger::DingTalk=>h.app.receive_messenger_reminder(crate::app::Unread::of(source)),
-            Messenger::Discord=>unreachable!("本测试只覆盖旧版 IM 的极简横幅"),
+            Messenger::Discord=>unreachable!("本測試只覆蓋舊版 IM 的極簡橫幅"),
         }
         for _ in 0..30 {h.frame(vec![]);}
         assert!(h.app.notice.as_ref().and_then(|a|a.messenger())==Some(source),"{source:?} {shape:?}：極簡劉海照常彈橫幅");
@@ -3821,13 +3821,13 @@ fn minimal_island_hides_messenger_notices_until_expanded(){
         assert!(h.app.notice.is_none(),"{source:?}：橫幅按時收起");
         assert_eq!(h.app.pending_messengers.len(),1,"{source:?}：未讀仍要記住");
         assert_eq!(h.region,idle,"{source:?} {shape:?}：收起時仍只有細線");
-        // 鼠标移上去展开：未读胶囊出现在面板旁，可以点。
+        // 滑鼠移上去展開：未讀膠囊出現在面板旁，可以點。
         h.hover(Pos2::new(WIN_W/2.0,2.0),0.8);h.hover(Pos2::new(WIN_W/2.0,40.0),1.0);
         assert!(h.app.open && h.app.progress()>0.9,"{source:?}：懸停應展開");
         assert!(h.app.messenger_appear()>0.9 && h.app.pending_messengers.len()==1,"{source:?}：展開後未讀膠囊在面板旁顯示");
     }
 }
-/// 微信语音来电：响铃期间任务栏持续闪动，按秒渲染岛体，排查样式问题。
+/// 微信語音來電：響鈴期間工作列持續閃動，按秒渲染島體，排查樣式問題。
 #[test]
 #[ignore="生成來電響鈴時的島體逐幀畫面，供人工檢視"]
 fn preview_wechat_call_ringing(){
@@ -3835,7 +3835,7 @@ fn preview_wechat_call_ringing(){
     let dest=std::env::var_os("DAOZAI_CALL_PREVIEW_DIR").map(std::path::PathBuf::from)
         .unwrap_or_else(||std::env::temp_dir().join(format!("daozai-call-preview-{}",std::process::id())));
     std::fs::create_dir_all(&dest).unwrap();
-    // 单条提醒 / 响铃期间反复提醒 / 来电窗口在另一个进程里（被当成第二个账号）。
+    // 單條提醒 / 響鈴期間反覆提醒 / 來電視窗在另一個程序裡（被當成第二個賬號）。
     for (scenario,minimal) in [("single",false),("single",true),("ringing",false),("ringing",true),("twoproc",false),("twoproc",true)] {
         let mode=format!("{scenario}-{}",if minimal{"minimal"}else{"normal"});
         let mut h=H::new();h.app.settings.wechat_notifications=true;h.app.settings.minimal=minimal;
@@ -3906,7 +3906,7 @@ fn water_settings_are_in_the_island_and_editable(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
     h.app.go(2,1.0);h.hover(H::local(300.0,60.0),0.8);h.click(H::local(145.0,110.0));assert_eq!(h.app.page,2);assert_eq!(h.app.subpage,Some(2));assert_eq!(h.app.settings_category,1);
     h.hover(H::local(300.0,60.0),0.8);h.click(H::local(357.0,69.0));assert_eq!(h.app.settings.serving_ml,300);
-    // 标题旁的切换在设置子页同样可用：切到久坐后第一行就是久坐时长，最后一行时段两边共用。
+    // 標題旁的切換在設定子頁同樣可用：切到久坐後第一行就是久坐時長，最後一行時段兩邊共用。
     h.click(H::local(136.0,19.0));assert!(h.app.sit_mode);for _ in 0..40{h.frame(vec![]);}
     h.hover(H::local(300.0,60.0),0.3);h.click(H::local(357.0,47.0));assert_eq!(h.app.settings.sit_minutes,65);
     h.hover(H::local(300.0,60.0),0.3);h.click(H::local(357.0,113.0));assert!(h.app.health_time,"最後一行進入提醒時段二級頁");
@@ -3917,7 +3917,7 @@ fn lunch_break_silences_water_and_sit_reminders(){
     use crate::app::SIT_TITLE;
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.system_idle=Some(0.0);h.frame(vec![]);
-    // 测试时钟固定在 09:41，把午休设成 09:30–10:00。
+    // 測試時鐘固定在 09:41，把午休設成 09:30–10:00。
     h.app.settings.lunch_rest=true;h.app.settings.lunch_start=9*60+30;h.app.settings.lunch_end=10*60;
     h.app.water.remind=true;h.app.last_reminder=h.app.t-2.0*3600.0;h.app.sit_start=h.app.t-2.0*3600.0;
     h.frame(vec![]);assert!(h.app.notice.is_none(),"午休中不應彈喝水或久坐提醒");
@@ -3971,7 +3971,7 @@ fn sit_notice_and_page_buttons_reset_the_timer(){
     h.click_text("知道了");assert!(h.app.notice.is_none());assert!((h.app.sit_due()-h.t-3600.0).abs()<5.0);assert_eq!(h.app.water.drunk_ml,0);
     h.app.alert(SIT_TITLE,"已連續坐了 70 分鐘",2,false);for _ in 0..60 {h.frame(vec![]);}
     h.click_text("起身了");assert!(h.app.notice.is_none());assert_eq!(h.app.sat_minutes(),0);assert_eq!(h.app.water.drunk_ml,0);
-    // 健康页：点「久坐」分段切换，同一位置的主按钮变成「起身了」、开关管久坐；点「喝水」切回
+    // 健康頁：點「久坐」分段切換，同一位置的主按鈕變成「起身了」、開關管久坐；點「喝水」切回
     h.app.sit_start=h.t-30.0*60.0;
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);h.app.go(2,1.0);h.hover(H::local(300.0,60.0),0.8);
     h.click(H::local(124.0,22.0));assert!(h.app.sit_mode);h.hover(H::local(300.0,90.0),0.8);
@@ -4284,7 +4284,7 @@ fn old_and_new_qqmusic_seek_and_hold_the_target_after_release(){
         assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="01:30")),"{source} 拖動中顯示目標時間");
         h.frame(vec![egui::Event::PointerButton{pos:to,button:egui::PointerButton::Primary,pressed:false,modifiers:Default::default()}]);
         assert!(h.cmds.iter().any(|c|matches!(c,crate::app::Cmd::Media(crate::smtc::Transport::Seek(t)) if (*t-90.0).abs()<0.1)),"{source} 鬆手提交跳轉");
-        // 播放器还没回报新位置：松手后仍显示目标时间，不弹回 00:12。
+        // 播放器還沒回報新位置：鬆手後仍顯示目標時間，不彈回 00:12。
         h.frame(vec![]);
         assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="01:30")),"{source} 鬆手後保持目標時間");
         assert!(crate::smtc::is_qqmusic(source));
@@ -4298,7 +4298,7 @@ fn volume_hud_drag_maps_pointer_to_percentage(){
     for _ in 0..60 {h.frame(vec![]);}
     assert!(!h.app.open);
     h.click_notice_badge();
-    // 缩短后的系统音量条仍支持点击和拖动。
+    // 縮短後的系統音量條仍支援點選和拖動。
     let (x0,y)=if h.app.compact_notices(){(WIN_W/2.0+(h.app.current_width()-44.0)/2.0+8.0+crate::app::HUD_TRACK_X,55.0)}else{(WIN_W/2.0-h.app.current_width()/2.0+h.app.pet_space()+crate::app::HUD_TRACK_X,19.0)};
     let press=Pos2::new(x0+52.0,y);
     h.cursor=Some(press);h.frame(vec![egui::Event::PointerMoved(press)]);
@@ -4384,7 +4384,7 @@ fn display_choice_saves_and_keeps_disconnected_selection(){
         let root=h.ctx.run(egui::RawInput{time:Some(time),..Default::default()},|ctx|h.app.settings_ui(ctx,false));let child=output.lock().unwrap().take().unwrap();
         raster.update_textures(&root.textures_delta);raster.update_textures(&child.textures_delta);h.shapes=child.shapes;
     }
-    // 设置页内容超过一屏时先向下滚动，直到目标完整出现在窗口内。
+    // 設定頁內容超過一屏時先向下滾動，直到目標完整出現在視窗內。
     fn reveal(h:&mut H,raster:&mut crate::preview_raster::Raster,label:&str)->Option<Rect>{
         let find=|h:&H|h.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Text(t)if t.galley.text()==label=>Some(t.visual_bounding_rect()),_=>None}).filter(|r|r.bottom()<550.0);
         for _ in 0..20 {
@@ -4602,7 +4602,7 @@ fn lyric_notifications_extend_right_and_keep_the_lyrics_in_place(){
         let label="晚風吹過了山崗";let original=text(&h,label);let right=WIN_W/2.0+h.app.current_width()/2.0;
         h.app.alert("大寫鎖定","已開啟",5,false);
         for _ in 0..60{h.frame(vec![]);assert!(text(&h,label).center().distance(original.center())<0.2,"提示不能擠動或替換原內容");}
-        assert!((h.app.current_width()-(right-WIN_W/2.0)*2.0-44.0).abs()<1.0,"通知圖示占用 44 點寬度");
+        assert!((h.app.current_width()-(right-WIN_W/2.0)*2.0-44.0).abs()<1.0,"通知圖示佔用 44 點寬度");
         assert!(h.region.right()<right+64.0);assert!(!h.app.open);
         h.t+=3.0;for _ in 0..100{h.frame(vec![]);}
         assert!(text(&h,label).center().distance(original.center())<0.2);
@@ -4704,17 +4704,17 @@ fn hud_shrinks_smoothly_after_expiration(){
 #[test]
 fn bluetooth_badge_follows_connect_and_disconnect(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    // 首次扫描已连接的设备，记录但不作为新连接提醒。
+    // 首次掃描已連線的裝置，記錄但不作為新連線提醒。
     h.bt=vec![crate::bt::Device{id:"buds".into(),name:"Buds".into(),battery:Some(80),kind:crate::bt::DeviceKind::Earbuds}];h.frame(vec![]);
     assert!(h.app.notice.is_none());
     assert_eq!(h.app.bt_shown.first().map(|d|d.name.as_str()),Some("Buds"));
-    // 之后断开、再连上，各弹一条 HUD 通知。
+    // 之後斷開、再連上，各彈一條 HUD 通知。
     h.t=20.0;h.bt.clear();h.frame(vec![]);
     assert_eq!(h.app.notice.as_ref().map(|a|a.body.as_str()),Some("Buds · 已斷開"));
     assert!(h.app.bt_shown.is_empty());
     h.t=30.0;h.bt=vec![crate::bt::Device{id:"buds".into(),name:"Buds".into(),battery:Some(80),kind:crate::bt::DeviceKind::Earbuds}];h.frame(vec![]);
     assert_eq!(h.app.notice.as_ref().map(|a|a.body.as_str()),Some("Buds · 電量 80%"));
-    // 没有设备时不留残留状态。
+    // 沒有裝置時不留殘留狀態。
     h.t=40.0;h.bt.clear();h.frame(vec![]);
     assert!(h.app.bt_shown.is_empty()&&h.app.notice.as_ref().is_none_or(|a|a.title!="藍芽裝置"||a.body=="Buds · 已斷開"));
 }
@@ -4947,7 +4947,7 @@ fn calendar_reminder_fires_once_and_dedupes_with_mail() {
     let start = chrono::Local::now().timestamp() + 600;
     let at = "10-30 10:00".to_string();
     let meeting = |title: &str| crate::mail::Meeting { all_day:false, end:None, title: title.into(), start, at: at.clone(), uid: "evt-shared-1".into() };
-    // 邮件里先来一份，日历再来同一个 UID + DTSTART：只弹一次。
+    // 郵件裡先來一份，日曆再來同一個 UID + DTSTART：只彈一次。
     h.app.mail_event(crate::mail::Event::Mail {
         item: crate::mail::Item {
             received_unix: None, account: "a@qq.com".into(),
@@ -4972,7 +4972,7 @@ fn calendar_reminder_fires_once_and_dedupes_with_mail() {
     let hits = h.app.history.iter().filter(|a| a.title == "會議提醒").count();
     assert_eq!(hits, 1, "同一場會只提醒一次");
     assert_eq!(h.app.history.iter().find(|a|a.title=="會議提醒").unwrap().page,7,"會議提醒應指向島內日程頁");
-    // 再同步一次、再过几帧，也不重复。
+    // 再同步一次、再過幾幀，也不重複。
     h.app.calendar_event(crate::calendar::Event::Synced { config:h.app.calendar.config.clone().unwrap(),events: vec![meeting("週會（飛書）")], at: "10-30 09:05".into() });
     h.frame(vec![]);
     assert_eq!(h.app.history.iter().filter(|a| a.title == "會議提醒").count(), 1);
@@ -5026,10 +5026,10 @@ fn mail_hyperlink_click_requests_the_default_browser() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();
     h.app.mail.accounts=vec![crate::mail::Account {custom: None, email:"a@qq.com".into(),provider:crate::mail::Provider::Qq,enabled:true}];
-    h.app.mail.recent=vec![crate::mail::Item {received_unix: None, account:"a@qq.com".into(),from:"產品團隊".into(),subject:"評審文件".into(),time:"09:41".into(),code:None,html: String::new().into(), summary:"請檢視以下文件。".into(),links:vec![crate::mail::Link{label:"檢視文件".into(),url:"https://example.com/review?a=1&b=2".into()}],meeting:None,uid:10}];
+    h.app.mail.recent=vec![crate::mail::Item {received_unix: None, account:"a@qq.com".into(),from:"產品團隊".into(),subject:"評審檔案".into(),time:"09:41".into(),code:None,html: String::new().into(), summary:"請檢視以下檔案。".into(),links:vec![crate::mail::Link{label:"檢視檔案".into(),url:"https://example.com/review?a=1&b=2".into()}],meeting:None,uid:10}];
     h.app.mail.open_uid=Some(("a@qq.com".into(),10));h.app.show_page(5);
     h.hover(H::local(300.0,60.0),1.0);
-    let link=h.shapes.iter().find_map(|shape|match &shape.shape{egui::Shape::Text(text)if text.galley.text().contains("檢視文件")=>Some(text.visual_bounding_rect()),_=>None}).expect("應展示郵件的超連結");
+    let link=h.shapes.iter().find_map(|shape|match &shape.shape{egui::Shape::Text(text)if text.galley.text().contains("檢視檔案")=>Some(text.visual_bounding_rect()),_=>None}).expect("應展示郵件的超連結");
     h.click(link.center());
     assert!(h.cmds.iter().any(|cmd|matches!(cmd,crate::app::Cmd::OpenUrl(url)if url=="https://example.com/review?a=1&b=2")),"點選後應透過預設瀏覽器開啟完整地址");
 }
@@ -5262,7 +5262,7 @@ fn full_mail_reader_keeps_the_entire_body_and_scrolls_independently(){
         h.ctx.set_embed_viewports(true);h.t+=1.0/60.0;
         let out=h.ctx.run(egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,egui::vec2(700.0,620.0))),time:Some(h.t),events,focused:true,..Default::default()},|ctx|h.app.mail_reader_ui(ctx));h.shapes=out.shapes;
     };
-    // 正文按块渲染：视口外的块不生成文字形状，所以「末尾可见」只能滚动到底再断言。
+    // 正文按塊渲染：視口外的塊不生成文字形狀，所以「末尾可見」只能滾動到底再斷言。
     let text_top=|h:&H,needle:&str|h.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Text(t)if t.galley.text()==needle=>Some(t.visual_bounding_rect().top()),_=>None});
     let wheel=|dy:f32|vec![egui::Event::PointerMoved(egui::pos2(350.0,300.0)),egui::Event::MouseWheel{unit:egui::MouseWheelUnit::Point,delta:egui::vec2(0.0,dy),modifiers:Default::default()}];
     render(&mut h,vec![]);render(&mut h,vec![]);
@@ -5943,7 +5943,7 @@ fn settings_theme_follows_system_and_preserves_island_style() {
         });
         for tab in 0..12 {
             h.app.settings_tab=tab;
-            // AI 额度的添加账号表单默认收起，点「＋ 添加账号」才展开；展开后再检查表单行对齐。
+            // AI 額度的新增賬號表單預設收起，點「＋ 新增賬號」才展開；展開後再檢查表單行對齊。
             h.app.quota.connect_open=tab==11;
             for frame in 0..3 {
                 h.ctx.data_mut(|d|d.insert_temp(egui::Id::new("settings-system-theme"),(std::time::Instant::now(),system)));
@@ -6612,7 +6612,7 @@ fn compact_font_atlas_preserves_panel_and_notice_pixels(){
             let reference=draw(16384,page,notice);
             for limit in [4096,2048] {let other=draw(limit,page,notice);
                 let max=reference.iter().zip(&other).map(|(a,b)|a.abs_diff(*b)).max().unwrap_or(0);let count=reference.iter().zip(&other).filter(|(a,b)|a!=b).count();
-                // 图集坐标改变只允许少量通道有 1/255 的浮点采样舍入差异（实测最多约 0.005% 的通道），肉眼不可见。
+                // 圖集座標改變只允許少量通道有 1/255 的浮點取樣舍入差異（實測最多約 0.005% 的通道），肉眼不可見。
                 assert!(max<=1 && count<reference.len()/1000,"圖集上限 {limit} 改變了頁面 {page:?}、通知 {notice} 的畫素：{max}/{count}");}
         }
     }
@@ -6636,7 +6636,7 @@ fn compact_font_atlas_preserves_settings_pixels_at_multiple_scales(){
                 let mut child=output.lock().unwrap().take().unwrap();
                 raster.update_textures(&root.textures_delta);raster.update_textures(&child.textures_delta);
                 if frame==2 {
-                    // 常驻预览读取真实时钟，排除跨分钟变化；固定时钟已由主界面对照覆盖。
+                    // 常駐預覽讀取真實時鐘，排除跨分鐘變化；固定時鐘已由主介面對照覆蓋。
                     if tab==10{child.shapes.retain(|s|!matches!(&s.shape,egui::Shape::Text(t) if t.galley.text().len()==5 && t.galley.text().as_bytes()[2]==b':'));}
                     raster.buf.fill([0.0,0.0,0.0,1.0]);raster.draw(&h.ctx.tessellate(child.shapes,child.pixels_per_point),child.pixels_per_point);
                     let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);result.push(rgba);
@@ -6649,7 +6649,7 @@ fn compact_font_atlas_preserves_settings_pixels_at_multiple_scales(){
         let before=draw(16384,scale);
         for limit in [4096,2048] {let after=draw(limit,scale);
         for (tab,(before,after)) in before.iter().zip(&after).enumerate(){
-            // 图集坐标改变只允许少量通道有 1/255 的浮点采样舍入差异。
+            // 圖集座標改變只允許少量通道有 1/255 的浮點取樣舍入差異。
             let max=before.iter().zip(after).map(|(a,b)|a.abs_diff(*b)).max().unwrap_or(0);
             let count=before.iter().zip(after).filter(|(a,b)|a!=b).count();assert!(max<=1 && count<before.len()/1000,"設定頁 {tab} 在圖集上限 {limit}、縮放 {scale} 下出現可見差異：{max}/{count}");
         }}
@@ -6712,7 +6712,7 @@ fn skin_gallery(){
     let dest=std::path::PathBuf::from(std::env::var_os("DAOZAI_SKIN_PREVIEW_DIR").expect("需指定預覽目錄"));
     std::fs::create_dir_all(&dest).unwrap();
     let (w,hgt)=((crate::app::CANVAS_W*2.0) as usize,(WIN_H*2.0) as usize);
-    // 日落渐变 + 几条城市剪影，用来观察半透明皮肤的通透感。
+    // 日落漸變 + 幾條城市剪影，用來觀察半透明皮膚的通透感。
     let backdrop=|raster:&mut crate::preview_raster::Raster|{
         for y in 0..hgt {for x in 0..w {
             let t=y as f32/hgt as f32;let s=x as f32/w as f32;
@@ -6749,7 +6749,7 @@ fn skin_gallery(){
                 }
                 if frame==119 {
                     backdrop(&mut raster);
-                    // 模拟系统实时模糊：只有岛体轮廓内的背景被模糊（与实机的合成层一致）。
+                    // 模擬系統實時模糊：只有島體輪廓內的背景被模糊（與實機的合成層一致）。
                     if let Some(shapes)=glass {
                         let pieces=crate::app::blur_pieces(&shapes,2.0);
                         let mut blurred=raster.buf.clone();
@@ -6787,7 +6787,7 @@ fn skin_gallery_resident(){
         for shape in crate::model::IslandShape::ALL {
             let mut h=H::new();h.app.settings.skin=skin;h.app.settings.island_shape=shape;h.app.opts.pet_idle=0.0;
             h.quota_accounts(2);h.app.quota.config.colors.insert("preview-0".into(),crate::quota::Accent::Blue);
-            // 岛体收起态
+            // 島體收起態
             let (w,hgt)=((crate::app::CANVAS_W*2.0) as usize,(WIN_H*2.0) as usize);
             let mut raster=crate::preview_raster::Raster::new(w,hgt);
             for frame in 0..90 {
@@ -6806,7 +6806,7 @@ fn skin_gallery_resident(){
                 }
                 raster.free_textures(&output.textures_delta);
             }
-            // 设置页常驻排列预览
+            // 設定頁常駐排列預覽
             let mut raster=crate::preview_raster::Raster::new(1200,300);
             for frame in 0..3 {
                 let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(600.0,150.0))),time:Some(frame as f64),
@@ -7001,7 +7001,7 @@ fn quota_cards_settings_gallery(){
     }
 }
 
-/// 新功能画面：按需导出，检查排版。
+/// 新功能畫面：按需匯出，檢查排版。
 fn feature_raster()->crate::preview_raster::Raster{crate::preview_raster::Raster::new((crate::app::CANVAS_W*2.0) as usize,(WIN_H*2.0) as usize)}
 fn shoot_feature(h:&mut H,raster:&mut crate::preview_raster::Raster,dest:&std::path::Path,name:&str,frames:usize,cursor:Option<Pos2>,today:&str){
     let ppp=2.0;let (w,hgt)=(crate::app::CANVAS_W,WIN_H);
@@ -7032,7 +7032,7 @@ fn shoot_feature(h:&mut H,raster:&mut crate::preview_raster::Raster,dest:&std::p
 fn feature_gallery(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let dest=std::path::PathBuf::from(std::env::var_os("DAOZAI_FEATURE_PREVIEW_DIR").expect("需指定預覽目錄"));std::fs::create_dir_all(&dest).unwrap();
-    let today="2026-11-04";// 周三
+    let today="2026-11-04";// 週三
     let todos=||{
         let mut a=crate::model::TodoItem::new("寫週報");a.repeat=0b001_0000;
         let mut b=crate::model::TodoItem::new("站會");b.repeat=crate::model::REPEAT_WORKDAYS;b.due=Some("2026-11-04 09:30".into());b.done_on=Some("2026-11-04".into());
@@ -7050,7 +7050,7 @@ fn feature_gallery(){
     shoot_feature(&mut h,&mut r,&dest,"todo-picker-0",30,Some(H::local(120.0,60.0)),today);
     h.app.open_task_reminder(3);
     shoot_feature(&mut h,&mut r,&dest,"todo-picker",60,Some(H::local(120.0,60.0)),today);
-    // 剪贴板
+    // 剪貼簿
     let mut h=H::new();let mut r=feature_raster();h.app.show_page(3);h.app.shelf_tab=1;
     shoot_feature(&mut h,&mut r,&dest,"clip-empty",60,Some(H::local(120.0,60.0)),today);
     {let mut hist=h.app.clipboard.lock();hist.items.clear();
@@ -7067,7 +7067,7 @@ fn feature_gallery(){
 }
 
 static SIDE_MUSIC:std::sync::atomic::AtomicBool=std::sync::atomic::AtomicBool::new(false);
-/// 侧边停靠的画面：画布为 SIDE_W × SIDE_H。
+/// 側邊停靠的畫面：畫布為 SIDE_W × SIDE_H。
 fn shoot_side(h:&mut H,raster:&mut crate::preview_raster::Raster,dest:&std::path::Path,name:&str,frames:usize,cursor:Option<Pos2>){
     let ppp=2.0;let (w,hgt)=(crate::side_dock::SIDE_W,crate::side_dock::SIDE_H);
     for f in 0..frames {
@@ -7085,7 +7085,7 @@ fn shoot_side(h:&mut H,raster:&mut crate::preview_raster::Raster,dest:&std::path
             raster.draw(&h.ctx.tessellate(output.shapes,output.pixels_per_point),output.pixels_per_point);
             let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);
             let mut image=image::RgbaImage::from_raw((w*ppp) as u32,(hgt*ppp) as u32,rgba).unwrap();
-            // 画出窗口区域（红）与命中区域（绿）的边框，方便检查。
+            // 畫出視窗區域（紅）與命中區域（綠）的邊框，方便檢查。
             if let Some(out)=out {
                 for (r,color) in [(out.region,image::Rgba([255,80,80,255])),(out.hit,image::Rgba([80,255,120,255]))] {
                     let (x0,y0,x1,y1)=((r.left()*ppp).max(0.0) as u32,(r.top()*ppp).max(0.0) as u32,((r.right()*ppp) as u32).min(image.width()-1),((r.bottom()*ppp) as u32).min(image.height()-1));
@@ -7122,7 +7122,7 @@ fn side_dock_gallery(){
         h.app.alert("待辦到時間了","回覆設計評審意見",4,false);
         shoot_side(&mut h,&mut r,&dest,&format!("side-{tag}-notice"),40,away);
     }
-    // 播放音乐 + 专注中 + 毛玻璃；极简模式；侧边提示。
+    // 播放音樂 + 專注中 + 毛玻璃；極簡模式；側邊提示。
     SIDE_MUSIC.store(true,std::sync::atomic::Ordering::Relaxed);
     let mut h=H::new();let mut r=feature_raster_sized(w,hgt);
     h.app.settings.dock=crate::model::Dock::Left;h.app.settings.skin=crate::model::Skin::GlassDark;
@@ -7141,7 +7141,7 @@ fn side_dock_gallery(){
 }
 fn feature_raster_sized(w:f32,h:f32)->crate::preview_raster::Raster{crate::preview_raster::Raster::new((w*2.0) as usize,(h*2.0) as usize)}
 
-/// 三个环形额度账号，随后显示 WorkBuddy 与 DeepSeek 余额。
+/// 三個環形額度賬號，隨後顯示 WorkBuddy 與 DeepSeek 餘額。
 fn side_quota_fixture(h:&mut H)->(String,String){
     use crate::quota::{Provider,Event};
     h.quota_accounts(3);
@@ -7164,11 +7164,11 @@ fn side_dock_stacks_ai_quota_and_opens_the_account(){
     assert_eq!(items.len(),h.app.quota.config.pinned_indices().len());
     let order:Vec<_>=items.iter().map(|(i,_)|h.app.quota.config.accounts[*i].provider).collect();
     assert!(items.iter().any(|(i,_)|h.app.quota.config.accounts[*i].id==wb),"WorkBuddy 應在豎向額度裡");
-    // 胶囊变长以容纳额度，仍完整留在画布内并竖直居中。
+    // 膠囊變長以容納額度，仍完整留在畫布內並豎直居中。
     let out=side_frame(&mut h,away);
     assert!(out.hit.height()>32.0+38.0*2.0,"{:?} {order:?}",out.hit);
     assert!(out.hit.top()>0.0 && out.hit.bottom()<hgt);
-    // 点击 WorkBuddy 那一项（按竖排顺序算出它的中心）：选中该账号并打开 AI 额度页。
+    // 點選 WorkBuddy 那一項（按豎排順序算出它的中心）：選中該賬號並開啟 AI 額度頁。
     let top=h.app.island_rect(Rect::from_min_size(Pos2::ZERO,Vec2::new(w,hgt)),h.app.w.pos,h.app.h.pos).top();
     let total=h.app.side_bar_len()-14.0;
     let mut y=top+(h.app.h.pos-total)/2.0;
@@ -7299,19 +7299,19 @@ fn side_dock_opens_from_the_edge_and_collapses_back(){
         let mut out=side_frame(&mut h,away);
         for _ in 0..60 {out=side_frame(&mut h,away);}
         assert!(!h.app.open);
-        // 收起：竖向胶囊贴边、竖直居中。
+        // 收起：豎向膠囊貼邊、豎直居中。
         assert!(out.hit.height()>out.hit.width(),"{dock:?} 收起時是豎向：{:?}",out.hit);
         assert!((out.hit.center().y-hgt/2.0).abs()<1.0);
         let edge=if dock==crate::model::Dock::Left{0.5}else{w-0.5};
-        assert!(out.hit.contains(Pos2::new(edge,hgt/2.0)),"{dock:?} 游標推到螢幕邊緣也能命中：{:?}",out.hit);
+        assert!(out.hit.contains(Pos2::new(edge,hgt/2.0)),"{dock:?} 遊標推到螢幕邊緣也能命中：{:?}",out.hit);
         assert!(out.region.contains_rect(out.hit.shrink(0.5)));
-        // 推到边缘停留 → 展开，面板从边缘滑出且完整留在画布内。
+        // 推到邊緣停留 → 展開，面板從邊緣滑出且完整留在畫布內。
         for _ in 0..60 {out=side_frame(&mut h,Some(Pos2::new(edge,hgt/2.0)));}
         assert!(h.app.open && h.app.progress()>0.95,"{dock:?} 應展開");
         assert!(out.hit.width()>crate::app::PW-1.0 && out.hit.height()<200.0,"{:?}",out.hit);
         assert!(Rect::from_min_size(Pos2::ZERO,Vec2::new(w,hgt)).contains_rect(out.region),"區域不能超出畫布：{:?}",out.region);
         if dock==crate::model::Dock::Left {assert!(out.hit.left()<=0.5)} else {assert!(out.hit.right()>=w-0.5)}
-        // 离开 → 收起。
+        // 離開 → 收起。
         for _ in 0..90 {out=side_frame(&mut h,away);}
         assert!(!h.app.open && h.app.progress()<0.05);
         assert!(out.hit.width()<60.0);
@@ -7387,8 +7387,8 @@ fn notification_preview_masks_fullwidth_and_zero_width_codes(){
     }
 }
 
-/// 内存实测：模拟长时间听歌（不断出现新汉字）并浏览各页面，输出进程内存、字形图集和贴图占用。
-/// 运行：DAOZAI_ATLAS=4096 DAOZAI_PPP=1.5 cargo test --lib memory_profile -- --ignored --nocapture --test-threads=1
+/// 記憶體實測：模擬長時間聽歌（不斷出現新漢字）並瀏覽各頁面，輸出程序記憶體、字形圖集和貼圖佔用。
+/// 執行：DAOZAI_ATLAS=4096 DAOZAI_PPP=1.5 cargo test --lib memory_profile -- --ignored --nocapture --test-threads=1
 #[test]
 #[ignore="記憶體實測，按需執行"]
 fn memory_profile_long_listening_session(){
@@ -7396,7 +7396,7 @@ fn memory_profile_long_listening_session(){
     let side:usize=std::env::var("DAOZAI_ATLAS").ok().and_then(|s|s.parse().ok()).unwrap_or(4096);
     let ppp:f32=std::env::var("DAOZAI_PPP").ok().and_then(|s|s.parse().ok()).unwrap_or(1.5);
     let songs:usize=std::env::var("DAOZAI_SONGS").ok().and_then(|s|s.parse().ok()).unwrap_or(120);
-    // 匿名内存≈Windows 的私有内存；文件映射（程序代码、系统字体）可在进程间共享，不计入私有内存。
+    // 匿名記憶體≈Windows 的私有記憶體；檔案對映（程式程式碼、系統字型）可在程序間共享，不計入私有記憶體。
     fn rss()->String{
         let status=std::fs::read_to_string("/proc/self/status").unwrap_or_default();
         let kb=|key:&str|status.lines().find_map(|l|l.strip_prefix(key)?.trim().trim_end_matches(" kB").trim().parse::<f64>().ok()).unwrap_or(0.0)/1024.0;
@@ -7406,10 +7406,10 @@ fn memory_profile_long_listening_session(){
         let [w,hgt]=h.ctx.fonts(|f|f.font_image_size());
         let tex:usize=h.ctx.tex_manager().read().allocated().map(|(_,m)|m.bytes_used()).sum();
         let galleys=h.ctx.fonts(|f|f.num_galleys_in_cache());
-        // 图集在 CPU 端按 f32 存覆盖率，显卡端再按 RGBA 存一份。
+        // 圖集在 CPU 端按 f32 存覆蓋率，顯示卡端再按 RGBA 存一份。
         println!("{label:<16} {} 圖集={w}x{hgt}（CPU≈{:.1}MB）貼圖合計={:.1}MB 文字快取={galleys}",rss(),(w*hgt*4) as f64/1048576.0,tex as f64/1048576.0);
     }
-    println!("{:<16} {}","測試程序基線",rss());
+    println!("{:<16} {}","測試程式基線",rss());
     let mut h=H::new();h.app.settings.island_lyrics=true;h.app.show_lyrics=true;
     println!("{:<16} {}","建立介面後",rss());
     let mut seed=12345u64;let mut next=||{seed=seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);(seed>>33) as u32};
@@ -7428,7 +7428,7 @@ fn memory_profile_long_listening_session(){
     for page in 0..8 {h.app.show_page(page);for _ in 0..20 {run(&mut h,&idle);}}
     report("瀏覽8個頁面後",&h);
     for song in 0..songs {
-        // 常用字约 3000 个：每首歌 40 句、每句 8–12 字，从中随机取，接近真实歌词的用字分布。
+        // 常用字約 3000 個：每首歌 40 句、每句 8–12 字，從中隨機取，接近真實歌詞的用字分佈。
         let lines:Vec<String>=(0..40).map(|_|(0..8+next()%5).map(|_|char::from_u32(0x4E00+next()%3000).unwrap()).collect()).collect();
         let lrc=lines.iter().enumerate().map(|(i,l)|format!("[{:02}:{:02}.00]{l}\n",i*3/60,i*3%60)).collect::<String>();
         let title=format!("測試歌曲{song}");
@@ -7475,7 +7475,7 @@ fn settings_gallery(){
                     raster.draw(&h.ctx.tessellate(child.shapes,child.pixels_per_point),child.pixels_per_point);
                     let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);
                     let image=image::RgbaImage::from_raw((w*scale) as u32,(hgt*scale) as u32,rgba).unwrap();
-                    // 去掉页面下方的空白
+                    // 去掉頁面下方的空白
                     let bg=image.get_pixel(((w-20.0)*scale) as u32,((hgt-5.0)*scale) as u32).0;
                     let mut bottom=image.height()-1;
                     'scan: while bottom>200 { for x in (270*scale as u32)..image.width()-10 { if image.get_pixel(x,bottom).0!=bg {break 'scan;} } bottom-=1; }
@@ -7563,8 +7563,8 @@ fn messenger_window_replacement_removes_stale_banner_targets_without_clearing_ot
         let old=Unread{source,pid:100,window:11};let other=Unread{source,pid:200,window:22};let current=Unread{window:33,..old};
         let receive=|app:&mut App,unread:Unread|match source{
             Messenger::Wechat|Messenger::WeCom|Messenger::Feishu|Messenger::DingTalk=>app.receive_messenger_reminder(unread),
-            Messenger::Qq=>app.receive_notification_from("QQ".into(),"QQ".into(),"有新消息".into(),Some(unread)),
-            Messenger::Discord=>unreachable!("本测试只覆盖旧版 IM"),
+            Messenger::Qq=>app.receive_notification_from("QQ".into(),"QQ".into(),"有新訊息".into(),Some(unread)),
+            Messenger::Discord=>unreachable!("本測試只覆蓋舊版 IM"),
         };
         receive(&mut h.app,old);h.frame(vec![]);receive(&mut h.app,other);receive(&mut h.app,current);
         assert_eq!(h.app.pending_messengers,[current,other]);
@@ -7704,7 +7704,7 @@ fn messenger_notifications_keep_separate_badges_until_the_client_is_viewed(){
     assert!(h.app.notice.is_none());
     let sources=|h:&H|h.app.pending_messengers.iter().map(|u|u.source).collect::<Vec<_>>();
     assert_eq!(sources(&h),[Messenger::Wechat,Messenger::Qq]);
-    // 收起时两条未读叠成一个入口，点它展开面板，再在旁边的胶囊里逐个点开。
+    // 收起時兩條未讀疊成一個入口，點它展開面板，再在旁邊的膠囊裡逐個點開。
     h.frame(vec![]);
     let stack=h.ctx.read_response(egui::Id::new(("card",true,"messenger-stack"))).expect("疊放入口可點選").rect.center();
     h.click(stack);for _ in 0..60{h.frame(vec![]);}
@@ -7771,7 +7771,7 @@ fn messenger_accounts_get_number_tags_and_clear_one_by_one(){
     assert!(h.app.pending_messengers.contains(&Unread::of(Messenger::Qq)),"檢視其他 QQ 不能清除無法歸屬的提醒");
     h.app.discard_unread(Unread::of(Messenger::Qq));
     assert_eq!(h.app.pending_messengers,[Unread{source:Messenger::Wechat,pid:100,window:12}]);
-    // 四个以上：胶囊仍与面板等高，滚轮翻到后面的图标。
+    // 四個以上：膠囊仍與面板等高，滾輪翻到後面的圖示。
     for pid in [300,400,500]{h.app.receive_wechat_reminder_from(pid,0);}
     h.hover(Pos2::new(WIN_W/2.0,12.0),0.2);
     let capsule=rect(&h,"微信");
@@ -7925,7 +7925,7 @@ fn unread_gallery(){
             if n!=3 {shoot_unread(&mut h,&mut r,&dest,&format!("unread-{key}-{n}-collapsed"),60,away);}
             shoot_unread(&mut h,&mut r,&dest,&format!("unread-{key}-{n}-open"),80,Some(near));
         }
-        // 微信多开：两个微信账号；两个微信账号 + QQ。
+        // 微信多開：兩個微信賬號；兩個微信賬號 + QQ。
         for (tag,qq) in [("multi2",false),("multi3",true)]{
             let mut h=H::new();h.app.settings.dock=dock;fill(&mut h,0);
             h.app.receive_wechat_reminder_from(101,0);h.app.receive_wechat_reminder_from(202,0);
@@ -8329,7 +8329,7 @@ fn weather_resident_bar_preview(){
             image::save_buffer(dest.join("weather-bar.png"),&rgba,1280,380,image::ColorType::Rgba8).unwrap();
         }
     }
-    // 设置页「常驻排列」预览：天气徽标有独立位置。换一个 H，避免复用纹理缓存。
+    // 設定頁「常駐排列」預覽：天氣徽標有獨立位置。換一個 H，避免複用紋理快取。
     let mut h=H::new();h.app.settings.pet=false;h.quota_accounts(1);
     h.app.weather.snapshot=Some(crate::weather::Snapshot{condition:None,attributions:vec![],place:"杭州".into(),position:None,auto:false,temp:9.0,feels:Some(5.6),humidity:Some(58),wind:Some(13.9),code:51,day:true,high:Some(15.2),low:Some(6.8),sunrise:Some("06:52".into()),sunset:Some("17:21".into()),sun_times:None,days:vec![],at:chrono::Utc::now().timestamp()});
     let mut raster=crate::preview_raster::Raster::new(1200,300);
@@ -8352,7 +8352,7 @@ fn weather_icons_stay_bright_on_light_skins(){
     let luma=|c:egui::Color32|0.299*c.r() as f32+0.587*c.g() as f32+0.114*c.b() as f32;
     let cloud=egui::Color32::from_rgb(238,242,250);let sun=egui::Color32::from_rgb(255,196,72);
     for palette in [CREAM,GLASS_LIGHT]{
-        // 通用换色会把白云反成深色、把太阳压成暗金；天气图标改用自己的浅色版配色。
+        // 通用換色會把白雲反成深色、把太陽壓成暗金；天氣圖示改用自己的淺色版配色。
         assert!(luma(map_color(cloud,&palette))<90.0);
         assert!(luma(crate::weather_ui::light_tone(cloud,&palette))>190.0,"淺色皮膚下的雲應是淡藍灰");
         let bright=crate::weather_ui::light_tone(sun,&palette);
@@ -8399,7 +8399,7 @@ fn weather_icon_atlas_preview(){
                     tile.text(14.0,125.0,&format!("WMO  {codes}"),8.5,W::Regular,theme::DIM,Align::Left);
                 }
                 c.text(20.0,690.0,"無資料、關閉天氣或極簡模式時不顯示；超過半小時未更新時，溫度轉灰。",10.5,W::Regular,theme::GRAY,Align::Left);
-                // 和岛上一样按图层换色，天气图标登记的浅色配色才会生效。
+                // 和島上一樣按圖層換色，天氣圖示登記的淺色配色才會生效。
                 if let Some(palette)=palette {let layer=ui.layer_id();crate::skin_paint::recolor_layer(ctx,layer,&[(0,crate::skin_paint::shape_count(ctx,layer))],&palette);}
             });});
             raster.update_textures(&output.textures_delta);

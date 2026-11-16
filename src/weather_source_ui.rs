@@ -12,7 +12,7 @@ pub(crate) fn updated_at(at:i64)->String {
     chrono::DateTime::from_timestamp(at,0).map(|d|d.with_timezone(&chrono::Local).format("%m-%d %H:%M").to_string()).unwrap_or_else(||"未取得".into())
 }
 
-/// 來源選項：地域圖標、來源名、短標籤；整張卡片都可點擊。
+/// 來源選項：地域圖示、來源名、短標籤；整張卡片都可點選。
 pub(crate) fn provider_option(ui:&mut egui::Ui,provider:Provider,selected:bool,width:f32)->egui::Response {
     let (rect,response)=ui.allocate_exact_size(egui::vec2(width,66.0),egui::Sense::click());
     let ctx=ui.ctx();let painter=ui.painter();
@@ -45,35 +45,35 @@ pub(crate) fn provider_option(ui:&mut egui::Ui,provider:Provider,selected:bool,w
     }
     let title_size=if width<185.0{11.5}else{13.0};
     painter.text(rect.min+egui::vec2(42.0,20.0),egui::Align2::LEFT_CENTER,title,egui::FontId::proportional(title_size),ui.visuals().text_color());
-    let badge=if overseas{"默认"}else{"授权码"};
+    let badge=if overseas{"預設"}else{"授權碼"};
     let badge_ink=if overseas{ui.visuals().weak_text_color()}else{color(ctx,Color32::from_rgb(255,200,150),Color32::from_rgb(200,140,80))};
     let galley=painter.layout_no_wrap(badge.into(),egui::FontId::proportional(9.0),badge_ink);
     let badge_rect=egui::Rect::from_min_size(egui::pos2(rect.right()-10.0-galley.size().x-10.0,rect.top()+12.0),galley.size()+egui::vec2(10.0,6.0));
     painter.rect_filled(badge_rect,4.0,crate::paint::mix(fill,badge_ink,0.10));painter.galley(badge_rect.min+egui::vec2(5.0,3.0),galley,badge_ink);
     let mut x=rect.left()+42.0;
-    for (label,fee) in [(if overseas{"海外"}else{"台湾"},false),(if overseas{"免费"}else{"免费授权"},true)]{
+    for (label,fee) in [(if overseas{"海外"}else{"臺灣"},false),(if overseas{"免費"}else{"免費授權"},true)]{
         let ink=if fee{color(ctx,Color32::from_rgb(130,211,168),Color32::from_rgb(30,127,79))}else{ui.visuals().weak_text_color()};
         let galley=painter.layout_no_wrap(label.into(),egui::FontId::proportional(10.0),ink);
         let pill=egui::Rect::from_min_size(egui::pos2(x,rect.top()+40.0),galley.size()+egui::vec2(10.0,6.0));
         painter.rect_filled(pill,4.0,crate::paint::mix(fill,ink,if fee{0.10}else{0.06}));painter.galley(pill.min+egui::vec2(5.0,3.0),galley,ink);x=pill.right()+5.0;
     }
     response.widget_info(||egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel,ui.is_enabled(),selected,title));
-    response.on_hover_text(if overseas{"海外源，默认免费使用，无需 Key。"}else{"中央氣象署開放資料：台灣官方氣象資料。需申請免費授權碼，僅支援台灣縣市與鄉鎮。"})
+    response.on_hover_text(if overseas{"海外源，預設免費使用，無需 Key。"}else{"中央氣象署開放資料：臺灣官方氣象資料。需申請免費授權碼，僅支援臺灣縣市與鄉鎮。"})
 }
 
 #[derive(Default)]
 pub(crate) struct State {
     pub selected:Provider,
     pub displayed:Provider,
-    /// 授權碼輸入框內容；測試通過並套用後清空。
+    /// 授權碼輸入框內容；測試透過並套用後清空。
     pub key:String,
     pub message:Option<(&'static str,bool)>,
     pub config:Config,
     pub config_open:bool,
-    /// 已保存在憑證管理器中的授權碼。
+    /// 已儲存在憑證管理器中的授權碼。
     pub client:Option<CwaClient>,
     testing:Option<Receiver<Result<String,CwaError>>>,
-    /// 通過連線測試、等待套用的授權碼。
+    /// 透過連線測試、等待套用的授權碼。
     tested_key:Option<String>,
     test_error:Option<CwaError>,
     pub refreshing:Option<Receiver<Result<Snapshot,CwaError>>>,
@@ -105,9 +105,9 @@ impl State {
         self.invalidate();
         let key=self.key.trim().to_string();
         if key.is_empty(){
-            self.test_error=Some(CwaError::NoKey);self.message=Some(("请先填写授权码。",true));return;
+            self.test_error=Some(CwaError::NoKey);self.message=Some(("請先填寫授權碼。",true));return;
         }
-        if cfg!(test){self.message=Some(("测试模式不发送真实请求。",false));return;}
+        if cfg!(test){self.message=Some(("測試模式不傳送真實請求。",false));return;}
         let county=self.draft_county.clone();
         self.testing=Some(cwa_weather::spawn(move||{CwaClient::new(key.clone()).test(&county)?;Ok(key)}));
     }
@@ -116,14 +116,14 @@ impl State {
         if let Some(result)=self.testing.as_ref().and_then(|rx|rx.try_recv().ok()){
             self.testing=None;
             match result {
-                Ok(key)=>{self.tested_key=Some(key);self.test_error=None;self.message=Some(("授权码验证通过，选择縣市后点「保存并启用」。",false));},
+                Ok(key)=>{self.tested_key=Some(key);self.test_error=None;self.message=Some(("授權碼驗證透過，選擇縣市後點「儲存並啟用」。",false));},
                 Err(e)=>{self.tested_key=None;self.test_error=Some(e);self.message=Some((e.text(),true));},
             }
         }
     }
     /// 取得 CWA 資料的排程判定：有授權碼、有地點、沒有進行中的請求，且距離上次成功或嘗試已夠久。
     pub(crate) fn refresh_due(&self,now:i64,snapshot_at:Option<i64>)->bool {
-        // last_attempt 为 0 表示尚未尝试过，立即取得。
+        // last_attempt 為 0 表示尚未嘗試過，立即取得。
         self.client.is_some()&&self.config.location.is_some()&&self.refreshing.is_none()
             &&(self.last_attempt==0||now-self.last_attempt>=RETRY_SECS)&&snapshot_at.map_or(true,|at|now-at>=REFRESH_SECS)
     }
@@ -134,7 +134,7 @@ impl State {
         let Location{position,county,district,..}=location;
         self.refreshing=Some(cwa_weather::spawn(move||client.fetch_all(&county,&district,position)));
     }
-    /// 手動刷新：不受排程限制，但仍不會與進行中的請求重疊。
+    /// 手動重新整理：不受排程限制，但仍不會與進行中的請求重疊。
     pub(crate) fn refresh_now(&mut self,now:i64){self.last_attempt=0;self.start_refresh(now);}
     pub(crate) fn poll_refresh(&mut self)->Option<Result<Snapshot,CwaError>>{
         let result=self.refreshing.as_ref()?.try_recv().ok()?;
@@ -148,9 +148,9 @@ impl State {
         }else if let Some(error)=self.test_error {
             ("授權碼驗證失敗",error.text(),Color32::from_rgb(69,32,35),Color32::from_rgb(255,235,235))
         }else if self.tested_key.is_some() {
-            ("授權碼驗證通過","CWA API 連線正常。請選擇縣市並點擊「保存並啟用」。",Color32::from_rgb(24,60,44),Color32::from_rgb(228,247,237))
+            ("授權碼驗證透過","CWA API 連線正常。請選擇縣市並點選「儲存並啟用」。",Color32::from_rgb(24,60,44),Color32::from_rgb(228,247,237))
         }else if self.client.is_some() {
-            ("授權碼已安全保存","可直接選擇縣市或鄉鎮，點擊「保存並啟用」。",Color32::from_rgb(24,60,44),Color32::from_rgb(228,247,237))
+            ("授權碼已安全儲存","可直接選擇縣市或鄉鎮，點選「儲存並啟用」。",Color32::from_rgb(24,60,44),Color32::from_rgb(228,247,237))
         }else{return;};
         let ink=if self.test_error.is_some(){color(ui.ctx(),Color32::from_rgb(255,155,155),Color32::from_rgb(174,46,46))}
             else if self.testing.is_some(){color(ui.ctx(),Color32::from_rgb(139,188,255),Color32::from_rgb(36,100,181))}
@@ -163,7 +163,7 @@ impl State {
 }
 
 impl App {
-    /// 套用天氣來源。Open-Meteo 立即切換；CWA 需要授權碼（已保存或剛通過測試）與有效的縣市或鄉鎮。
+    /// 套用天氣來源。Open-Meteo 立即切換；CWA 需要授權碼（已儲存或剛透過測試）與有效的縣市或鄉鎮。
     fn apply_weather_source(&mut self){
         if !self.module_on(WEATHER_PAGE){return;}
         let now=chrono::Utc::now().timestamp();
@@ -172,21 +172,21 @@ impl App {
             let mut config=source.config.clone();config.provider=Provider::OpenMeteo;
             if let Err(e)=config.save(){source.message=Some((e.text(),true));return;}
             source.config=config;source.displayed=Provider::OpenMeteo;source.key.clear();source.invalidate();source.config_open=false;source.refreshing=None;
-            source.message=Some(("已应用，天气与城市列表已切换到所选来源。",false));
+            source.message=Some(("已應用，天氣與城市列表已切換到所選來源。",false));
             self.weather=crate::weather::State::load(&self.settings.weather_city,self.settings.weather_position.as_ref());
             return;
         }
         let Some(location)=weather_provider::cwa_location(&source.draft_county,&source.draft_district)else{
-            source.message=Some(("请选择有效的縣市與鄉鎮。",true));return;
+            source.message=Some(("請選擇有效的縣市與鄉鎮。",true));return;
         };
         if let Some(key)=source.tested_key.take(){
             if weather_provider::store_cwa_key(&key).is_err(){source.message=Some((Error::Storage.text(),true));return;}
             source.client=Some(CwaClient::new(key));
         }
-        if source.client.is_none(){source.message=Some(("请先填写授权码并通过测试。",true));return;}
+        if source.client.is_none(){source.message=Some(("請先填寫授權碼並透過測試。",true));return;}
         let mut config=source.config.clone();config.provider=Provider::Cwa;
         if !config.saved.contains(&location){
-            if config.saved.len()>=crate::weather::MAX_CITIES{source.message=Some(("已保存 5 个城市，请先移除一个再添加。",true));return;}
+            if config.saved.len()>=crate::weather::MAX_CITIES{source.message=Some(("已儲存 5 個城市，請先移除一個再新增。",true));return;}
             config.saved.push(location.clone());
         }
         config.location=Some(location);
@@ -194,10 +194,10 @@ impl App {
         source.config=config;source.displayed=Provider::Cwa;source.key.clear();source.invalidate();source.config_open=false;
         source.refresh_error=None;source.refresh_now(now);
         self.weather.snapshot=None;self.weather.error=None;self.weather.loading=true;
-        self.weather_source.message=Some(("已应用，正在取得中央氣象署天氣资料。",false));
+        self.weather_source.message=Some(("已應用，正在取得中央氣象署天氣資料。",false));
     }
 
-    /// 切換到已保存的 CWA 地點。
+    /// 切換到已儲存的 CWA 地點。
     pub(crate) fn cwa_select_location(&mut self,location:Location){
         if !self.module_on(WEATHER_PAGE){return;}
         let mut config=self.weather_source.config.clone();config.location=Some(location.clone());
@@ -208,13 +208,13 @@ impl App {
         self.weather.snapshot=None;self.weather.error=None;self.weather.loading=true;
     }
 
-    /// 保存目前選擇的縣市／鄉鎮到已保存列表（不啟用）。
+    /// 儲存目前選擇的縣市／鄉鎮到已儲存列表（不啟用）。
     pub(crate) fn cwa_add_city(&mut self){
         if !self.module_on(WEATHER_PAGE){return;}
         let Some(location)=weather_provider::cwa_location(&self.weather_source.draft_county,&self.weather_source.draft_district)else{return;};
         let source=&mut self.weather_source;
-        if source.config.saved.contains(&location){source.message=Some(("这个城市已保存。",false));return;}
-        if source.config.saved.len()>=crate::weather::MAX_CITIES{source.message=Some(("已保存 5 个城市，请先移除一个再添加。",true));return;}
+        if source.config.saved.contains(&location){source.message=Some(("這個城市已儲存。",false));return;}
+        if source.config.saved.len()>=crate::weather::MAX_CITIES{source.message=Some(("已儲存 5 個城市，請先移除一個再新增。",true));return;}
         let mut config=source.config.clone();config.saved.push(location);
         match config.save(){Err(e)=>source.message=Some((e.text(),true)),Ok(())=>{source.config=config;source.message=None;}}
     }
@@ -235,7 +235,7 @@ impl App {
     }
 
     pub(crate) fn weather_source_settings(&mut self,ui:&mut egui::Ui){
-        settings_label(ui,"天气来源");
+        settings_label(ui,"天氣來源");
         settings_card(ui,|ui|{
             let width=(ui.available_width()-ui.spacing().item_spacing.x)/2.0;
             ui.horizontal(|ui|{
@@ -248,57 +248,57 @@ impl App {
                 }
             });
             ui.add_space(5.0);
-            settings_hint(ui,&format!("当前生效：{}{}",self.weather_source.displayed.name(),if self.weather_source.selected!=self.weather_source.displayed{" · 所选来源尚未应用"}else{""}));
+            settings_hint(ui,&format!("當前生效：{}{}",self.weather_source.displayed.name(),if self.weather_source.selected!=self.weather_source.displayed{" · 所選來源尚未應用"}else{""}));
             if self.weather_source.selected==Provider::OpenMeteo {
-                settings_hint(ui,"无需 Key。点击应用后使用 Open-Meteo 自己的城市与定位设置。");
-                if self.weather_source.displayed!=Provider::OpenMeteo&&ui.button("应用 Open-Meteo").clicked(){self.apply_weather_source();}
+                settings_hint(ui,"無需 Key。點選應用後使用 Open-Meteo 自己的城市與定位設定。");
+                if self.weather_source.displayed!=Provider::OpenMeteo&&ui.button("應用 Open-Meteo").clicked(){self.apply_weather_source();}
                 return;
             }
             ui.add_space(4.0);ui.separator();ui.add_space(3.0);
             ui.horizontal_wrapped(|ui|{
-                ui.label(RichText::new("台灣中央氣象署 (CWA OpenData) API 授權碼").strong());
-                if ui.small_button(if self.weather_source.config_open{"收起"}else{"展开"}).clicked(){self.weather_source.config_open=!self.weather_source.config_open;}
-                ui.hyperlink_to("申请授权码",AUTHKEY_URL);
+                ui.label(RichText::new("臺灣中央氣象署 (CWA OpenData) API 授權碼").strong());
+                if ui.small_button(if self.weather_source.config_open{"收起"}else{"展開"}).clicked(){self.weather_source.config_open=!self.weather_source.config_open;}
+                ui.hyperlink_to("申請授權碼",AUTHKEY_URL);
             });
             if !self.weather_source.config_open {self.weather_source.connection_status(ui);}
             if self.weather_source.config_open {
                 ui.add_space(5.0);
-                ui.label(RichText::new("授权码").size(12.0));
-                let hint=if self.weather_source.client.is_some(){"已安全保存；填写新授权码可更换"}else{"在 CWA 开放资料平台申请的授权码"};
+                ui.label(RichText::new("授權碼").size(12.0));
+                let hint=if self.weather_source.client.is_some(){"已安全儲存；填寫新授權碼可更換"}else{"在 CWA 開放資料平臺申請的授權碼"};
                 let key=ui.add(egui::TextEdit::singleline(&mut self.weather_source.key).id_salt("cwa-key").password(true).hint_text(hint).desired_width(f32::INFINITY));
                 if key.changed(){self.weather_source.invalidate();}
                 ui.add_space(5.0);
                 ui.horizontal_wrapped(|ui|{
-                    if ui.add_enabled(self.weather_source.testing.is_none(),egui::Button::new("测试授权码")).clicked(){self.weather_source.test_connection();}
-                    if self.weather_source.testing.is_some(){ui.spinner();ui.label("测试中...");ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));}
+                    if ui.add_enabled(self.weather_source.testing.is_none(),egui::Button::new("測試授權碼")).clicked(){self.weather_source.test_connection();}
+                    if self.weather_source.testing.is_some(){ui.spinner();ui.label("測試中...");ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));}
                     let clearable=self.weather_source.client.is_some()||!self.weather_source.key.is_empty();
-                    if ui.add_enabled(clearable,egui::Button::new("清除本机授权码")).clicked(){
+                    if ui.add_enabled(clearable,egui::Button::new("清除本機授權碼")).clicked(){
                         let clearing_active=self.weather_source.displayed==Provider::Cwa;
                         match weather_provider::delete_cwa_key(){
                             Err(e)=>self.weather_source.message=Some((e.text(),true)),
                             Ok(())=>{
                                 self.weather_source.client=None;self.weather_source.key.clear();self.weather_source.invalidate();
                                 if clearing_active{self.weather_source.selected=Provider::OpenMeteo;self.apply_weather_source();}
-                                self.weather_source.message=Some(("本机授权码已清除。",false));
+                                self.weather_source.message=Some(("本機授權碼已清除。",false));
                             },
                         }
                     }
                 });
                 self.weather_source.connection_status(ui);
-                settings_hint(ui,"授权码只保存在 Windows 凭据管理器，不写入设置文件。CWA 开放资料仅提供台湾地区天气。");
+                settings_hint(ui,"授權碼只儲存在 Windows 憑據管理器，不寫入設定檔案。CWA 開放資料僅提供臺灣地區天氣。");
             }
             if self.weather_source.test_error.is_none() {if let Some((message,error))=self.weather_source.message {ui.add(egui::Label::new(RichText::new(message).size(11.5).color(if error{color(ui.ctx(),Color32::from_rgb(255,137,137),Color32::from_rgb(183,48,48))}else{ui.visuals().weak_text_color()})).wrap());}}
         });
     }
 
-    /// CWA 縣市與鄉鎮選擇、已保存城市列表與來源說明。
+    /// CWA 縣市與鄉鎮選擇、已儲存城市列表與來源說明。
     pub(crate) fn cwa_city_settings(&mut self,ui:&mut egui::Ui){
         let active=self.weather_source.displayed==Provider::Cwa;
         let ready=self.weather_source.client.is_some()||self.weather_source.tested_key.is_some();
         let accent=color(ui.ctx(),Color32::from_rgb(96,164,255),Color32::from_rgb(34,108,220));
         settings_label(ui,"中央氣象署城市");
         settings_card(ui,|ui|{
-            ui.horizontal(|ui|{ui.label(RichText::new("已保存城市").strong());ui.label(RichText::new(format!("{} / 5",self.weather_source.config.saved.len())).color(ui.visuals().weak_text_color()));});
+            ui.horizontal(|ui|{ui.label(RichText::new("已儲存城市").strong());ui.label(RichText::new(format!("{} / 5",self.weather_source.config.saved.len())).color(ui.visuals().weak_text_color()));});
             let saved=self.weather_source.config.saved.clone();let(mut chosen,mut removed)=(None,None);
             for location in saved {
                 let cached=if active{self.weather.snapshot.as_ref().filter(|s|s.position.as_ref()==Some(&location.position))}else{None};
@@ -307,8 +307,8 @@ impl App {
             }
             if let Some(location)=removed{self.cwa_remove_city(&location);}
             else if let Some(location)=chosen {self.cwa_select_location(location);}
-            if self.weather_source.config.saved.is_empty(){settings_hint(ui,"还没有保存城市，选择縣市或鄉鎮后点「添加城市」，最多保存 5 个。");}
-            else {settings_hint(ui,"点击城市即可切换；中央氣象署仅支持手动选择地区。");}
+            if self.weather_source.config.saved.is_empty(){settings_hint(ui,"還沒有儲存城市，選擇縣市或鄉鎮後點「新增城市」，最多儲存 5 個。");}
+            else {settings_hint(ui,"點選城市即可切換；中央氣象署僅支援手動選擇地區。");}
             ui.add_space(7.0);ui.separator();ui.add_space(6.0);
             let counties=cwa_weather::TW_COUNTIES;
             ui.horizontal(|ui|{
@@ -336,18 +336,18 @@ impl App {
             let full=self.weather_source.config.saved.len()>=crate::weather::MAX_CITIES;
             ui.add_space(5.0);
             ui.horizontal_wrapped(|ui|{
-                if ui.add_enabled(draft.is_some()&&!exists&&!full,egui::Button::new("添加城市")).clicked(){self.cwa_add_city();}
-                settings_hint(ui,if exists{"这个城市已保存"}else if full{"已保存 5 个城市，移除一个后可继续添加。"}else{"添加后可随时在上方列表切换。"});
+                if ui.add_enabled(draft.is_some()&&!exists&&!full,egui::Button::new("新增城市")).clicked(){self.cwa_add_city();}
+                settings_hint(ui,if exists{"這個城市已儲存"}else if full{"已儲存 5 個城市，移除一個後可繼續新增。"}else{"新增後可隨時在上方列表切換。"});
             });
-            if let Some(location)=draft.as_ref() {settings_hint(ui,&format!("已选择：{}",location.position.label));}
+            if let Some(location)=draft.as_ref() {settings_hint(ui,&format!("已選擇：{}",location.position.label));}
             ui.add_space(7.0);
-            if ui.add_enabled(ready&&draft.is_some(),egui::Button::new("保存并启用")).clicked(){self.apply_weather_source();}
-            if !ready {settings_hint(ui,"请先在上方填写并测试授权码。");}
+            if ui.add_enabled(ready&&draft.is_some(),egui::Button::new("儲存並啟用")).clicked(){self.apply_weather_source();}
+            if !ready {settings_hint(ui,"請先在上方填寫並測試授權碼。");}
         });
         if active {
             settings_card(ui,|ui|{
-                ui.hyperlink_to("天气数据来自中央氣象署开放资料平台","https://opendata.cwa.gov.tw/");
-                settings_hint(ui,"观测、36 小时与一周预报约每小时刷新。降水概率为每时段或每日较高值。");
+                ui.hyperlink_to("天氣資料來自中央氣象署開放資料平臺","https://opendata.cwa.gov.tw/");
+                settings_hint(ui,"觀測、36 小時與一週預報約每小時重新整理。降水機率為每時段或每日較高值。");
                 let stamp=self.weather.snapshot.as_ref().map_or(0,|s|s.at);
                 settings_hint(ui,&format!("上次更新：{}",updated_at(stamp)));
                 if let Some(e)=self.weather_source.refresh_error {settings_hint(ui,e.text());}
@@ -364,19 +364,19 @@ mod tests {
     #[test]
     fn cwa_refresh_is_hourly_and_retries_failures_after_thirty_minutes(){
         let mut state=State::default();
-        assert!(!state.refresh_due(1_000,None),"没有授权码或地点时不能刷新");
+        assert!(!state.refresh_due(1_000,None),"沒有授權碼或地點時不能重新整理");
         state.client=Some(CwaClient::new("placeholder-key".into()));
         state.config.location=weather_provider::cwa_location("高雄市","三民區");
-        assert!(state.refresh_due(1_000,None),"首次没有数据时应立即取得");
+        assert!(state.refresh_due(1_000,None),"首次沒有資料時應立即取得");
         state.last_attempt=1_000;
-        assert!(!state.refresh_due(1_000+RETRY_SECS-1,None),"失败后 30 分钟内不重试");
+        assert!(!state.refresh_due(1_000+RETRY_SECS-1,None),"失敗後 30 分鐘內不重試");
         assert!(state.refresh_due(1_000+RETRY_SECS,None));
-        // 成功取得的数据：一小时内不重复请求，满一小时后再次取得。
+        // 成功取得的資料：一小時內不重複請求，滿一小時後再次取得。
         state.last_attempt=10_000;
-        assert!(!state.refresh_due(10_000+REFRESH_SECS-1,Some(10_000)),"成功取得后一小时内不重复请求");
+        assert!(!state.refresh_due(10_000+REFRESH_SECS-1,Some(10_000)),"成功取得後一小時內不重複請求");
         assert!(state.refresh_due(10_000+REFRESH_SECS,Some(10_000)));
         state.refreshing=Some(mpsc::channel().1);
-        assert!(!state.refresh_due(10*REFRESH_SECS,Some(0)),"进行中的请求不能重叠");
+        assert!(!state.refresh_due(10*REFRESH_SECS,Some(0)),"進行中的請求不能重疊");
     }
 
     #[test]
@@ -385,7 +385,7 @@ mod tests {
         state.key="   ".into();state.test_connection();
         assert_eq!(state.test_error,Some(CwaError::NoKey));
         assert!(state.testing.is_none());
-        assert_eq!(state.message,Some(("请先填写授权码。",true)));
+        assert_eq!(state.message,Some(("請先填寫授權碼。",true)));
     }
 
     #[test]
@@ -395,7 +395,7 @@ mod tests {
         tx.send(Ok("placeholder-key".to_string())).unwrap();
         state.poll(true);
         assert_eq!(state.tested_key.as_deref(),Some("placeholder-key"));
-        assert!(state.client.is_none(),"未套用前不能写入凭据或启用来源");
+        assert!(state.client.is_none(),"未套用前不能寫入憑據或啟用來源");
         let (tx,rx)=mpsc::channel();state.testing=Some(rx);
         tx.send(Err(CwaError::InvalidKey)).unwrap();
         state.poll(true);
@@ -421,6 +421,6 @@ mod tests {
         assert_eq!((location.county.as_str(),location.district.as_str()),("臺南市","仁德區"));
         let county_only=weather_provider::cwa_location("高雄市","").unwrap();
         assert_eq!(county_only.position.label,"高雄市");
-        assert!(county_only.valid(),"CWA 地点需要能通过设定读取的有效性检查");
+        assert!(county_only.valid(),"CWA 地點需要能透過設定讀取的有效性檢查");
     }
 }

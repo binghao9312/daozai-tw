@@ -1,4 +1,4 @@
-//! 台灣中央氣象署 (CWA) 開放資料平台 API 客戶端
+//! 臺灣中央氣象署 (CWA) 開放資料平臺 API 客戶端
 //! 支援：一般天氣預報-今明 36 小時 (F-C0032-001)、現在天氣觀測 (O-A0003-001)、鄉鎮未來 1 週 (F-D0047-091)
 //! 授權碼只進 Windows 憑證管理器；網路呼叫與 JSON 解析分開，解析可用固定樣本單元測試。
 
@@ -20,14 +20,14 @@ const DATASET_WEEK: &str = "F-D0047-091"; // 鄉鎮未來 1 週天氣預報
 /// 觀測資料缺值標記（CWA 以 -99、-998 表示無資料）。
 const MISSING_VALUES: [f32; 2] = [-99.0, -998.0];
 
-/// CWA 錯誤類型
+/// CWA 錯誤型別
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CwaError {
     /// 未設定授權碼
     NoKey,
     /// 授權碼無效
     InvalidKey,
-    /// 請求參數無效
+    /// 請求引數無效
     InvalidParam,
     /// 請求頻率超限
     RateLimited,
@@ -37,7 +37,7 @@ pub enum CwaError {
     Network,
     /// 回應格式錯誤
     InvalidResponse,
-    /// 非台灣地區
+    /// 非臺灣地區
     OutOfRegion,
     /// 已停用
     Disabled,
@@ -49,12 +49,12 @@ impl CwaError {
         match self {
             CwaError::NoKey => "尚未設定 CWA 授權碼",
             CwaError::InvalidKey => "CWA 授權碼無效",
-            CwaError::InvalidParam => "請求參數無效",
+            CwaError::InvalidParam => "請求引數無效",
             CwaError::RateLimited => "請求過於頻繁，請稍後再試",
             CwaError::QuotaExceeded => "月度額度已用盡",
             CwaError::Network => "網路連線失敗",
             CwaError::InvalidResponse => "伺服器回應格式異常",
-            CwaError::OutOfRegion => "CWA 僅提供台灣地區天氣資料",
+            CwaError::OutOfRegion => "CWA 僅提供臺灣地區天氣資料",
             CwaError::Disabled => "CWA 天氣來源已停用",
         }
     }
@@ -217,9 +217,9 @@ pub struct DailyForecast {
     pub max_temp: Option<f32>,
 }
 
-// ---- 台灣縣市與鄉鎮 ----
+// ---- 臺灣縣市與鄉鎮 ----
 
-/// 台灣 22 縣市（CWA 標準名稱）
+/// 臺灣 22 縣市（CWA 標準名稱）
 pub const TW_COUNTIES: [&str; 22] = [
     "高雄市", "臺南市", "臺北市", "新北市", "桃園市", "臺中市",
     "基隆市", "新竹市", "嘉義市", "新竹縣", "苗栗縣", "彰化縣",
@@ -231,7 +231,7 @@ pub const TW_COUNTIES: [&str; 22] = [
 const TW_DISTRICTS: [(&str, &[&str]); 3] = [
     ("臺北市", &["中正區", "大同區", "中山區", "松山區", "大安區", "萬華區", "信義區", "士林區", "北投區", "內湖區", "南港區", "文山區"]),
     ("臺南市", &["中西區", "東區", "南區", "北區", "安平區", "安南區", "永康區", "歸仁區", "新化區", "左鎮區", "玉井區", "楠西區", "南化區", "仁德區", "關廟區", "龍崎區", "官田區", "麻豆區", "佳里區", "西港區", "七股區", "將軍區", "學甲區", "北門區", "新營區", "後壁區", "白河區", "東山區", "六甲區", "下營區", "柳營區", "鹽水區", "善化區", "大內區", "山上區", "新市區", "安定區"]),
-    ("高雄市", &["新興區", "前金區", "苓雅區", "鹽埕區", "鼓山區", "旗津區", "前鎮區", "三民區", "楠梓區", "小港區", "左營區", "仁武區", "大社區", "岡山區", "路竹區", "阿蓮區", "田寮區", "燕巢區", "橋頭區", "梓官區", "彌陀區", "永安區", "湖內區", "鳳山區", "大寮區", "林園區", "鳥松區", "大樹區", "旗山區", "美濃區", "六龜區", "內門區", "杉林區", "甲仙區", "桃源區", "那瑪夏區", "茂林區", "茄萣區"]),
+    ("高雄市", &["新興區", "前金區", "苓雅區", "鹽埕區", "鼓山區", "旗津區", "前鎮區", "三民區", "楠梓區", "小港區", "左營區", "仁武區", "大社群", "岡山區", "路竹區", "阿蓮區", "田寮區", "燕巢區", "橋頭區", "梓官區", "彌陀區", "永安區", "湖內區", "鳳山區", "大寮區", "林園區", "鳥松區", "大樹區", "旗山區", "美濃區", "六龜區", "內門區", "杉林區", "甲仙區", "桃源區", "那瑪夏區", "茂林區", "茄萣區"]),
 ];
 
 /// 鄉鎮選單（沒有資料時為空，表示只使用縣市級預報）。
@@ -246,9 +246,9 @@ pub fn area_label(county: &str, district: &str) -> String {
     if district.trim().is_empty() { county } else { format!("{county}{}", district.trim()) }
 }
 
-/// 正規化台灣縣市名稱（台 -> 臺，簡稱補上「市」或「縣」）。
+/// 正規化臺灣縣市名稱（臺 -> 臺，簡稱補上「市」或「縣」）。
 pub fn normalize_tw_city_name(input: &str) -> String {
-    let trimmed = input.trim().replace('台', "臺");
+    let trimmed = input.trim().replace('臺', "臺");
     match trimmed.as_str() {
         "高雄" => "高雄市".to_string(),
         "臺南" => "臺南市".to_string(),
@@ -302,7 +302,7 @@ pub fn get_county_position(county: &str) -> Option<Position> {
         "連江縣" => (26.1582, 119.9397),
         _ => return None,
     };
-    Some(Position { lat, lon, label: normalized, region: "台灣".into() })
+    Some(Position { lat, lon, label: normalized, region: "臺灣".into() })
 }
 
 // ---- 解析 ----
@@ -333,7 +333,7 @@ pub(crate) fn parse_36hr_forecast(records: &Forecast36hrRecords) -> Vec<Parsed36
                 let entry = periods.entry((slot.start_time.clone(), slot.end_time.clone())).or_insert(ForecastPeriod {
                     start_time: start, end_time: end, weather: None, pop: None, min_temp: None, max_temp: None, comfort: None,
                 });
-                // 数值可能只出现在 parameterName 中，因此 parameterValue 缺失时退回名称。
+                // 數值可能只出現在 parameterName 中，因此 parameterValue 缺失時退回名稱。
                 let raw = slot.parameter.parameter_value.as_deref().unwrap_or(&slot.parameter.parameter_name);
                 let value = raw.trim().parse::<f32>().ok();
                 match elem.element_name.as_str() {
@@ -415,7 +415,7 @@ fn parse_cwa_date(s: &str) -> Option<NaiveDate> {
     NaiveDate::parse_from_str(s.get(..10)?, "%Y-%m-%d").ok()
 }
 
-/// 將 CWA 天氣現象文字對應到 WMO 代碼（與 Open-Meteo 的圖示共用）。
+/// 將 CWA 天氣現象文字對應到 WMO 程式碼（與 Open-Meteo 的圖示共用）。
 pub fn cwa_weather_to_wmo_code(text: Option<&str>) -> u8 {
     let text = text.unwrap_or("");
     match text {
@@ -455,7 +455,7 @@ fn build_snapshot_at(
             obs.temperature.unwrap_or(25.0),
             obs.weather_desc.clone().unwrap_or_else(|| "不明".to_string()),
             cwa_weather_to_wmo_code(obs.weather_desc.as_deref()),
-            // O-A0003-001 的 HUMD 多为小数（0.71 = 71%），个别资料集以百分比表示，两者都接受。
+            // O-A0003-001 的 HUMD 多為小數（0.71 = 71%），個別資料集以百分比表示，兩者都接受。
             obs.humidity.map(|h| if h <= 1.0 { (h * 100.0).round() as u32 } else { h.round() as u32 }),
             obs.wind_speed,
         )
@@ -511,7 +511,7 @@ fn build_snapshot_at(
 
     Snapshot {
         condition: Some(current_condition),
-        attributions: vec!["資料來源：中央氣象署開放資料平台".into()],
+        attributions: vec!["資料來源：中央氣象署開放資料平臺".into()],
         place: position.label.clone(),
         position: Some(position),
         auto: false,
@@ -717,12 +717,12 @@ mod tests {
         let now = Local.with_ymd_and_hms(2026, 11, 16, 14, 0, 0).unwrap();
         let snapshot = build_snapshot_at(&forecast, None, None, position(), now);
         assert!(!snapshot.days.is_empty());
-        assert_eq!(snapshot.temp, 28.0, "无观测时以 36 小时第一个时段代替");
+        assert_eq!(snapshot.temp, 28.0, "無觀測時以 36 小時第一個時段代替");
     }
 
     #[test]
     fn city_names_normalize_to_cwa_standard_and_cover_all_twenty_two_counties() {
-        assert_eq!(normalize_tw_city_name("台南"), "臺南市");
+        assert_eq!(normalize_tw_city_name("臺南"), "臺南市");
         assert_eq!(normalize_tw_city_name(" 高雄 "), "高雄市");
         assert_eq!(normalize_tw_city_name("臺東"), "臺東縣");
         assert_eq!(TW_COUNTIES.len(), 22);

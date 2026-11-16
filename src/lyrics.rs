@@ -88,7 +88,7 @@ pub enum FetchError {
 impl FetchError {
     pub fn label(&self)->&'static str {
         match self {
-            Self::Unavailable(_)=>"暂未获取歌词，请重试",
+            Self::Unavailable(_)=>"暫未獲取歌詞，請重試",
             Self::NotFound=>"未找到匹配歌词",
             Self::InvalidResponse(_)=>"歌词响应异常",
             Self::IncompleteMetadata=>"播放器未提供完整歌曲信息",

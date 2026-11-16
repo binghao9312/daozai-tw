@@ -1,5 +1,5 @@
-//! 天氣來源設定：Open-Meteo（免金鑰，預設）與台灣中央氣象署 (CWA)。
-//! 授權碼只保存在 Windows 憑證管理器；設定檔只記錄來源與縣市、鄉鎮。
+//! 天氣來源設定：Open-Meteo（免金鑰，預設）與臺灣中央氣象署 (CWA)。
+//! 授權碼只儲存在 Windows 憑證管理器；設定檔只記錄來源與縣市、鄉鎮。
 use crate::weather::Position;
 use serde::{Deserialize, Serialize};
 
@@ -70,10 +70,10 @@ impl Config {
             .ok()
             .and_then(|b| serde_json::from_slice::<Self>(&b).ok())
             .map(|mut c| {
-                // 旧版和风城市的时区与地区不属于台湾来源，直接丢弃。
-                c.saved.retain(|l| l.valid() && l.position.region == "台灣");
+                // 舊版和風城市的時區與地區不屬於臺灣來源，直接丟棄。
+                c.saved.retain(|l| l.valid() && l.position.region == "臺灣");
                 c.saved.truncate(crate::weather::MAX_CITIES);
-                if !c.location.as_ref().is_some_and(|l| l.valid() && l.position.region == "台灣") {
+                if !c.location.as_ref().is_some_and(|l| l.valid() && l.position.region == "臺灣") {
                     c.location = None;
                 }
                 c
@@ -98,7 +98,7 @@ pub(crate) enum Error {
 impl Error {
     pub fn text(self) -> &'static str {
         match self {
-            Self::Storage => "无法安全保存天气设置，请检查 Windows 凭据管理器后重试。",
+            Self::Storage => "無法安全儲存天氣設定，請檢查 Windows 憑據管理器後重試。",
         }
     }
 }
@@ -125,7 +125,7 @@ mod keystore {
 }
 #[cfg(any(not(windows), test))]
 mod keystore {
-    // 非 Windows 与测试环境不接触真实凭据库；测试通过 CwaClient 直接注入授权碼。
+    // 非 Windows 與測試環境不接觸真實憑據庫；測試透過 CwaClient 直接注入授權碼。
     pub fn store(_key: &str) -> bool {
         cfg!(test)
     }
@@ -137,15 +137,15 @@ mod keystore {
     }
 }
 
-/// 保存 CWA 授權碼到 Windows 憑證管理器。
+/// 儲存 CWA 授權碼到 Windows 憑證管理器。
 pub(crate) fn store_cwa_key(key: &str) -> Result<(), Error> {
     if keystore::store(key.trim()) { Ok(()) } else { Err(Error::Storage) }
 }
-/// 讀取已保存的 CWA 授權碼；沒有或無法讀取時為 None。
+/// 讀取已儲存的 CWA 授權碼；沒有或無法讀取時為 None。
 pub(crate) fn load_cwa_key() -> Option<String> {
     keystore::load()
 }
-/// 清除已保存的 CWA 授權碼。
+/// 清除已儲存的 CWA 授權碼。
 pub(crate) fn delete_cwa_key() -> Result<(), Error> {
     if keystore::delete() { Ok(()) } else { Err(Error::Storage) }
 }
