@@ -11,10 +11,10 @@ pub(crate) const CURRENT_INTERVAL:i64=3600;
 pub(crate) const DAILY_INTERVAL:i64=21600;
 
 #[derive(Clone,Copy,Default,PartialEq,Eq,Serialize,Deserialize)]
-pub(crate) enum Provider {#[default] OpenMeteo,Qweather}
+pub(crate) enum Provider {#[default] OpenMeteo,Qweather,Cwa}
 impl Provider {
-    pub fn name(self)->&'static str {match self {Self::OpenMeteo=>"Open-Meteo",Self::Qweather=>"和风天气"}}
-    pub fn url(self)->&'static str {match self {Self::OpenMeteo=>"https://open-meteo.com/",Self::Qweather=>"https://www.qweather.com/"}}
+    pub fn name(self)->&'static str {match self {Self::OpenMeteo=>"Open-Meteo",Self::Qweather=>"和风天气",Self::Cwa=>"中央氣象署 (CWA)"}}
+    pub fn url(self)->&'static str {match self {Self::OpenMeteo=>"https://open-meteo.com/",Self::Qweather=>"https://www.qweather.com/",Self::Cwa=>"https://opendata.cwa.gov.tw/"}}
 }
 
 #[derive(Clone,PartialEq,Serialize,Deserialize)]
@@ -23,12 +23,41 @@ impl Location {pub fn valid(&self)->bool {self.position.valid()&&self.timezone.p
 pub(crate) struct Search {pub locations:Vec<Location>,pub credits:Vec<String>}
 
 #[derive(Clone,Default,Serialize,Deserialize)]
-pub(crate) struct Config {pub provider:Provider,pub host:String,#[serde(default)]pub credential:String,pub location:Option<Location>,pub saved:Vec<Location>}
-impl Config {
-    pub fn load()->Self {std::fs::read(crate::model::config_dir().join("weather-provider.json")).ok().and_then(|b|serde_json::from_slice::<Self>(&b).ok()).map(|mut c|{c.saved.retain(Location::valid);c.saved.truncate(crate::weather::MAX_CITIES);if !c.location.as_ref().is_some_and(Location::valid){c.location=None;}c}).unwrap_or_default()}
-    pub fn save(&self)->Result<(),Error> {let dir=crate::model::config_dir();std::fs::create_dir_all(&dir).map_err(|_|Error::Storage)?;crate::model::atomic_write(&dir.join("weather-provider.json"),&serde_json::to_vec(self).map_err(|_|Error::Storage)?).map_err(|_|Error::Storage)}
+pub(crate) struct Config {
+    pub provider: Provider,
+    /// QWeather API Host (專用域名)
+    pub host: String,
+    /// QWeather API Key / CWA 授權碼
+    #[serde(default)]
+    pub credential: String,
+    pub location: Option<Location>,
+    pub saved: Vec<Location>,
 }
-
+impl Config {
+    pub fn load() -> Self {
+        std::fs::read(crate::model::config_dir().join("weather-provider.json"))
+            .ok()
+            .and_then(|b| serde_json::from_slice::<Self>(&b).ok())
+            .map(|mut c| {
+                c.saved.retain(Location::valid);
+                c.saved.truncate(crate::weather::MAX_CITIES);
+                if !c.location.as_ref().is_some_and(Location::valid) {
+                    c.location = None;
+                }
+                c
+            })
+            .unwrap_or_default()
+    }
+    pub fn save(&self) -> Result<(), Error> {
+        let dir = crate::model::config_dir();
+        std::fs::create_dir_all(&dir).map_err(|_| Error::Storage)?;
+        crate::model::atomic_write(
+            &dir.join("weather-provider.json"),
+            &serde_json::to_vec(self).map_err(|_| Error::Storage)?,
+        )
+        .map_err(|_| Error::Storage)
+    }
+}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub(crate) enum Error {Invalid,Auth,Rate,Limit,Network,Response,Storage,Disabled}
 impl Error {

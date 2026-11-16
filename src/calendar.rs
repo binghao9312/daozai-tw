@@ -29,22 +29,24 @@ const WINDOW_SECS: i64 = 24 * 3600;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Provider {
     #[default]
+    Google,
+    /// 蘋果 iCloud 日曆：Apple ID + App 專用密碼。
+    ICloud,
+    /// 任意 CalDAV 服務（Nextcloud、群暉、Fastmail、Radicale 等）或 iCal (.ics) 私密網址。
+    Custom,
+    /// 自建或第三方 Exchange（ActiveSync）。
+    Exchange,
     Feishu,
     DingTalk,
     WeCom,
-    /// 苹果 iCloud 日历：Apple ID + App 专用密码。
-    ICloud,
-    /// 任意 CalDAV 服务（Nextcloud、群晖、Fastmail、Radicale 等），地址由用户填写。
-    Custom,
-    /// 自建或第三方 Exchange（ActiveSync），地址由用户填写；与企业微信共用同一套只读客户端。
-    Exchange,
 }
 
 impl Provider {
-    pub const ALL: [Provider; 6] = [Provider::Feishu, Provider::DingTalk, Provider::WeCom, Provider::ICloud, Provider::Custom, Provider::Exchange];
+    pub const ALL: [Provider; 4] = [Provider::Google, Provider::ICloud, Provider::Custom, Provider::Exchange];
 
     pub fn key(self) -> &'static str {
         match self {
+            Provider::Google => "google",
             Provider::Feishu => "feishu",
             Provider::DingTalk => "dingtalk",
             Provider::WeCom => "wecom",
@@ -56,11 +58,12 @@ impl Provider {
 
     pub fn label(self) -> &'static str {
         match self {
-            Provider::Feishu => "飞书",
-            Provider::DingTalk => "钉钉",
-            Provider::WeCom => "企业微信",
+            Provider::Google => "Google 日曆",
+            Provider::Feishu => "飛書",
+            Provider::DingTalk => "釘釘",
+            Provider::WeCom => "企業微信",
             Provider::ICloud => "iCloud",
-            Provider::Custom => "CalDAV",
+            Provider::Custom => "CalDAV / iCal",
             Provider::Exchange => "Exchange",
         }
     }
@@ -68,6 +71,7 @@ impl Provider {
     /// 平台同步入口，界面上只读显示。
     pub fn server(self) -> &'static str {
         match self {
+            Provider::Google => "https://apidata.googleusercontent.com/caldav/v2/",
             Provider::Feishu => "https://caldav.feishu.cn/calendars/",
             Provider::DingTalk => "https://calendar.dingtalk.com",
             Provider::WeCom => "https://wecom.work",
@@ -77,63 +81,64 @@ impl Provider {
     }
 
     /// 自定义 CalDAV、Exchange 需要用户填写服务器地址。
-    pub fn custom_server(self) -> bool { matches!(self, Provider::Custom | Provider::Exchange) }
+    pub fn custom_server(self) -> bool { matches!(self, Provider::Google | Provider::Custom | Provider::Exchange) }
 
     /// 走 Exchange ActiveSync 协议，而不是 CalDAV。
     pub fn exchange(self) -> bool { matches!(self, Provider::WeCom | Provider::Exchange) }
 
     /// 服务器地址输入框的示例。
     pub fn server_hint(self) -> &'static str {
-        if self == Provider::Exchange { "mail.example.com" } else { "https://example.com/remote.php/dav" }
+        match self {
+            Provider::Google => "貼上 Google 日曆的 .ics 私密網址，或留空使用 CalDAV",
+            Provider::Exchange => "mail.example.com",
+            _ => "https://example.com/remote.php/dav 或 .ics 網址",
+        }
     }
 
     /// 一个账号下有多个日历（iCloud 的「家庭」「工作」等）时全部同步。
-    pub fn all_calendars(self) -> bool { matches!(self, Provider::ICloud | Provider::Custom) }
+    pub fn all_calendars(self) -> bool { matches!(self, Provider::Google | Provider::ICloud | Provider::Custom) }
 
     /// 「在哪拿？」三步引导，直接对应客户端菜单。
     pub fn guide(self) -> [&'static str; 3] {
         match self {
-            Provider::Feishu => [
-                "桌面端右上角头像 → 设置",
-                "日历 → CalDAV 同步配置 → 选「其它设备」",
-                "点生成，复制用户名和密码填到上面",
-            ],
-            Provider::DingTalk => [
-                "打开钉钉 → 日历",
-                "日历设置 → 同步至其他日历 / CalDAV",
-                "生成账号，复制用户名和密码填到上面",
-            ],
-            Provider::WeCom => [
-                "手机端 工作台 → 日程",
-                "右上角「三」→ 日程设置",
-                "同步至其他日历（Exchange）→ 复制完整用户名及生成的密码",
+            Provider::Google => [
+                "在 Google 日曆網頁版中，前往「設定」→ 點選欲同步的日曆名稱",
+                "複製「以 iCal 格式顯示的私密網址」（.ics）貼到伺服器欄位",
+                "或伺服器留空，使用者名稱填 Gmail，密碼填 Google「應用程式密碼」",
             ],
             Provider::ICloud => [
-                "用浏览器打开 account.apple.com，登录 Apple 账户",
-                "登录与安全 → App 专用密码 → 生成一个（名称可填「岛仔」）",
-                "用户名填 Apple ID 邮箱，密码填刚生成的 App 专用密码",
+                "用瀏覽器開啟 account.apple.com，登入 Apple 帳號",
+                "登入與安全 → App 專用密碼 → 產生一組（名稱可填「島仔」）",
+                "使用者名稱填 Apple ID 信箱，密碼填剛產生的 App 專用密碼",
             ],
             Provider::Custom => [
-                "服务器填日历服务的 CalDAV 地址，例如 https://example.com/remote.php/dav",
-                "用户名和密码用该服务的账号；支持「应用密码」的建议单独生成一个",
-                "只读同步；岛仔会自动发现账号下所有日历",
+                "伺服器填日曆服務的 CalDAV 地址或 .ics 私密網址",
+                "使用者名稱和密碼用該服務的帳號；支援「應用密碼」的建議單獨產生",
+                "唯讀同步；島仔會自動探索帳號下所有日曆或解析 .ics",
             ],
             Provider::Exchange => [
-                "服务器填 Exchange 邮件服务器地址，例如 mail.example.com，可向公司 IT 获取",
-                "用户名一般是邮箱，也可能是「域\\用户名」；密码用邮箱密码",
-                "只读同步日历；Microsoft 365 / Outlook.com 已不支持密码登录，暂不能连接",
+                "伺服器填 Exchange 郵件伺服器地址，例如 mail.example.com",
+                "使用者名稱一般是信箱，也可能是「網域\\使用者名稱」；密碼用信箱密碼",
+                "唯讀同步日曆；Microsoft 365 已不支援密碼登入，暫無法連接",
+            ],
+            Provider::Feishu | Provider::DingTalk | Provider::WeCom => [
+                "已停用此中國服務，請改用 Google 日曆或 iCloud",
+                "",
+                "",
             ],
         }
     }
 
     pub fn parse(key: &str) -> Self {
         match key {
+            "google" => Provider::Google,
             "dingtalk" => Provider::DingTalk,
             "wecom" => Provider::WeCom,
+            "feishu" => Provider::Feishu,
             "icloud" => Provider::ICloud,
             "custom" => Provider::Custom,
             "exchange" => Provider::Exchange,
-            _ => Provider::Feishu,
+            _ => Provider::Google,
         }
     }
 }
@@ -599,8 +604,11 @@ fn dav_response(
 /// 其他平台只信任同源地址。
 fn same_service(provider:Provider,target:&url::Url,base:&url::Url)->bool {
     if target.origin()==base.origin() {return true;}
-    provider==Provider::ICloud && target.scheme()=="https" && target.port().is_none()
-        && target.host_str().is_some_and(|host|host.ends_with(".icloud.com"))
+    if provider==Provider::ICloud && target.scheme()=="https" && target.port().is_none()
+        && target.host_str().is_some_and(|host|host.ends_with(".icloud.com")) {return true;}
+    if provider==Provider::Google && target.scheme()=="https"
+        && target.host_str().is_some_and(|host|host.ends_with(".google.com") || host.ends_with(".googleusercontent.com")) {return true;}
+    false
 }
 
 const PROPFIND_BODY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
@@ -698,6 +706,24 @@ pub fn fetch_month(cfg: &Config, password: &str, month: NaiveDate) -> Result<Fet
 
 fn fetch_range(cfg: &Config, password: &str, lo: chrono::DateTime<chrono::Utc>, hi: chrono::DateTime<chrono::Utc>) -> Result<Fetched, Failure> {
     if cfg.provider.exchange() { return exchange::fetch(cfg, password, lo, hi); }
+    let server_candidate = cfg.server.as_deref().unwrap_or("");
+    let is_ics = server_candidate.contains(".ics") || server_candidate.contains("/ical/") || server_candidate.starts_with("webcal://") || cfg.username.contains(".ics");
+    if is_ics {
+        let url_target = if !server_candidate.is_empty() { server_candidate } else { &cfg.username };
+        let agent = agent()?;
+        let http_url = url_target.replacen("webcal://", "https://", 1);
+        let resp = agent.get(&http_url).timeout(Duration::from_secs(15)).call()
+            .map_err(|e| Failure::text(format!("下載 iCal (.ics) 失敗：{e}")))?;
+        let text = resp.into_string()
+            .map_err(|e| Failure::text(format!("讀取 iCal (.ics) 內容失敗：{e}")))?;
+        let parsed = inspect_ics(&text, lo, hi)
+            .map_err(|e| Failure::text(e))?;
+        return Ok(Fetched {
+            href: http_url,
+            events: parsed.events,
+            report: parsed.report,
+        });
+    }
     let agent = agent()?;
     // 每次都发现全部日历：已保存的地址可能指向空日历，会遮蔽同一账号下的其他日历。
     // 逐个查询，单个日历失败不影响其他日历，全部失败才报错。
@@ -770,6 +796,11 @@ fn report_resource_refs(xml:&str,href:&str)->Result<String,Failure> {
 }
 
 fn discover_calendars(agent: &ureq::Agent, cfg: &Config, password: &str) -> Result<(Vec<String>,ReadReport), Failure> {
+    if cfg.provider == Provider::Google {
+        let cal_id = cfg.username.trim();
+        let google_url = format!("https://apidata.googleusercontent.com/caldav/v2/{cal_id}/events");
+        return Ok((vec![google_url], ReadReport::default()));
+    }
     let base = ensure_slash(cfg.base().trim());
     let root=path_of(&base)=="/";
     if let Some(calendar)=discover_at(agent,cfg,password,&base,"1")? {

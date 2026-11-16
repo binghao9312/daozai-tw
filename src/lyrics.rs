@@ -238,69 +238,43 @@ pub fn fetch_for_display_with(source:&str,track:&str,artist:&str,duration:f64,so
     result
 }
 
-/// 原生缓存优先；未缓存的新歌仍可使用已有在线来源。
-pub fn fetch_for_source(source:&str,track:&str,artist:&str,duration:f64,song_id:Option<u64>)->Result<Lyrics,FetchError> {
-    #[cfg(windows)]
-    if source.eq_ignore_ascii_case("kwmusic.exe") {
-        if let Some(lyrics)=crate::smtc::kuwo::read_lyrics(track,artist){trace(||"酷我本地:命中".into());return Ok(lyrics);}
+/// YouTube Music 與全域曲目標題清洗
+pub fn clean_ytmusic_title(track:&str)->String {
+    static SUFFIX:std::sync::OnceLock<regex::Regex>=std::sync::OnceLock::new();
+    let suffix=SUFFIX.get_or_init(||regex::Regex::new(r"(?i)\s*(?:-\s*Topic|[\(\[（【]\s*(?:official(?:\s+(?:music\s+)?(?:video|audio|mv))?|lyrics?|lyric\s+video|audio|mv|hd|4k)\s*[\)\]）】])").unwrap());
+    suffix.replace_all(track,"").split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+pub fn clean_ytmusic_artist(artist:&str)->String {
+    artist.trim_end_matches(" - Topic").trim().to_string()
+}
+
+/// 主力來源：YouTube Music + LRCLIB 動態歌詞與本地快取
+pub fn fetch_for_source(_source:&str,track:&str,artist:&str,duration:f64,_song_id:Option<u64>)->Result<Lyrics,FetchError> {
+    let clean_track = clean_ytmusic_title(track);
+    let clean_art = clean_ytmusic_artist(artist);
+    if clean_track.trim().is_empty() { return Err(FetchError::NotFound); }
+    let path = cache_path(&clean_track, &clean_art, duration);
+    if let Some(lyrics) = read_cache(&path).filter(|lyrics| !romanized(&clean_track, lyrics)) {
+        trace(|| "本地快取:命中".into());
+        return Ok(lyrics);
     }
-    #[cfg(windows)]
-    if source.eq_ignore_ascii_case("bodian_pc.exe") {
-        if let Some(lyrics)=song_id.and_then(crate::smtc::bodian::read_lyrics){trace(||"波点本地:命中".into());return Ok(lyrics);}
+    if let Some(remembered) = read_negative(&path) {
+        trace(|| "近期已確認無同步歌詞".into());
+        return remembered;
     }
-    if source.to_ascii_lowercase().contains("qqmusic") {
-        let common=cache_path(track,artist,duration);
-        let path=common.parent().unwrap().join("qqmusic").join(common.file_name().unwrap());
-        if let Some(lyrics)=read_cache(&path).filter(|lyrics|!romanized(track,lyrics)){trace(||"本地缓存:命中".into());return Ok(lyrics);}
-        if let Some(remembered)=read_negative(&path){trace(||"近期已确认无同步歌词".into());return remembered;}
-        let preferred=fetch_qqmusic("https://c.y.qq.com",track,artist,duration);
-        trace(||format!("QQ音乐:{}",outcome(&preferred)));
-        if let Ok(lyrics)=&preferred {if lyrics.synced && !romanized(track,lyrics) {write_cache(&path,lyrics);return preferred;}}
-        let (fallback,failed)=fetch_online_detail(track,artist,duration,Skip::QqMusic);
-        if !failed && matches!(&preferred,Ok(_)|Err(FetchError::NotFound)) && !fallback.as_ref().is_ok_and(|l|l.synced) {
-            write_negative(&path,preferred.as_ref().ok().or(fallback.as_ref().ok()));
-        }
-        return match (preferred,fallback) {
-            (_,Ok(lyrics)) if lyrics.synced=>Ok(lyrics),
-            (Ok(lyrics),_)|(_,Ok(lyrics))=>Ok(lyrics),
-            (Err(FetchError::NotFound),Err(error))|(Err(error),_)=>Err(error),
-        };
-    }
-    if source.to_ascii_lowercase().contains("kugou"){
-        if let Some(lyrics)=kugou_cache::read(track,artist,duration){return Ok(lyrics);}
-    }
-    if source.eq_ignore_ascii_case("cloudmusic.exe"){
-        if let Some(id)=song_id.filter(|id|*id>0){
-            let path=crate::model::config_dir().join("lyrics").join(format!("netease-{id}.lrc"));
-            if let Some(lyrics)=read_cache(&path).filter(|lyrics|!romanized(track,lyrics)){trace(||"本地缓存:命中".into());return Ok(lyrics);}
-            if let Some(remembered)=read_negative(&path){trace(||"近期已确认无同步歌词".into());return remembered;}
-            let by_id=fetch_netease_song("https://music.163.com",id);
-            trace(||format!("网易云按ID:{}",outcome(&by_id)));
-            match by_id{
-                Ok(lyrics) if lyrics.synced=>{write_cache(&path,&lyrics);return Ok(lyrics);}
-                // 网易云本身只有文本歌词（「暂无自动滚动」）：不再重复搜网易云，改到 QQ 音乐、LRCLIB 找同步版本。
-                Ok(plain)=>{
-                    let (other,failed)=fetch_online_detail(track,artist,duration,Skip::Netease);
-                    if let Ok(lyrics)=&other {if lyrics.synced{if !romanized(track,lyrics){write_cache(&path,lyrics);}return other;}}
-                    if !failed{write_negative(&path,Some(&plain));}
-                    return Ok(plain);
-                }
-                // 按 ID 取词失败（限流、断网）时仍走搜索，避免一次失败就整首无词。
-                Err(_)=>{}
+    let res = fetch_from_lrclib("https://lrclib.net", &clean_track, &clean_art, duration);
+    match &res {
+        Ok(lyrics) if lyrics.synced => {
+            if !romanized(&clean_track, lyrics) {
+                write_cache(&path, lyrics);
             }
         }
+        Ok(lyrics) => write_negative(&path, Some(lyrics)),
+        Err(FetchError::NotFound) => write_negative(&path, None),
+        _ => {}
     }
-    if is_soda(source) {
-        match soda_cache::read_detail(track,artist,duration) {
-            Ok(raw)=>{
-                let lyrics=parse_krc(&raw);
-                if lyrics.synced {trace(||"汽水本地:命中".into());return Ok(lyrics);}
-                trace(||"汽水本地:无时间轴".into());
-            }
-            Err(miss)=>trace(||format!("汽水本地:{}",miss.label())),
-        }
-    }
-    fetch(track,artist,duration)
+    res
 }
 
 fn parse_krc(raw:&str)->Lyrics {
@@ -659,11 +633,44 @@ fn clean_title(track:&str)->String {
 }
 
 fn fetch_from(base:&str,track:&str,artist:&str,duration_secs:f64)->Result<Lyrics,FetchError> {
+    fetch_from_lrclib(base,track,artist,duration_secs)
+}
+
+fn fetch_from_lrclib(base:&str,track:&str,artist:&str,duration_secs:f64)->Result<Lyrics,FetchError> {
     if track.trim().is_empty() {
         return Err(FetchError::NotFound);
     }
+    let clean_track = clean_ytmusic_title(track);
+    let clean_art = clean_ytmusic_artist(artist);
+
+    // 1. 優先精確查詢 /api/get
+    let d = if duration_secs > 0.0 { format!("&duration={:.0}", duration_secs) } else { String::new() };
+    let get_url = format!("{base}/api/get?track_name={}&artist_name={}{d}", urlencode(&clean_track), urlencode(&clean_art));
+    if let Ok(val) = request_json(&get_url, base) {
+        if let Some(synced) = val.get("syncedLyrics").and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty()) {
+            let parsed = parse_lrc(synced);
+            if !parsed.lines.is_empty() { return Ok(parsed); }
+        }
+        if let Some(plain) = val.get("plainLyrics").and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty()) {
+            let parsed = from_plain(plain);
+            if !parsed.lines.is_empty() { return Ok(parsed); }
+        }
+    }
+
+    // 2. 模糊查詢 /api/search?q=
+    let query_str = format!("{} {}", clean_track, clean_art);
+    let search_q_url = format!("{base}/api/search?q={}", urlencode(query_str.trim()));
+    if let Ok(val) = request_json(&search_q_url, base) {
+        if let Some(items) = val.as_array() {
+            if let Ok(lyrics) = lyrics_from_items(items, track, duration_secs) {
+                return Ok(lyrics);
+            }
+        }
+    }
+
+    // 3. Fallback: 原始精準比對搜尋
     let identity=song_identity(track,artist);
-    let (query_title,query_artist)=search_terms(track,artist);
+    let (query_title,query_artist)=search_terms(&clean_track,&clean_art);
     let items=search(base,&query_title,&query_artist)?;
     let items=items.into_iter().filter(|item|{
         let name=item.get("trackName").and_then(|v|v.as_str()).unwrap_or_default();

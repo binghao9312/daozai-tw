@@ -3,6 +3,10 @@ use super::{Messenger,OpenError,Target,Unread};
 use super::windows::*;
 use windows::{core::Owned,Win32::{Foundation::{BOOL,HWND,LPARAM},System::Threading::{OpenProcess,PROCESS_QUERY_LIMITED_INFORMATION},UI::WindowsAndMessaging::*}};
 
+pub(crate) const DISCORD:NativeAdapter=NativeAdapter{
+    paths:||paths(Messenger::Discord),main_frame:|class,style,extended|main_frame(Messenger::Discord,class,style,extended),
+    accounts:None,ready,strict_window:true,open,taskbar:Some(|ctx|start(Messenger::Discord,ctx)),
+};
 pub(crate) const WECOM:NativeAdapter=NativeAdapter{
     paths:||paths(Messenger::WeCom),main_frame:|class,style,extended|main_frame(Messenger::WeCom,class,style,extended),
     accounts:None,ready,strict_window:true,open,taskbar:Some(|ctx|start(Messenger::WeCom,ctx)),
@@ -22,6 +26,7 @@ fn start(client:Messenger,ctx:eframe::egui::Context)->Result<Box<dyn TaskbarSour
 fn main_frame(client:Messenger,class:&str,style:u32,extended:u32)->bool{
     if style&WS_CHILD.0!=0 || extended&(WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE).0!=0{return false;}
     match client{
+        Messenger::Discord=>class=="Chrome_WidgetWin_1" && frame_style(class,style,extended),
         Messenger::WeCom=>class=="WeWorkWindow",
         Messenger::Feishu=>class=="Chrome_WidgetWin_1" && frame_style(class,style,extended),
         Messenger::DingTalk=>(class=="StandardFrame_DingTalk" || class.starts_with("Qt") && class.ends_with("QWindowIcon")) && frame_style(class,style,extended),
@@ -33,6 +38,7 @@ pub(crate) unsafe fn main_window(window:HWND,client:Messenger)->bool{
     if !IsWindow(window).as_bool() || GetWindow(window,GW_OWNER).is_ok()
         || !client_main_frame(client,&class_name(window),GetWindowLongW(window,GWL_STYLE)as u32,GetWindowLongW(window,GWL_EXSTYLE)as u32){return false;}
     if client==Messenger::DingTalk && class_name(window)!=DINGTALK_FRAME && has_dingtalk_frame(window_pid(window)){return false;}
+    if client==Messenger::Discord && !discord_title(&window_title(window)) && discord_main_frame(window_pid(window)).is_some(){return false;}
     if client==Messenger::Feishu && !feishu_title(&window_title(window)) && feishu_main_frame(window_pid(window)).is_some(){return false;}
     if IsIconic(window).as_bool(){return true;}
     let mut rect=RECT::default();
@@ -81,6 +87,22 @@ unsafe fn feishu_main_frame(pid:u32)->Option<HWND>{
     let _=EnumWindows(Some(visit),LPARAM((&mut search as *mut Search)as isize));
     match search.found.as_slice(){[one]=>Some(*one),_=>None}
 }
+fn discord_title(title:&str)->bool {
+    let t=title.trim();
+    t.eq_ignore_ascii_case("Discord") || t.ends_with("- Discord") || t.contains("Discord")
+}
+unsafe fn discord_main_frame(pid:u32)->Option<HWND>{
+    struct Search{pid:u32,found:Vec<HWND>}
+    unsafe extern "system" fn visit(window:HWND,data:LPARAM)->BOOL{
+        let search=&mut *(data.0 as *mut Search);
+        if window_pid(window)==search.pid && class_name(window)=="Chrome_WidgetWin_1" && discord_title(&window_title(window)){search.found.push(window);}
+        true.into()
+    }
+    let mut search=Search{pid,found:Vec::new()};
+    let _=EnumWindows(Some(visit),LPARAM((&mut search as *mut Search)as isize));
+    match search.found.as_slice(){[one]=>Some(*one),_=>None}
+}
+
 /// 飞书独立会话 / 文档窗口闪动时，归到同进程的主窗口：同一进程就是同一个飞书实例，不会串到其他账号。
 unsafe fn feishu_owner(window:HWND)->Option<HWND>{
     if !feishu_frame(window) || feishu_title(&window_title(window)){return None;}
@@ -148,7 +170,7 @@ enum WakeRoute {Focus,Restore,Show,Relaunch}
 fn wake_route(source:Messenger,visible:bool,iconic:bool)->WakeRoute {
     if iconic {WakeRoute::Restore}
     else if visible {WakeRoute::Focus}
-    else if source==Messenger::Feishu {WakeRoute::Relaunch}
+    else if source==Messenger::Feishu || source==Messenger::Discord {WakeRoute::Relaunch}
     else {WakeRoute::Show}
 }
 

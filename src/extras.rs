@@ -1942,9 +1942,10 @@ impl App {
                                                 .stroke(egui::Stroke::NONE).corner_radius(6.0);
                                             let button=ui.add_enabled_ui(!self.calendar.testing,|ui|ui.add_sized([width,30.0],button)).inner;
                                             let button=match p{
-                                                crate::calendar::Provider::ICloud=>button.on_hover_text("苹果日历：Apple ID + App 专用密码"),
-                                                crate::calendar::Provider::Custom=>button.on_hover_text("任意 CalDAV 日历：Nextcloud、群晖、Fastmail 等"),
-                                                crate::calendar::Provider::Exchange=>button.on_hover_text("公司自建或第三方 Exchange 日历（ActiveSync），只读同步"),
+                                                crate::calendar::Provider::Google=>button.on_hover_text("Google 日曆：支援貼上 .ics 私密網址或 CalDAV 同步"),
+                                                crate::calendar::Provider::ICloud=>button.on_hover_text("Apple 日曆：Apple ID + App 專用密碼"),
+                                                crate::calendar::Provider::Custom=>button.on_hover_text("CalDAV / iCal 日曆：Nextcloud、群暉、Fastmail 或 .ics 網址"),
+                                                crate::calendar::Provider::Exchange=>button.on_hover_text("公司自建或第三方 Exchange 日曆（ActiveSync），唯讀同步"),
                                                 _=>button,
                                             };
                                             if button.clicked() && !selected{

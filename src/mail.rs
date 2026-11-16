@@ -31,19 +31,14 @@ pub enum Provider {
 
 impl Default for Provider {
     fn default() -> Self {
-        Provider::Qq
+        Provider::Gmail
     }
 }
 
 impl Provider {
-    pub const ALL: [Provider; 8] = [
-        Provider::Qq,
-        Provider::Mail163,
-        Provider::Mail126,
-        Provider::Exmail,
-        Provider::ICloud,
+    pub const ALL: [Provider; 3] = [
         Provider::Gmail,
-        Provider::Microsoft,
+        Provider::ICloud,
         Provider::Custom,
     ];
 
@@ -130,7 +125,8 @@ impl Provider {
             "gmail" => Provider::Gmail,
             "microsoft" => Provider::Microsoft,
             "custom" => Provider::Custom,
-            _ => Provider::Qq,
+            "qq" => Provider::Qq,
+            _ => Provider::Gmail,
         }
     }
 }

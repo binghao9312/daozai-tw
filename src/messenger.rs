@@ -13,7 +13,7 @@ pub(crate) mod desktop;
 pub use windows::{Runtime,ToastAccounts,TaskbarEvent};
 
 #[derive(Clone,Copy,Debug,PartialEq,Eq,Hash)]
-pub enum Messenger {Wechat,Qq,WeCom,Feishu,DingTalk}
+pub enum Messenger {Discord,Wechat,Qq,WeCom,Feishu,DingTalk}
 
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub enum Capture {Taskbar,SystemToast}
@@ -38,6 +38,19 @@ pub struct Adapter {
     #[cfg(windows)]
     pub(crate) native:&'static windows::NativeAdapter,
 }
+
+const DISCORD:Adapter=Adapter{
+    client:Messenger::Discord,name:"Discord",capture:Capture::SystemToast,notification_id:"Discord",
+    aliases:&["com.squirrel.Discord.Discord","com.squirrel.Discord.DiscordPTB","com.squirrel.Discord.DiscordCanary"],
+    display_names:&["Discord","Discord PTB","Discord Canary"],
+    process_names:&["Discord.exe","DiscordPTB.exe","DiscordCanary.exe"],
+    publishers:&["discord"],
+    keep_unidentified:true,dismiss_unread:true,icon_scale:1.0,collapsed_icon_scale:0.85,
+    enabled:|settings|settings.wechat_notifications || settings.read_notifications,
+    tray_enabled:|_|true,
+    paint_icon:discord_icon,
+    #[cfg(windows)] native:&desktop::DISCORD,
+};
 
 const WECHAT:Adapter=Adapter{
     client:Messenger::Wechat,name:"微信",capture:Capture::Taskbar,notification_id:"WeChat",
@@ -79,9 +92,9 @@ const DINGTALK:Adapter=Adapter{
 };
 
 impl Messenger {
-    pub const ALL:[Self;5]=[Self::Wechat,Self::Qq,Self::WeCom,Self::Feishu,Self::DingTalk];
+    pub const ALL:[Self;6]=[Self::Discord,Self::Wechat,Self::Qq,Self::WeCom,Self::Feishu,Self::DingTalk];
     pub const OFFICE:[Self;3]=[Self::WeCom,Self::Feishu,Self::DingTalk];
-    pub fn adapter(self)->&'static Adapter{match self{Self::Wechat=>&WECHAT,Self::Qq=>&QQ,Self::WeCom=>&WECOM,Self::Feishu=>&FEISHU,Self::DingTalk=>&DINGTALK}}
+    pub fn adapter(self)->&'static Adapter{match self{Self::Discord=>&DISCORD,Self::Wechat=>&WECHAT,Self::Qq=>&QQ,Self::WeCom=>&WECOM,Self::Feishu=>&FEISHU,Self::DingTalk=>&DINGTALK}}
     pub fn name(self)->&'static str{self.adapter().name}
     pub fn from_notification_id(id:&str)->Option<Self>{
         Self::ALL.into_iter().find(|client|{
@@ -182,6 +195,14 @@ impl AccountHistory {
         match(previous.as_slice(),current.as_slice()){([a],[b]) if a==b=>Some((self.single_since?,*to,*a)),_=>None}
     }
     pub(crate) fn retain(&mut self,exists:impl Fn(u32,i64)->bool){self.targets.retain(|id,(created,_)|exists(*id,*created));}
+}
+
+fn discord_icon(c:&Card,x:f32,y:f32){
+    let rect=c.rect(x-9.5,y-9.5,19.0,19.0);
+    let icon=egui::Image::new(egui::include_image!("../assets/messenger/discord.svg"));
+    if let Ok(egui::load::TexturePoll::Ready{texture})=icon.load_for_size(c.ui.ctx(),rect.size()){
+        c.painter.image(texture.id,rect,egui::Rect::from_min_max(egui::Pos2::ZERO,egui::pos2(1.0,1.0)),egui::Color32::WHITE);
+    }
 }
 
 fn wechat_icon(c:&Card,x:f32,y:f32){

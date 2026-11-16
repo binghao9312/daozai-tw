@@ -80,10 +80,13 @@ impl NowPlaying {
             return MediaKind::Video;
         }
         let source=self.source.to_lowercase();
-        if (matches!(source.as_str(),"kugou"|"kugou.exe"|"cloudmusic.exe"|"汽水音乐"|"sodamusic.exe"|"spotify"|"spotify.exe"|"kwmusic.exe"|"bodian_pc.exe") || is_qqmusic(&source) || apple_music::is_source(&source)) && self.playback_type==MediaKind::Music{return MediaKind::Music;}
+        if (matches!(source.as_str(),"spotify"|"spotify.exe"|"ytm-rs.exe"|"youtube music desktop app"|"pear desktop") || is_ytmusic(&source) || is_qqmusic(&source) || apple_music::is_source(&source)) && self.playback_type==MediaKind::Music{return MediaKind::Music;}
         if ["chrome","msedge","firefox","brave","opera"].iter().any(|name|source.contains(name)) {
             let album=self.album.trim().to_lowercase();
-            if ["youtube","bilibili","抖音","哔哩哔哩"].contains(&album.as_str()){return MediaKind::Video;}
+            if ["bilibili","抖音","哔哩哔哩"].contains(&album.as_str()){return MediaKind::Video;}
+            if album.contains("youtube music") || source.contains("youtube") {
+                return MediaKind::Music;
+            }
             // 视频作者也可能被放进 Artist；浏览器缺少专辑信息时不自动认作歌曲。
             if album.is_empty(){return MediaKind::Unknown;}
         }
@@ -246,6 +249,11 @@ fn read_artwork(props:&windows::Media::Control::GlobalSystemMediaTransportContro
     Some(bytes)
 }
 
+pub(crate) fn is_ytmusic(source:&str)->bool {
+    let s=source.to_ascii_lowercase();
+    s.contains("ytm-rs") || s.contains("youtube music") || s.contains("peardesktop") || s.contains("pear desktop")
+}
+
 /// QQ 音乐在系统媒体会话里的身份名：22.76 及以前是 `QQMusic.exe`，22.82 起改为 `Tencent.QQMusic`。
 /// 进度拖动、音量都要认出它；会话查找仍用原始身份名。
 pub(crate) fn is_qqmusic(source:&str)->bool {
@@ -344,8 +352,9 @@ fn media_text(value:windows::core::Result<windows::core::HSTRING>)->Option<Strin
 #[cfg(windows)]
 fn read_session(session:&windows::Media::Control::GlobalSystemMediaTransportControlsSession,artwork:&mut ArtworkCache)->Option<NowPlaying>{
     let props=media_result(||session.TryGetMediaPropertiesAsync())?;
-    let title = media_text(props.Title())?;
-    let mut artist = media_text(props.Artist())?;
+    let raw_title = media_text(props.Title())?;
+    let title = crate::lyrics::clean_ytmusic_title(&raw_title);
+    let mut artist = crate::lyrics::clean_ytmusic_artist(&media_text(props.Artist()).unwrap_or_default());
     if title.is_empty() {
         return None;
     }

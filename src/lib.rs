@@ -43,6 +43,7 @@ pub mod weather;
 mod weather_ui;
 mod weather_source_ui;
 mod qweather;
+pub mod cwa_weather;
 mod pages;
 mod extras;
 mod pet;

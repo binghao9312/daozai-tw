@@ -153,9 +153,9 @@ fn build_fonts()->FontDefinitions {
         find(&[("segoeuib.ttf", 0), ("selawkb.ttf", 0)], &dirs),
     ];
     let cjk = [
-        find(&[("msyh.ttc", 1), ("NotoSansSC-Regular.otf", 0), ("NotoSansCJK-Regular.ttc", 2)], &dirs),
-        find(&[("msyhbd.ttc", 1), ("NotoSansSC-Medium.otf", 0), ("NotoSansCJK-Medium.ttc", 2)], &dirs),
-        find(&[("msyhbd.ttc", 1), ("NotoSansSC-Bold.otf", 0), ("NotoSansCJK-Bold.ttc", 2)], &dirs),
+        find(&[("msjh.ttc", 1), ("msyh.ttc", 1), ("NotoSansTC-Regular.otf", 0), ("NotoSansSC-Regular.otf", 0), ("NotoSansCJK-Regular.ttc", 2)], &dirs),
+        find(&[("msjhbd.ttc", 1), ("msyhbd.ttc", 1), ("NotoSansTC-Medium.otf", 0), ("NotoSansSC-Medium.otf", 0), ("NotoSansCJK-Medium.ttc", 2)], &dirs),
+        find(&[("msjhbd.ttc", 1), ("msyhbd.ttc", 1), ("NotoSansTC-Bold.otf", 0), ("NotoSansSC-Bold.otf", 0), ("NotoSansCJK-Bold.ttc", 2)], &dirs),
     ];
 
     let korean = [

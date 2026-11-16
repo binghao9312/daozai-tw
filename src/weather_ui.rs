@@ -644,12 +644,24 @@ impl App {
         failed&&chrono::Utc::now().timestamp()-snapshot.at>interval*2
     }
     fn weather_can_refresh(&self)->bool {
-        self.module_on(WEATHER_PAGE)&&if self.weather_source.displayed==crate::weather_source_ui::Provider::Qweather {self.weather_source.client.is_some()&&self.weather_source.runtime.can_refresh(chrono::Utc::now().timestamp())}else{self.weather.can_refresh(&self.settings.weather_city,self.t)}
+        self.module_on(WEATHER_PAGE)&&if self.weather_source.displayed==crate::weather_source_ui::Provider::Qweather {self.weather_source.client.is_some()&&self.weather_source.runtime.can_refresh(chrono::Utc::now().timestamp())}else if self.weather_source.displayed==crate::weather_source_ui::Provider::Cwa {self.weather_source.cwa_client.is_some()}else{self.weather.can_refresh(&self.settings.weather_city,self.t)}
     }
     fn weather_refresh(&mut self){
         if !self.module_on(WEATHER_PAGE){return;}
         if self.weather_source.displayed==crate::weather_source_ui::Provider::Qweather {if !cfg!(test){if let Some(client)=&self.weather_source.client {self.weather_source.runtime.refresh(client,chrono::Utc::now().timestamp(),true);}}}
-        else{self.weather.refresh_manual(&self.settings.weather_city,self.t);}
+        else if self.weather_source.displayed==crate::weather_source_ui::Provider::Cwa {
+            if let Some(client)=&self.weather_source.cwa_client {
+                if let Some(county) = &self.weather_source.config.location.as_ref().map(|l| l.position.label.clone()) {
+                    if let Some(snapshot) = client.fetch_all(county) {
+                        self.weather.snapshot = Some(snapshot);
+                        self.weather.error = None;
+                        self.weather.loading = false;
+                    } else {
+                        self.weather.error = Some("無法取得 CWA 天氣資料".into());
+                    }
+                }
+            }
+        }else{self.weather.refresh_manual(&self.settings.weather_city,self.t);}
     }
     /// 后台取数的轮询与自动刷新；数据过期就重新拉一次。
     pub(crate) fn weather_tick(&mut self) {
@@ -667,6 +679,30 @@ impl App {
             }
             self.weather.loading=self.weather_source.runtime.loading();
             self.weather.error=self.weather_source.runtime.error.map(|e|e.text().to_string()).or_else(||if self.weather_source.client.is_none(){Some("尚未配置和风凭据，请到天气设置填写并测试。".into())}else if self.weather_source.config.location.is_none(){Some("请先选择和风城市，和风暂不支持自动定位。".into())}else{None});
+            return;
+        }
+        if self.weather_source.displayed==crate::weather_source_ui::Provider::Cwa {
+            let now=chrono::Utc::now().timestamp();
+            // CWA 定期刷新（每小時）
+            if let Some(client)=&self.weather_source.cwa_client {
+                if let Some(county) = &self.weather_source.config.location.as_ref().map(|l| l.position.label.clone()) {
+                    // 檢查是否需要刷新
+                    let needs_refresh = self.weather.snapshot.is_none() 
+                        || now - self.weather.snapshot.as_ref().map(|s| s.at).unwrap_or(0) >= 3600;
+                    if needs_refresh {
+                        if let Some(snapshot) = client.fetch_all(county) {
+                            self.weather.snapshot = Some(snapshot);
+                            self.weather.error = None;
+                        } else {
+                            self.weather.error = Some("無法取得 CWA 天氣資料".into());
+                        }
+                    }
+                    if let Some(snapshot)=&mut self.weather.snapshot {
+                        if let Some(sun)=&snapshot.sun_times {snapshot.day=now>=sun.sunrise&&now<sun.sunset;}
+                    }
+                }
+            }
+            self.weather.loading = false;
             return;
         }
         self.weather.poll(&self.settings.weather_city,enabled);

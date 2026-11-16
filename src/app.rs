@@ -895,10 +895,19 @@ impl App {
         let (bw, bh) = if settings.minimal { (BAR_W_MIN, BAR_H_MIN) } else { (BAR_W, BAR_H) };
         let focus_seconds=settings.focus_minutes as f32*60.0;
         let initial_lyrics=settings.lyrics_enabled;
-        let initial_page=settings.page_order.iter().copied().find(|page|settings.visible_pages[*page]).unwrap_or(0);
         let weather_source=crate::weather_source_ui::State::load();
         let mut weather=crate::weather::State::load(&settings.weather_city,settings.weather_position.as_ref());
         if weather_source.displayed==crate::weather_source_ui::Provider::Qweather {weather.snapshot=weather_source.runtime.snapshot();}
+        else if weather_source.displayed==crate::weather_source_ui::Provider::Cwa {
+            if let Some(client)=&weather_source.cwa_client {
+                if let Some(county) = &weather_source.config.location.as_ref().map(|l| l.position.label.clone()) {
+                    if let Some(snapshot) = client.fetch_all(county) {
+                        weather.snapshot = Some(snapshot);
+                    }
+                }
+            }
+        }
+        let initial_page = 0;
         Self {
             opts,
             render_compat_running: settings.render_compat,
@@ -1324,18 +1333,18 @@ impl App {
         let mode = std::env::var("DAOZAI_MAIL_DEMO").unwrap_or_default();
         self.settings_tab = 7;
         if mode == "fail" {
-            self.mail.form.provider = Provider::Qq;
-            self.mail.form.email = "test@qq.com".into();
+            self.mail.form.provider = Provider::Gmail;
+            self.mail.form.email = "test@gmail.com".into();
             self.mail.form.password = "invalid-auth-code".into();
-            self.mail.note = "test@qq.com：正在测试连接…".into();
+            self.mail.note = "test@gmail.com：正在測試連線…".into();
             self.pending.push(Cmd::MailTest(
-                Account { custom: None, email: "test@qq.com".into(), provider: Provider::Qq, enabled: true },
+                Account { custom: None, email: "test@gmail.com".into(), provider: Provider::Gmail, enabled: true },
                 "invalid-auth-code".into(),
             ));
             return;
         }
         self.mail.accounts = vec![
-            Account { custom: None, email: "demo@qq.com".into(), provider: Provider::Qq, enabled: false },
+            Account { custom: None, email: "demo@gmail.com".into(), provider: Provider::Gmail, enabled: false },
             Account { custom: None, email: "demo@icloud.com".into(), provider: Provider::ICloud, enabled: false },
         ];
         for a in &self.mail.accounts {
@@ -1410,8 +1419,8 @@ impl App {
     pub fn calendar_demo(&mut self) {
         use calendar::Provider;
         let mode = std::env::var("DAOZAI_CAL_DEMO").unwrap_or_default();
-        self.calendar.form.provider = Provider::Feishu;
-        self.calendar.form.username = "demo***@feishu.example".into();
+        self.calendar.form.provider = Provider::Google;
+        self.calendar.form.username = "demo***@gmail.com".into();
         self.settings_tab = 8;
         self.open_settings();
         self.settings.calendar_prompt = false;
@@ -1422,24 +1431,24 @@ impl App {
                 .unwrap_or_default()
         };
         let demo_cfg = calendar::Config {
-            provider: Provider::Feishu,
-            username: "demo***@feishu.example".into(),
-            href: Some("https://caldav.feishu.cn/calendars/8f3c2d7a-1111-2222-3333-444455556666/".into()),
+            provider: Provider::Google,
+            username: "demo***@gmail.com".into(),
+            href: Some("https://apidata.googleusercontent.com/caldav/v2/demo%40gmail.com/events".into()),
             server: None,
         };
         match mode.as_str() {
             "paste" => {
                 self.calendar.form.username =
-                    "服务器地址：https://caldav.feishu.cn/calendars/\n用户名：demo***@feishu.example\n密码：demo-pass-123".into();
+                    "伺服器地址：https://apidata.googleusercontent.com/caldav/v2/\n使用者名稱：demo***@gmail.com\n密碼：demo-pass-123".into();
                 if let Some((u, p)) = calendar::parse_paste(&self.calendar.form.username) {
                     self.calendar.form.username = u;
                     self.calendar.form.password = p;
-                    self.calendar.note = "已从粘贴内容拆出用户名和密码，服务器地址已按平台填好".into();
+                    self.calendar.note = "已從貼上內容拆出使用者名稱和密碼".into();
                 }
             }
             "fail" => {
                 self.calendar.form.password = "demo-pass-123".into();
-                self.calendar.note = calendar::human_error(Provider::Feishu, Some(401));
+                self.calendar.note = calendar::human_error(Provider::Google, Some(401));
                 self.calendar.note_error = true;
             }
             "connected" => {
