@@ -13,18 +13,18 @@ pub fn explicit_lifetime(subject:&str,body:&str,code:&str)->Option<u64>{
     if code.is_empty(){return None;}
     use std::sync::OnceLock;
     static RE:OnceLock<regex::Regex>=OnceLock::new();
-    let re=RE.get_or_init(||regex::Regex::new(r"(?i)(?:有效(?:时间|期)?(?:为|是)?\s*[:：]?\s*|valid\s+for\s+|expires?\s+in\s+)([0-9]{1,3})\s*(秒(?:钟)?|分钟|小时|seconds?|minutes?|hours?)|([0-9]{1,3})\s*(秒(?:钟)?|分钟|小时)\s*(?:内有效|后失效)").unwrap());
+    let re=RE.get_or_init(||regex::Regex::new(r"(?i)(?:有效(?:時間|期)?(?:為|是)?\s*[:：]?\s*|valid\s+for\s+|expires?\s+in\s+)([0-9]{1,3})\s*(秒(?:鍾)?|分鐘|小時|seconds?|minutes?|hours?)|([0-9]{1,3})\s*(秒(?:鍾)?|分鐘|小時)\s*(?:內有效|後失效)").unwrap());
     let mut values=Vec::new();
     for sentence in subject.split(['。','!','！','\n',';','；']).chain(body.split(['。','!','！','\n',';','；'])) {
         if sentence.chars().count()>240 || !sentence.contains(code){continue;}
         let lower=sentence.to_ascii_lowercase();
-        if !(sentence.contains("验证码")||lower.contains("verification code")||lower.contains("one-time")||lower.contains("otp")){continue;}
+        if !(sentence.contains("驗證碼")||lower.contains("verification code")||lower.contains("one-time")||lower.contains("otp")){continue;}
         for c in re.captures_iter(sentence) {
             let start=c.get(0)?.start();
             let Some(code_end)=sentence[..start].rfind(code).map(|i|i+code.len()) else{continue;};
             let gap=sentence[code_end..start].trim_matches(|c:char|c.is_whitespace()||",，:：.。".contains(c)).to_ascii_lowercase();
             // A nearby membership/session lifetime is not the code's lifetime.
-            if !["","的","is","will","该验证码","此验证码","验证码","this code is","请于","请在"].contains(&gap.as_str()){return None;}
+            if !["","的","is","will","該驗證碼","此驗證碼","驗證碼","this code is","請於","請在"].contains(&gap.as_str()){return None;}
             let n=c.get(1).or_else(||c.get(3))?.as_str().parse::<u64>().ok()?;
             let unit=c.get(2).or_else(||c.get(4))?.as_str().to_ascii_lowercase();
             let multiplier=if unit.starts_with('分')||unit.starts_with("minute"){60}else if unit.starts_with('小')||unit.starts_with("hour"){3600}else{1};
@@ -84,7 +84,7 @@ impl Privacy {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn item()->Item{Item{account:"test@example.com".into(),from:"Example".into(),subject:"验证码 123456 有效期为30秒".into(),time:String::new(),received_unix:Some(100),code:Some("123456".into()),html:String::new().into(),summary:"验证码 123456 有效期为30秒".into(),links:vec![],meeting:None,uid:1}}
+    fn item()->Item{Item{account:"test@example.com".into(),from:"Example".into(),subject:"驗證碼 123456 有效期為30秒".into(),time:String::new(),received_unix:Some(100),code:Some("123456".into()),html:String::new().into(),summary:"驗證碼 123456 有效期為30秒".into(),links:vec![],meeting:None,uid:1}}
     #[test] fn new_event_after_a_snapshot_reveals_the_code_once(){
         let item=item();let mut p=Privacy::default();
         p.observe(&item,false,0.0,100);assert!(p.hidden(&item,0.0,60));
@@ -92,12 +92,12 @@ mod tests {
         p.observe(&item,true,35.0,135);assert!(p.hidden(&item,35.0,60));
     }
     #[test] fn explicit_lifetime_requires_code_context_and_unambiguous_duration(){
-        assert_eq!(explicit_lifetime("验证码 123456 有效期为30秒","","123456"),Some(30));
+        assert_eq!(explicit_lifetime("驗證碼 123456 有效期為30秒","","123456"),Some(30));
         assert_eq!(explicit_lifetime("","Your verification code 123456 is valid for 5 minutes.","123456"),Some(300));
-        assert_eq!(explicit_lifetime("验证码 123456","会员有效期30分钟","123456"),None);
-        assert_eq!(explicit_lifetime("验证码 123456，会员有效期30分钟","","123456"),None);
-        assert_eq!(explicit_lifetime("验证码 123456 有效期为30秒，有效期为5分钟","","123456"),None);
-        assert_eq!(explicit_lifetime("验证码 123456 有效期999小时","","123456"),None);
+        assert_eq!(explicit_lifetime("驗證碼 123456","會員有效期30分鐘","123456"),None);
+        assert_eq!(explicit_lifetime("驗證碼 123456，會員有效期30分鐘","","123456"),None);
+        assert_eq!(explicit_lifetime("驗證碼 123456 有效期為30秒，有效期為5分鐘","","123456"),None);
+        assert_eq!(explicit_lifetime("驗證碼 123456 有效期999小時","","123456"),None);
     }
     #[test] fn delay_history_reconnect_and_manual_reveal_never_extend_auto_visibility(){
         let i=item();let mut p=Privacy::default();p.observe(&i,true,0.0,120);
@@ -107,14 +107,14 @@ mod tests {
         let mut p=Privacy::default();p.observe(&i,false,0.0,100);assert!(p.hidden(&i,0.0,60));
     }
     #[test] fn fallback_is_configurable_and_masks_formatted_codes(){
-        let mut i=item();i.subject="验证码 123456".into();i.summary="no validity stated".into();i.received_unix=None;
+        let mut i=item();i.subject="驗證碼 123456".into();i.summary="no validity stated".into();i.received_unix=None;
         let mut p=Privacy::default();p.observe(&i,true,0.0,100);
         assert!(!p.hidden(&i,14.0,15));assert!(p.hidden(&i,15.0,15));
         assert!(!mask("123456 and 1 2 3-4 5 6","123456").contains('1'));
     }
     #[test] fn masking_covers_normalized_code_variants(){
-        for (text,code) in [("验证码 １２３４５６","123456"),("验证码 12\u{200b}3456","123456"),("验证码 123456","123 456"),("验证码 ＡＢＣ－１２３","ABC-123")] {
-            assert_eq!(mask(text,code),"验证码 ••••••","归一化提取出的验证码必须遮住原文");
+        for (text,code) in [("驗證碼 １２３４５６","123456"),("驗證碼 12\u{200b}3456","123456"),("驗證碼 123456","123 456"),("驗證碼 ＡＢＣ－１２３","ABC-123")] {
+            assert_eq!(mask(text,code),"驗證碼 ••••••","歸一化提取出的驗證碼必須遮住原文");
         }
     }
 }

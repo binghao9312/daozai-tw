@@ -131,7 +131,7 @@ fn compositor_blur_allowed() -> bool {
         if let (Some(at), Some(last)) = (at, last) { if at.elapsed() < Duration::from_secs(2) { return last; } }
         let allowed = system_transparency() != Some(false);
         if last.is_some_and(|last| last != allowed) || last.is_none() && !allowed {
-            glass_diagnostic(if allowed { "系统透明效果已开启，恢复合成引擎模糊" } else { "系统透明效果关闭，不使用合成引擎模糊" });
+            glass_diagnostic(if allowed { "系統透明效果已開啟，恢復合成引擎模糊" } else { "系統透明效果關閉，不使用合成引擎模糊" });
         }
         cache.set((Some(std::time::Instant::now()), Some(allowed)));
         allowed
@@ -144,10 +144,10 @@ fn glass_diagnostic(message: &str) {
     let path = crate::model::config_dir().join("glass-diagnostics.txt");
     if std::fs::metadata(&path).is_ok_and(|m| m.len() > 64 * 1024) { let _ = std::fs::write(&path, b""); }
     let transparency = {
-        match system_transparency() { Some(true) => "开", Some(false) => "关", None => "未知" }
+        match system_transparency() { Some(true) => "開", Some(false) => "關", None => "未知" }
     };
     if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
-        let _ = writeln!(file, "{} · {} · 系统透明效果：{}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), message, transparency);
+        let _ = writeln!(file, "{} · {} · 系統透明效果：{}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), message, transparency);
     }
 }
 
@@ -460,7 +460,7 @@ impl Window {
         }).unwrap_or_default();
         // 本机验证用：DAOZAI_OUTLINE_TEST=alpha 按 AMD 等路径处理；=opaque 再假装读回的画面没有透明通道。
         let opaque_surface=surface_needs_outline_clip(backend,&vendor,&renderer) || outline_test().is_some();
-        if opaque_surface{glass_diagnostic(&format!("渲染兼容：{vendor} {renderer} {backend:?}，不直接信任系统透明合成，首帧前先按轮廓裁剪"));}
+        if opaque_surface{glass_diagnostic(&format!("渲染相容：{vendor} {renderer} {backend:?}，不直接信任系統透明合成，首幀前先按輪廓裁剪"));}
         watch_drag(hwnd,cc.egui_ctx.clone());
         Some(Self { hwnd, layering:Layering::Pending, region: (i32::MIN, 0, 0, 0), expanded: false, hook, browser_state:(None,PollClock::default()), drag_capture:DragCapture::default(), glass:None, backdrop:None, blur:false, blur_unavailable:false, opaque_surface, outline:ShapeAlpha::default() })
     }
@@ -513,12 +513,12 @@ impl Window {
             match crate::layered::Layered::new() {
                 Ok(layered)=>{
                     self.outline.active=!real;
-                    glass_diagnostic(if real {"渲染兼容：已切换为分层窗口逐像素透明（边缘抗锯齿）"}
-                        else {"渲染兼容：读回的画面没有透明通道，按岛体轮廓补算边缘透明度（分层窗口，边缘抗锯齿）"});
+                    glass_diagnostic(if real {"渲染相容：已切換為分層視窗逐畫素透明（邊緣抗鋸齒）"}
+                        else {"渲染相容：讀回的畫面沒有透明通道，按島體輪廓補算邊緣透明度（分層視窗，邊緣抗鋸齒）"});
                     self.layering=Layering::Active(layered);
                 }
                 Err(error)=>{
-                    glass_diagnostic(&format!("渲染兼容：分层显示窗口创建失败：{error:?}"));
+                    glass_diagnostic(&format!("渲染相容：分層顯示視窗建立失敗：{error:?}"));
                     self.layering=Layering::Unavailable;return false;
                 }
             }
@@ -529,7 +529,7 @@ impl Window {
             // 切到分层窗口后，下一次 update 换回矩形区域（岛仔窗口本身已几乎不可见，只负责命中）。
             Ok(changed)=>changed,
             Err(error)=>{
-                glass_diagnostic(&format!("渲染兼容：分层窗口不可用，回到轮廓裁剪：{error:?}"));
+                glass_diagnostic(&format!("渲染相容：分層視窗不可用，回到輪廓裁剪：{error:?}"));
                 layered.detach(self.hwnd);
                 self.layering=Layering::Unavailable;
                 self.glass=None;self.region=(i32::MIN,0,0,0);
@@ -592,11 +592,11 @@ impl Window {
                 if self.backdrop.is_none() {
                     match crate::composition::Backdrop::new() {
                         Ok(backdrop) => {
-                            glass_diagnostic("合成引擎模糊底板已创建");
+                            glass_diagnostic("合成引擎模糊底板已建立");
                             self.backdrop = Some(backdrop);
                         }
                         Err(error) => {
-                            glass_diagnostic(&format!("合成引擎模糊层创建失败：{error:?}"));
+                            glass_diagnostic(&format!("合成引擎模糊層建立失敗：{error:?}"));
                             self.blur_unavailable = true;
                         }
                     }
@@ -605,7 +605,7 @@ impl Window {
                     match backdrop.show(self.hwnd, &crate::app::blur_pieces(shapes, ppp)) {
                         Ok(()) => self.blur = true,
                         Err(error) => {
-                            glass_diagnostic(&format!("模糊层更新失败：{error:?}"));
+                            glass_diagnostic(&format!("模糊層更新失敗：{error:?}"));
                             backdrop.hide();
                             self.blur = false;
                             self.blur_unavailable = true;
@@ -697,13 +697,13 @@ mod tests {
                 let region=CreateRectRgn(0,0,0,0);
                 GetWindowRgn(hwnd,region);
                 assert!(PtInRegion(region,px(200.0),px(100.0)).as_bool());
-                assert!(!PtInRegion(region,px(10.0),px(10.0)).as_bool(),"兼容后端不能保留画布上的黑色背景：{backend:?} / {vendor} / {renderer}");
-                assert!(!PtInRegion(region,px(81.0),px(61.0)).as_bool(),"圆角外侧必须透出桌面");
+                assert!(!PtInRegion(region,px(10.0),px(10.0)).as_bool(),"相容後端不能保留畫布上的黑色背景：{backend:?} / {vendor} / {renderer}");
+                assert!(!PtInRegion(region,px(81.0),px(61.0)).as_bool(),"圓角外側必須透出桌面");
                 assert!(!native.blur);
-                assert!(native.backdrop.is_none(),"轮廓兼容模式不能再启用独立模糊底板");
+                assert!(native.backdrop.is_none(),"輪廓相容模式不能再啟用獨立模糊底板");
                 native.update((0.0,0.0,0.0,0.0),(0.0,0.0,0.0,0.0),None,None,None,ppp,false,false);
                 GetWindowRgn(hwnd,region);
-                assert!(!PtInRegion(region,px(200.0),px(100.0)).as_bool(),"隐藏时不能留下上一帧轮廓");
+                assert!(!PtInRegion(region,px(200.0),px(100.0)).as_bool(),"隱藏時不能留下上一幀輪廓");
                 let _=DeleteObject(region);
             }
             *hit().lock().unwrap_or_else(|e|e.into_inner())=saved;
@@ -728,25 +728,25 @@ mod tests {
                 let shapes=[GlassShape::Outline(island)];
                 // 读回的画面：岛体黑色、画布也是黑色，alpha 全部 255——和 AMD OpenGL 读回的一样。
                 let opaque=[0u8,0,0,255].repeat(w*h);
-                assert!(!native.present_frame([w,h],&opaque),"还没收到轮廓时先保持轮廓裁剪");
+                assert!(!native.present_frame([w,h],&opaque),"還沒收到輪廓時先保持輪廓裁剪");
                 assert!(matches!(native.layering,Layering::Pending));
                 native.update((0.0,0.0,w as f32,h as f32),(80.0,0.0,240.0,60.0),None,None,Some(&shapes),1.0,false,false);
                 assert!(native.wants_frames());
-                assert!(native.present_frame([w,h],&opaque),"读不到透明通道也要切到分层窗口");
+                assert!(native.present_frame([w,h],&opaque),"讀不到透明通道也要切到分層視窗");
                 assert!(matches!(native.layering,Layering::Active(_)) && native.outline.active);
                 let frame=&native.outline.frame;
                 let alpha=|x:usize,y:usize|frame[(y*w+x)*4+3];
-                assert_eq!(alpha(200,30),255,"岛体内部不透明");
-                assert_eq!(alpha(10,150),0,"画布空白处透明，不能留黑底");
+                assert_eq!(alpha(200,30),255,"島體內部不透明");
+                assert_eq!(alpha(10,150),0,"畫布空白處透明，不能留黑底");
                 let soft=(0..h).flat_map(|y|(0..w).map(move|x|(x,y))).filter(|&(x,y)|(1..255).contains(&alpha(x,y))).count();
-                assert!(soft>=80,"圆角和肩部要有抗锯齿过渡像素，实际 {soft}");
-                assert!(frame.chunks_exact(4).all(|p|p[0]<=p[3]&&p[1]<=p[3]&&p[2]<=p[3]),"必须是合法的预乘颜色");
+                assert!(soft>=80,"圓角和肩部要有抗鋸齒過渡畫素，實際 {soft}");
+                assert!(frame.chunks_exact(4).all(|p|p[0]<=p[3]&&p[1]<=p[3]&&p[2]<=p[3]),"必須是合法的預乘顏色");
                 // 切到分层窗口后不再用轮廓裁剪岛仔窗口本身。
                 native.update((0.0,0.0,w as f32,h as f32),(80.0,0.0,240.0,60.0),None,None,Some(&shapes),1.0,false,false);
                 let region=CreateRectRgn(0,0,0,0);
-                if GetWindowRgn(hwnd,region).0!=0 {assert!(PtInRegion(region,10,150).as_bool(),"分层显示后窗口区域应回到矩形");}
+                if GetWindowRgn(hwnd,region).0!=0 {assert!(PtInRegion(region,10,150).as_bool(),"分層顯示後視窗區域應回到矩形");}
                 let _=DeleteObject(region);
-                assert!(!native.present_frame([w,h],&opaque),"画面没变时不重复提交");
+                assert!(!native.present_frame([w,h],&opaque),"畫面沒變時不重複提交");
             }
             *hit().lock().unwrap_or_else(|e|e.into_inner())=saved;
             let _=DestroyWindow(hwnd);
@@ -756,10 +756,10 @@ mod tests {
     #[test]
     fn outline_clip_preserves_other_opengl_drivers_and_recognizes_amd_variants(){
         for (vendor,renderer) in [("NVIDIA Corporation","NVIDIA GeForce RTX 4060"),("Intel","Intel(R) UHD Graphics"),("Mesa","llvmpipe (LLVM 20.1.1, 256 bits)"),("Microsoft Corporation","GDI Generic")]{
-            assert!(!surface_needs_outline_clip(None,vendor,renderer),"正常驱动不能被错误识别为 AMD：{vendor}");
+            assert!(!surface_needs_outline_clip(None,vendor,renderer),"正常驅動不能被錯誤識別為 AMD：{vendor}");
         }
         for (vendor,renderer) in [("AMD","Radeon RX 6750 GRE"),("ati technologies inc.","Radeon"),("Mesa","AMD Radeon RX 6800 (radeonsi)"),("Mesa","Radeon RX 6750 GRE (radeonsi)")]{
-            assert!(surface_needs_outline_clip(None,vendor,renderer),"需要识别 AMD 厂商与渲染器：{vendor} / {renderer}");
+            assert!(surface_needs_outline_clip(None,vendor,renderer),"需要識別 AMD 廠商與渲染器：{vendor} / {renderer}");
         }
     }
 
@@ -771,14 +771,14 @@ mod tests {
         let outline=crate::shape::outline(Rect::from_min_max(pos2(100.0,0.0),pos2(300.0,60.0)),5.0,8.0,20.0);
         let shapes=[GlassShape::Outline(outline),GlassShape::Round(Rect::from_min_max(pos2(320.0,0.0),pos2(360.0,30.0)),10.0)];
         let key=glass_key(&shapes,1.5);
-        assert_eq!(key,glass_key(&shapes,1.5),"同一帧轮廓的键必须稳定，避免每帧重设区域");
+        assert_eq!(key,glass_key(&shapes,1.5),"同一幀輪廓的鍵必須穩定，避免每幀重設區域");
         assert_ne!(key,glass_key(&shapes,1.25));
         unsafe {
-            let rgn=glass_region(&key).expect("轮廓应能生成区域");
-            assert!(PtInRegion(rgn,300,45).as_bool(),"岛体中央在区域内");
-            assert!(!PtInRegion(rgn,152,88).as_bool(),"底部圆角外侧不能出现模糊");
-            assert!(PtInRegion(rgn,510,20).as_bool(),"通知详情等圆角块也在区域内");
-            assert!(!PtInRegion(rgn,470,20).as_bool(),"两块之间保持透明");
+            let rgn=glass_region(&key).expect("輪廓應能生成區域");
+            assert!(PtInRegion(rgn,300,45).as_bool(),"島體中央在區域內");
+            assert!(!PtInRegion(rgn,152,88).as_bool(),"底部圓角外側不能出現模糊");
+            assert!(PtInRegion(rgn,510,20).as_bool(),"通知詳情等圓角塊也在區域內");
+            assert!(!PtInRegion(rgn,470,20).as_bool(),"兩塊之間保持透明");
             let _=DeleteObject(rgn);
         }
     }
@@ -786,8 +786,8 @@ mod tests {
     #[test]
     fn drag_capture_ignores_clicks_and_pointer_jitter() {
         let mut capture=DragCapture::default();let zone=Some((110,0,530,120));
-        assert!(!capture.update(true,Some((300,60)),zone,(4,4)),"感应区内按下不能直接扩大窗口");
-        assert!(!capture.update(true,Some((302,61)),zone,(4,4)),"点击时的小幅抖动不算拖动");
+        assert!(!capture.update(true,Some((300,60)),zone,(4,4)),"感應區內按下不能直接擴大視窗");
+        assert!(!capture.update(true,Some((302,61)),zone,(4,4)),"點選時的小幅抖動不算拖動");
         assert!(!capture.update(false,Some((302,61)),zone,(4,4)));
     }
 
@@ -796,20 +796,20 @@ mod tests {
         // 极简模式一秒才画一帧：两次点击之间可能没有一帧看到松开。
         let mut capture=DragCapture::default();let zone=Some((110,0,530,120));
         assert!(!capture.update(true,Some((200,60)),zone,(4,4)));
-        assert!(!capture.update(true,Some((380,60)),zone,(4,4)),"在岛下方连续点击不同标签不能被当成拖文件");
-        assert!(!capture.update(true,Some((300,30)),zone,(4,4)),"在感应区内拖动标签或选文字也不能扩大窗口");
+        assert!(!capture.update(true,Some((380,60)),zone,(4,4)),"在島下方連續點選不同標籤不能被當成拖檔案");
+        assert!(!capture.update(true,Some((300,30)),zone,(4,4)),"在感應區內拖動標籤或選文字也不能擴大視窗");
     }
 
     #[test]
     fn drag_capture_requires_movement_and_entry_and_resets_after_release() {
         let mut capture=DragCapture::default();let zone=Some((110,0,530,120));
         assert!(!capture.update(true,Some((700,400)),zone,(4,4)));
-        assert!(!capture.update(true,Some((650,300)),zone,(4,4)),"远处拖动不能改变岛的区域");
-        assert!(capture.update(true,Some((300,60)),zone,(4,4)),"拖到感应区后允许接收文件");
-        assert!(!capture.update(true,Some((700,400)),zone,(4,4)),"离开感应区应恢复区域");
+        assert!(!capture.update(true,Some((650,300)),zone,(4,4)),"遠處拖動不能改變島的區域");
+        assert!(capture.update(true,Some((300,60)),zone,(4,4)),"拖到感應區後允許接收檔案");
+        assert!(!capture.update(true,Some((700,400)),zone,(4,4)),"離開感應區應恢復區域");
         assert!(capture.update(true,Some((300,60)),zone,(4,4)));
         assert!(!capture.update(false,Some((300,60)),zone,(4,4)));
-        assert!(!capture.update(true,Some((300,60)),zone,(4,4)),"下一次点击不能沿用上次拖动状态");
+        assert!(!capture.update(true,Some((300,60)),zone,(4,4)),"下一次點選不能沿用上次拖動狀態");
         assert!(!capture.update(true,None,zone,(4,4)));
         assert!(!capture.update(true,Some((300,60)),None,(4,4)));
     }
@@ -839,19 +839,19 @@ mod tests {
                 let display=match &native.layering {Layering::Active(layered)=>layered.display(),_=>island.0};
                 let foreground=GetForegroundWindow();
                 SetWindowPos(cover.0,HWND_TOPMOST,bounds.left,bounds.top,1920,32,flags).unwrap();
-                assert!(top_bar_above(display,bounds),"复现顶栏遮挡，兼容渲染={layered}");
+                assert!(top_bar_above(display,bounds),"復現頂欄遮擋，相容渲染={layered}");
                 native.keep_above_top_bar(bounds);
-                assert!(!top_bar_above(display,bounds),"收起时也应恢复实际层级，兼容渲染={layered}");
-                assert_eq!(GetForegroundWindow(),foreground,"置顶不能抢走输入焦点");
+                assert!(!top_bar_above(display,bounds),"收起時也應恢復實際層級，相容渲染={layered}");
+                assert_eq!(GetForegroundWindow(),foreground,"置頂不能搶走輸入焦點");
                 for (x,y,w,h) in [(-10000,-10000,400,140),(-10480,-10000,1920,300),(-10480,-10000,1920,1080),(-10480,-9600,1920,32),(-12400,-10000,1920,32)] {
                     SetWindowPos(cover.0,HWND_TOPMOST,x,y,w,h,flags).unwrap();
-                    assert!(!top_bar_above(display,bounds),"普通弹窗、全屏窗口和其他屏幕不触发顶栏适配");
+                    assert!(!top_bar_above(display,bounds),"普通彈窗、全屏視窗和其他螢幕不觸發頂欄適配");
                     native.keep_above_top_bar(bounds);
-                    assert!(above(cover.0,display),"不应越过无关弹窗争抢置顶");
+                    assert!(above(cover.0,display),"不應越過無關彈窗爭搶置頂");
                 }
                 SetWindowPos(cover.0,HWND_TOPMOST,bounds.left,bounds.top,1920,32,flags).unwrap();
                 let _=ShowWindow(cover.0,SW_HIDE);
-                assert!(!top_bar_above(display,bounds),"隐藏的顶栏不触发抬高");
+                assert!(!top_bar_above(display,bounds),"隱藏的頂欄不觸發抬高");
             }
         }
     }
@@ -876,26 +876,26 @@ mod tests {
             let flags=SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE;
             apply_style(island.0,false,false);
             SetWindowPos(cover.0,HWND_TOPMOST,0,0,0,0,flags).unwrap();
-            assert!(above(cover.0,island.0),"先复现其他窗口盖住岛体");
+            assert!(above(cover.0,island.0),"先復現其他視窗蓋住島體");
             let foreground=GetForegroundWindow();
             let saved=hit().lock().unwrap_or_else(|e|e.into_inner()).clone();
             let mut native=Window{hwnd:island.0,layering:Layering::Pending,region:(0,0,0,0),expanded:false,hook:HWINEVENTHOOK::default(),browser_state:(None,PollClock::now()),drag_capture:DragCapture::default(),glass:None,backdrop:None,blur:false,blur_unavailable:false,opaque_surface:false,outline:ShapeAlpha::default()};
             let update=|native:&mut Window,expanded|native.update((0.0,0.0,416.0,140.0),(0.0,0.0,416.0,140.0),None,None,None,1.0,false,expanded);
             update(&mut native,true);
-            assert!(above(island.0,cover.0),"展开时必须重新抬高实际窗口层级，不能只检查置顶标记");
-            assert_eq!(GetForegroundWindow(),foreground,"悬停展开不能抢走当前应用的输入焦点");
+            assert!(above(island.0,cover.0),"展開時必須重新抬高實際視窗層級，不能只檢查置頂標記");
+            assert_eq!(GetForegroundWindow(),foreground,"懸停展開不能搶走當前應用的輸入焦點");
             SetWindowPos(cover.0,HWND_TOPMOST,0,0,0,0,flags).unwrap();
             update(&mut native,true);
-            assert!(above(cover.0,island.0),"展开后不能每帧与其他弹窗争抢层级");
+            assert!(above(cover.0,island.0),"展開後不能每幀與其他彈窗爭搶層級");
             update(&mut native,false);
-            assert!(above(cover.0,island.0),"收起时不抬高层级");
+            assert!(above(cover.0,island.0),"收起時不抬高層級");
             // 模拟只剩置顶标记、实际顺序落在普通窗口后面的情况。
             SetWindowPos(island.0,HWND_NOTOPMOST,0,0,0,0,flags).unwrap();
             SetWindowPos(cover.0,HWND_NOTOPMOST,0,0,0,0,flags).unwrap();
             SetWindowLongPtrW(island.0,GWL_EXSTYLE,GetWindowLongPtrW(island.0,GWL_EXSTYLE)|WS_EX_TOPMOST.0 as isize);
             assert!(above(cover.0,island.0));
             update(&mut native,true);
-            assert!(above(island.0,cover.0),"再次展开也必须恢复实际置顶顺序");
+            assert!(above(island.0,cover.0),"再次展開也必須恢復實際置頂順序");
             assert_eq!(GetForegroundWindow(),foreground);
             *hit().lock().unwrap_or_else(|e|e.into_inner())=saved;
         }
@@ -904,11 +904,11 @@ mod tests {
     #[test]
     fn file_drag_expands_region_only_when_capture_is_active(){
         let island=(230,0,410,42);let zone=(110,0,530,120);
-        assert_eq!(file_drag_region(island,Some(zone),false),island,"普通悬停不扩大原生区域");
-        assert_eq!(file_drag_region(island,Some(zone),true),zone,"拖入感应区应覆盖岛下方");
-        assert_eq!(file_drag_region(island,None,true),island,"关闭置物架或隐藏岛时不接收外围拖放");
+        assert_eq!(file_drag_region(island,Some(zone),false),island,"普通懸停不擴大原生區域");
+        assert_eq!(file_drag_region(island,Some(zone),true),zone,"拖入感應區應覆蓋島下方");
+        assert_eq!(file_drag_region(island,None,true),island,"關閉置物架或隱藏島時不接收外圍拖放");
         let expanded=(64,0,576,220);
-        assert_eq!(file_drag_region(expanded,Some(zone),true),expanded,"展开后的文件区不应被感应区裁掉");
+        assert_eq!(file_drag_region(expanded,Some(zone),true),expanded,"展開後的檔案區不應被感應區裁掉");
     }
 
     #[test]
@@ -922,8 +922,8 @@ mod tests {
             let rgn=CreateRectRgn(region.0,region.1,region.2,region.3);assert_ne!(SetWindowRgn(hwnd,rgn,false),0);
             let mut rect=RECT::default();GetWindowRect(hwnd,&mut rect).unwrap();
             let point=|x:i32,y:i32|LPARAM((((rect.top+y) as u32)<<16|((rect.left+x) as u16 as u32)) as isize);
-            assert_eq!(SendMessageW(hwnd,WM_NCHITTEST,WPARAM(0),point(500,80)).0,HTTRANSPARENT as isize,"感应区中的普通点击仍须穿透");
-            assert_eq!(SendMessageW(hwnd,WM_NCHITTEST,WPARAM(0),point(320,15)).0,HTCLIENT as isize,"岛体本身仍可交互");
+            assert_eq!(SendMessageW(hwnd,WM_NCHITTEST,WPARAM(0),point(500,80)).0,HTTRANSPARENT as isize,"感應區中的普通點選仍須穿透");
+            assert_eq!(SendMessageW(hwnd,WM_NCHITTEST,WPARAM(0),point(320,15)).0,HTCLIENT as isize,"島體本身仍可互動");
             let _=DestroyWindow(hwnd);*hit().lock().unwrap_or_else(|e|e.into_inner())=saved;
         }
     }
@@ -951,11 +951,11 @@ mod tests {
             let hwnd=CreateWindowExW(WS_EX_NOACTIVATE,windows::core::w!("STATIC"),windows::core::w!(""),WS_POPUP,0,0,100,50,None,None,None,None).unwrap();
             SetWindowSubclass(hwnd,Some(observe),SUBCLASS_ID+2,&mut capture as *mut Capture as usize).unwrap();
             SetWindowSubclass(hwnd,Some(subclass),SUBCLASS_ID,0).unwrap();
-            for active in [1,0]{let result=SendMessageW(hwnd,WM_NCACTIVATE,WPARAM(active),LPARAM(0));if active==0{assert_ne!(result.0,0,"仍须允许切换到其他窗口");}}
+            for active in [1,0]{let result=SendMessageW(hwnd,WM_NCACTIVATE,WPARAM(active),LPARAM(0));if active==0{assert_ne!(result.0,0,"仍須允許切換到其他視窗");}}
             SendMessageW(hwnd,WM_NCPAINT,WPARAM(1),LPARAM(0));
             let _=DestroyWindow(hwnd);
-            assert_eq!(capture.activation,[(1,-1),(0,-1)],"仍需通知窗口框架焦点变化，同时阻止系统重画顶边");
-            assert_eq!(capture.paint,0,"透明岛体不能交给系统绘制非客户区");
+            assert_eq!(capture.activation,[(1,-1),(0,-1)],"仍需通知視窗框架焦點變化，同時阻止系統重畫頂邊");
+            assert_eq!(capture.paint,0,"透明島體不能交給系統繪製非客戶區");
         }
     }
 
@@ -975,8 +975,8 @@ mod tests {
             apply_style(window.0,false,false);count=0;
             for editing in [true,false,true,false] {apply_style(window.0,editing,false);}
             apply_style(window.0,false,true);
-            assert_eq!(count,0,"添加和退出输入时不应触发原生边框重算，避免顶端白条闪现");
-            assert_ne!(GetWindowLongPtrW(window.0,GWL_EXSTYLE)&WS_EX_TOPMOST.0 as isize,0,"仍应保持岛体置顶");
+            assert_eq!(count,0,"新增和退出輸入時不應觸發原生邊框重算，避免頂端白條閃現");
+            assert_ne!(GetWindowLongPtrW(window.0,GWL_EXSTYLE)&WS_EX_TOPMOST.0 as isize,0,"仍應保持島體置頂");
         }
     }
 

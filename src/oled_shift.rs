@@ -79,14 +79,14 @@ mod tests {
         let period = CYCLE;
         let mut previous = offset(Duration::ZERO);
         let (mut lowest, mut highest) = (previous, previous);
-        assert_eq!(previous, 0, "启动时先贴边，不改变默认位置");
+        assert_eq!(previous, 0, "啟動時先貼邊，不改變預設位置");
         for step in 1..=period * 2 {
             let current = offset(STEP * step);
-            assert!((current - previous).abs() == 1, "第 {step} 步只应移动 1 个像素：{previous} → {current}");
+            assert!((current - previous).abs() == 1, "第 {step} 步只應移動 1 個畫素：{previous} → {current}");
             (lowest, highest) = (lowest.min(current), highest.max(current));
             previous = current;
         }
-        assert_eq!((lowest, highest), (-MAX_SHIFT, MAX_SHIFT), "一个来回应两侧都用满，再回到贴边位置");
+        assert_eq!((lowest, highest), (-MAX_SHIFT, MAX_SHIFT), "一個來回應兩側都用滿，再回到貼邊位置");
         assert_eq!(offset(STEP * period), 0);
     }
 
@@ -96,41 +96,41 @@ mod tests {
         for dock in [Dock::Top, Dock::Left, Dock::Right] {
             let side = dock.is_side();
             let (x, y) = shift(true, dock, elapsed);
-            assert_eq!((x, y), if side {(0, MAX_SHIFT)} else {(MAX_SHIFT, 0)}, "{dock:?}：只能沿不贴边的一轴移动");
-            assert_eq!(shift(false, dock, elapsed), (0, 0), "{dock:?}：关闭时必须回到贴边位置");
+            assert_eq!((x, y), if side {(0, MAX_SHIFT)} else {(MAX_SHIFT, 0)}, "{dock:?}：只能沿不貼邊的一軸移動");
+            assert_eq!(shift(false, dock, elapsed), (0, 0), "{dock:?}：關閉時必須回到貼邊位置");
         }
     }
 
     #[test]
     fn position_holds_within_a_step_and_starts_over_after_one_cycle() {
         let within = STEP * 2u32 + Duration::from_secs(44);
-        assert_eq!(offset(within), offset(STEP * 2u32), "同一步内位置不变，避免窗口抖动");
+        assert_eq!(offset(within), offset(STEP * 2u32), "同一步內位置不變，避免視窗抖動");
         let period = STEP * CYCLE;
         for step in [0u32, 1, 5, 11] {
-            assert_eq!(offset(STEP * step), offset(period + STEP * step), "一个来回后重复同样的位移");
+            assert_eq!(offset(STEP * step), offset(period + STEP * step), "一個來回後重復同樣的位移");
         }
-        assert!(offset(Duration::MAX).abs() <= MAX_SHIFT, "超长运行时间不应溢出");
+        assert!(offset(Duration::MAX).abs() <= MAX_SHIFT, "超長執行時間不應溢位");
     }
 
     #[test]
     fn the_next_step_wakes_up_exactly_on_the_boundary() {
         let step = STEP.as_millis() as u64;
-        assert_eq!(until_next_step(Duration::ZERO), STEP, "刚挪完就约下一个间隔，不空转");
+        assert_eq!(until_next_step(Duration::ZERO), STEP, "剛挪完就約下一個間隔，不空轉");
         assert_eq!(until_next_step(Duration::from_millis(1)), Duration::from_millis(step - 1));
         assert_eq!(until_next_step(STEP * 2u32 + Duration::from_secs(1)), Duration::from_secs(44));
         assert_eq!(until_next_step(STEP * 2u32), STEP);
         for left in [0u64, 1, 100, 149] {
             let wait = until_next_step(STEP * 3u32 + Duration::from_millis(step - left));
-            assert!(wait >= Duration::from_millis(150) && wait <= STEP, "刚过边界时也要留出最小间隔：{left} → {wait:?}");
+            assert!(wait >= Duration::from_millis(150) && wait <= STEP, "剛過邊界時也要留出最小間隔：{left} → {wait:?}");
         }
     }
 
     #[test]
     fn expanded_dragging_or_editing_holds_the_position() {
-        assert!(should_move(false, false, false), "收起静止时应该移动");
-        assert!(!should_move(true, false, false), "展开时保持当前位置");
-        assert!(!should_move(false, true, false), "拖拽时保持当前位置");
-        assert!(!should_move(false, false, true), "编辑时保持当前位置");
+        assert!(should_move(false, false, false), "收起靜止時應該移動");
+        assert!(!should_move(true, false, false), "展開時保持當前位置");
+        assert!(!should_move(false, true, false), "拖拽時保持當前位置");
+        assert!(!should_move(false, false, true), "編輯時保持當前位置");
         assert!(!should_move(true, true, true));
     }
 
@@ -144,10 +144,10 @@ mod tests {
         while current != (0, 0) && frames < 10 {
             current = toward(current, (0, 0));
             frames += 1;
-            assert!(frames <= 3, "最多 3 帧就应该收敛");
+            assert!(frames <= 3, "最多 3 幀就應該收斂");
         }
         assert_eq!(current, (0, 0));
-        assert_eq!(toward((0, 0), (0, 0)), (0, 0), "已经到位时不动");
-        assert_eq!(toward((3, 0), (-2, 0)), (2, 0), "单轴每次只走 1 个像素");
+        assert_eq!(toward((0, 0), (0, 0)), (0, 0), "已經到位時不動");
+        assert_eq!(toward((3, 0), (-2, 0)), (2, 0), "單軸每次只走 1 個畫素");
     }
 }

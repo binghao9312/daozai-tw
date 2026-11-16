@@ -296,27 +296,27 @@ mod tests {
     fn ambient_animation_readback_is_paced_but_input_stays_full_rate() {
         use std::time::{Duration, Instant};
         let now = Instant::now();
-        assert_eq!(readback_delay(None, now, false), None, "第一次读回不等待");
-        assert_eq!(readback_delay(Some(now), now + Duration::from_millis(10), false), Some(Duration::from_millis(23)), "动画期间未到间隔时延后");
-        assert_eq!(readback_delay(Some(now), now + AMBIENT_READBACK, false), None, "到间隔立即读回");
-        assert_eq!(readback_delay(Some(now), now + Duration::from_millis(1), true), None, "有输入时保持满帧");
+        assert_eq!(readback_delay(None, now, false), None, "第一次讀回不等待");
+        assert_eq!(readback_delay(Some(now), now + Duration::from_millis(10), false), Some(Duration::from_millis(23)), "動畫期間未到間隔時延後");
+        assert_eq!(readback_delay(Some(now), now + AMBIENT_READBACK, false), None, "到間隔立即讀回");
+        assert_eq!(readback_delay(Some(now), now + Duration::from_millis(1), true), None, "有輸入時保持滿幀");
         // 60 帧/秒的动画持续 1 秒：读回次数减半左右。
         let (mut last, mut count) = (None, 0);
         for frame in 0..60u64 {
             let t = now + Duration::from_micros(frame * 16_667);
             if readback_delay(last, t, false).is_none() { last = Some(t); count += 1; }
         }
-        assert!((28..=31).contains(&count), "约 30 次/秒，实际 {count}");
+        assert!((28..=31).contains(&count), "約 30 次/秒，實際 {count}");
     }
 
     #[test]
     fn opaque_readback_is_not_trusted_for_layering() {
         let opaque = [0u8, 0, 0, 255].repeat(16);
-        assert!(!has_real_alpha([4, 4], &opaque), "读不到 alpha 时不能切到分层窗口");
+        assert!(!has_real_alpha([4, 4], &opaque), "讀不到 alpha 時不能切到分層視窗");
         let mut clear = opaque.clone();
         clear[3] = 0;
         assert!(has_real_alpha([4, 4], &clear));
-        assert!(!has_real_alpha([4, 4], &clear[..32]), "尺寸不符视为无效");
+        assert!(!has_real_alpha([4, 4], &clear[..32]), "尺寸不符視為無效");
     }
 
     #[test]
@@ -339,12 +339,12 @@ mod tests {
         assert_eq!(mask[10 * 20 + 10], 255);
         assert_eq!(mask[0], 0);
         let soft = mask.iter().filter(|&&a| a > 0 && a < 255).count();
-        assert!(soft >= 30, "圆周应有一圈抗锯齿过渡像素，实际 {soft}");
+        assert!(soft >= 30, "圓周應有一圈抗鋸齒過渡畫素，實際 {soft}");
         // 两块方向相反、互相重叠的轮廓取并集，重叠处不能被抵消成空洞。
         let a = vec![(0.0, 0.0), (6.0, 0.0), (6.0, 4.0), (0.0, 4.0)];
         let b = vec![(4.0, 0.0), (4.0, 4.0), (10.0, 4.0), (10.0, 0.0)];
         let both = coverage_mask([10, 4], &[a, b]);
-        assert!(both.iter().all(|&v| v == 255), "并集应整块覆盖：{both:?}");
+        assert!(both.iter().all(|&v| v == 255), "並集應整塊覆蓋：{both:?}");
         // 轮廓超出画布时安全截断。
         let out = coverage_mask([4, 4], &[vec![(-5.0, -5.0), (9.0, -5.0), (9.0, 9.0), (-5.0, 9.0)]]);
         assert!(out.iter().all(|&v| v == 255));
@@ -381,16 +381,16 @@ mod tests {
             let mut present = |n: u32, layered: &mut Layered| for i in 0..n {
                 frame[(i as usize * 4) % (w * h * 4)] = (i % 251) as u8;
                 frame[3] = (i % 200) as u8;
-                assert!(layered.present(owner, [w, h], &frame).unwrap(), "每帧画面不同，必须真正提交");
+                assert!(layered.present(owner, [w, h], &frame).unwrap(), "每幀畫面不同，必須真正提交");
             };
             present(300, &mut layered);
             let gdi = |kind| GetGuiResources(GetCurrentProcess(), kind);
             let (mem0, gdi0, user0) = (crate::resources::snapshot().unwrap().private_bytes, gdi(GR_GDIOBJECTS), gdi(GR_USEROBJECTS));
             present(3000, &mut layered);
             let (mem1, gdi1, user1) = (crate::resources::snapshot().unwrap().private_bytes, gdi(GR_GDIOBJECTS), gdi(GR_USEROBJECTS));
-            eprintln!("3000 帧：私有内存 {:+.1} MB，GDI {gdi0}→{gdi1}，USER {user0}→{user1}", (mem1 as f64 - mem0 as f64) / 1048576.0);
-            assert!(mem1 < mem0 + 8 * 1024 * 1024, "3000 帧后私有内存增长超过 8MB");
-            assert!(gdi1 <= gdi0 + 2 && user1 <= user0 + 2, "GDI/USER 对象随帧数增长");
+            eprintln!("3000 幀：私有記憶體 {:+.1} MB，GDI {gdi0}→{gdi1}，USER {user0}→{user1}", (mem1 as f64 - mem0 as f64) / 1048576.0);
+            assert!(mem1 < mem0 + 8 * 1024 * 1024, "3000 幀後私有記憶體增長超過 8MB");
+            assert!(gdi1 <= gdi0 + 2 && user1 <= user0 + 2, "GDI/USER 物件隨幀數增長");
             drop(layered);
             let _ = DestroyWindow(owner);
         }
@@ -408,19 +408,19 @@ mod tests {
             assert!(layered.present(owner, [4, 2], &px).unwrap());
             let mut alpha = 0u8;
             GetLayeredWindowAttributes(owner, None, Some(&mut alpha), None).unwrap();
-            assert_eq!(alpha, OWNER_ALPHA, "岛仔窗口几乎不可见，但不能是 0（否则点不到）");
+            assert_eq!(alpha, OWNER_ALPHA, "島仔視窗幾乎不可見，但不能是 0（否則點不到）");
             assert!(IsWindowVisible(layered.display()).as_bool());
-            assert_eq!(next_visible(layered.display()), Some(owner), "岛仔窗口紧贴在显示窗口下面");
-            assert!(!layered.present(owner, [4, 2], &px).unwrap(), "同一画面不重复提交");
-            assert!(!layered.present(owner, [8, 1], &[0u8; 32]).unwrap(), "尺寸与窗口不符时跳过");
+            assert_eq!(next_visible(layered.display()), Some(owner), "島仔視窗緊貼在顯示視窗下面");
+            assert!(!layered.present(owner, [4, 2], &px).unwrap(), "同一畫面不重複提交");
+            assert!(!layered.present(owner, [8, 1], &[0u8; 32]).unwrap(), "尺寸與視窗不符時跳過");
             SetWindowPos(owner, None, -9000, -9000, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE).unwrap();
             layered.sync(owner, false);
             let mut d = RECT::default();
             GetWindowRect(layered.display(), &mut d).unwrap();
-            assert_eq!((d.left, d.top), (-9000, -9000), "窗口移动后显示窗口跟随");
+            assert_eq!((d.left, d.top), (-9000, -9000), "視窗移動後顯示視窗跟隨");
             let _ = ShowWindow(owner, SW_HIDE);
             layered.sync(owner, false);
-            assert!(!IsWindowVisible(layered.display()).as_bool(), "岛仔窗口隐藏时显示窗口一起隐藏");
+            assert!(!IsWindowVisible(layered.display()).as_bool(), "島仔視窗隱藏時顯示視窗一起隱藏");
             layered.detach(owner);
             assert!(GetWindowLongPtrW(owner, GWL_EXSTYLE) & WS_EX_LAYERED.0 as isize == 0);
             let _ = DestroyWindow(owner);

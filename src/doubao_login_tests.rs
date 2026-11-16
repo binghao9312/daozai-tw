@@ -116,10 +116,10 @@ fn cancellation_prevents_launching_the_browser() {
 }
 
 #[test]
-#[ignore = "使用独立无头 Chrome／Edge 验证实际 CDP 通道及进程目录清理"]
+#[ignore = "使用獨立無頭 Chrome／Edge 驗證實際 CDP 通道及程序目錄清理"]
 fn doubao_browser_transport_local() {
     let root = temp_dir("browser");
-    let child = Command::new(find_browser().expect("本机 Chrome／Edge"))
+    let child = Command::new(find_browser().expect("本機 Chrome／Edge"))
         .arg(format!("--user-data-dir={}", root.display()))
         .args(["--headless=new", "--remote-debugging-port=0", "--remote-debugging-address=127.0.0.1", "--no-first-run", "--no-default-browser-check", "about:blank"])
         .stdout(Stdio::null()).stderr(Stdio::null()).spawn().unwrap();
@@ -128,21 +128,21 @@ fn doubao_browser_transport_local() {
     let (port, url) = loop {
         assert!(browser.child.try_wait().unwrap().is_none());
         if let Ok(raw) = fs::read_to_string(root.join("DevToolsActivePort")) { break endpoint(&raw).unwrap(); }
-        assert!(Instant::now() < deadline, "独立浏览器启动超时");
+        assert!(Instant::now() < deadline, "獨立瀏覽器啟動超時");
         std::thread::sleep(Duration::from_millis(100));
     };
     assert!(cdp(port, &url, "Storage.getCookies").unwrap()["cookies"].as_array().unwrap().is_empty());
     let pid = browser.child.id();
     drop(browser);
-    assert!(!root.exists(), "登录浏览器临时目录应已清理");
-    assert!(TcpStream::connect((Ipv4Addr::LOCALHOST, port)).is_err(), "独立浏览器端口应已关闭：{pid}");
+    assert!(!root.exists(), "登入瀏覽器臨時目錄應已清理");
+    assert!(TcpStream::connect((Ipv4Addr::LOCALHOST, port)).is_err(), "獨立瀏覽器埠應已關閉：{pid}");
 }
 
 #[test]
-#[ignore = "只读验证本机豆包当前登录及额度，不保存凭据"]
+#[ignore = "只讀驗證本機豆包當前登入及額度，不儲存憑據"]
 fn doubao_local_live_read_only() {
-    let header = local().expect("读取本机豆包当前登录");
-    let snapshot = super::super::request(&super::super::super::http_agent(), ENDPOINT, &header).map_err(|error|error.0).expect("只读查询豆包额度");
+    let header = local().expect("讀取本機豆包當前登入");
+    let snapshot = super::super::request(&super::super::super::http_agent(), ENDPOINT, &header).map_err(|error|error.0).expect("只讀查詢豆包額度");
     assert!(!snapshot.windows.is_empty());
-    println!("本机豆包识别及额度查询通过：{} 个周期，{} 项额外额度", snapshot.windows.len(), snapshot.extra.len());
+    println!("本機豆包識別及額度查詢透過：{} 個週期，{} 項額外額度", snapshot.windows.len(), snapshot.extra.len());
 }

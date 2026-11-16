@@ -20,8 +20,8 @@ fn strong() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
     R.get_or_init(|| {
         Regex::new(concat!(
-            r"(?i)[验驗][证證][码碼]|校[验驗][码碼]|[确確][认認][码碼]|[动動][态態](?:密)?[码碼]|安全[码碼]|登[录錄入][码碼]|激活[码碼]|",
-            r"一次性(?:密[码碼]|口令)|otp|one[-\s]?time\s+(?:code|password|passcode)|",
+            r"(?i)[驗驗][證證][碼碼]|校[驗驗][碼碼]|[確確][認認][碼碼]|[動動][態態](?:密)?[碼碼]|安全[碼碼]|登[錄錄入][碼碼]|啟用[碼碼]|",
+            r"一次性(?:密[碼碼]|口令)|otp|one[-\s]?time\s+(?:code|password|passcode)|",
             r"verification\s+code|security\s+code|auth(?:entication)?\s+code|",
             r"passcode|\bcode\b|認証コード|인증번호"
         ))
@@ -33,7 +33,7 @@ fn weak() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
     R.get_or_init(|| {
         Regex::new(concat!(
-            r"(?i)登[录錄入陆陸]|[验驗][证證]|校[验驗]|身份|[确確][认認]|安全|",
+            r"(?i)登[錄錄入陸陸]|[驗驗][證證]|校[驗驗]|身份|[確確][認認]|安全|",
             r"sign[-\s]?in|log[-\s]?in|verify|verification|confirm|authenticate"
         ))
         .expect("weak keyword regex")
@@ -97,21 +97,21 @@ fn has(win: &str, words: &[&str]) -> bool {
 }
 
 const ORDER_WORDS: &[&str] = &[
-    "订单", "单号", "快递", "运单", "物流", "包裹", "编号", "序号", "发票", "金额", "合计",
-    "实付", "应付", "电话", "手机号", "会议号", "会议", "卡尾号", "尾号", "邮编", "sku",
+    "訂單", "單號", "快遞", "運單", "物流", "包裹", "編號", "序號", "發票", "金額", "合計",
+    "實付", "應付", "電話", "手機號", "會議號", "會議", "卡尾號", "尾號", "郵編", "sku",
     "訂單", "單號", "快遞", "運單", "編號", "序號", "發票", "金額", "合計", "實付", "應付", "電話", "手機號", "會議", "尾號", "郵編",
     "order", "track", "invoice", "amount", "phone", "meeting", "card ending",
 ];
 
-const MONEY_WORDS: &[&str] = &["¥", "￥", "$", "€", "元", "价格", "金额", "合计", "实付", "应付", "價格", "金額", "合計", "實付", "應付"];
+const MONEY_WORDS: &[&str] = &["¥", "￥", "$", "€", "元", "價格", "金額", "合計", "實付", "應付", "價格", "金額", "合計", "實付", "應付"];
 
 const PROMO_WORDS: &[&str] = &[
-    "优惠", "折扣", "促销", "满减", "券", "红包", "coupon", "promo", "discount", "sale",
+    "優惠", "折扣", "促銷", "滿減", "券", "紅包", "coupon", "promo", "discount", "sale",
     "優惠", "促銷", "滿減", "紅包",
 ];
 
 const EXPIRE_WORDS: &[&str] = &[
-    "有效", "过期", "失效", "expire", "valid", "minutes", "分钟", "小时内", "過期", "分鐘", "小時內",
+    "有效", "過期", "失效", "expire", "valid", "minutes", "分鐘", "小時內", "過期", "分鐘", "小時內",
 ];
 
 /// 纯字母只接受明确的验证码字段，不能靠标题、大小写或强调样式累积成高分。
@@ -139,7 +139,7 @@ fn alphabetic_code_at(hay:&str,start:usize,end:usize,text:&str,emph:&[String])->
     let quote=|c:char|"\"'“”‘’「」`".contains(c);
     let raw_gap=&prefix[label.end()..];
     let gap=raw_gap.trim().trim_end_matches(quote).trim().trim_end_matches([':', '：', '=']).trim().to_ascii_lowercase();
-    if !["","is","为","為","是"].contains(&gap.as_str()){return false;}
+    if !["","is","為","為","是"].contains(&gap.as_str()){return false;}
     let tail=hay[end..].trim_start_matches(quote).trim_start_matches([' ','\t']);
     if tail.starts_with(['@','/','\\','_','-']) || tail.strip_prefix('.').is_some_and(|s|s.chars().next().is_some_and(|c|c.is_ascii_alphanumeric())){return false;}
     let terminal=tail.is_empty() || tail.starts_with(['\r','\n','.',',','，','。',';','；','!','！',')','）']);
@@ -335,7 +335,7 @@ fn score_at(hay: &str, start: usize, end: usize, text: &str, subject_end: usize,
     if is_emph {
         score += 25;
     }
-    if has(&b40, &["验证码是", "验证码为", "校验码是", "驗證碼是", "驗證碼為", "校驗碼是", "code is", "code:"]) {
+    if has(&b40, &["驗證碼是", "驗證碼為", "校驗碼是", "驗證碼是", "驗證碼為", "校驗碼是", "code is", "code:"]) {
         score += 5;
     }
     if has(&a40, EXPIRE_WORDS) || has(&b60, EXPIRE_WORDS) {
@@ -398,7 +398,7 @@ mod tests {
 
     #[test]
     fn numeric_html_entities_still_produce_a_maskable_code() {
-        let body=html_to_text("<p>验证码：&#49;&#50;&#51;&#52;&#53;&#54;</p>");
+        let body=html_to_text("<p>驗證碼：&#49;&#50;&#51;&#52;&#53;&#54;</p>");
         assert_eq!(extract("",&body,&[]).map(|c|c.text),Some("123456".into()));
     }
 
@@ -412,7 +412,7 @@ mod tests {
             ("Your verification code","Your verification code: QXTRPA","QXTRPA"),
             ("Your security code","Your security code: qmxrpt.","qmxrpt"),
             ("","Your verification code is QxTrPa.","QxTrPa"),
-            ("","验证码为：AbCdEf。","AbCdEf"),
+            ("","驗證碼為：AbCdEf。","AbCdEf"),
             ("","您的一次性驗證碼為：QXTRPA","QXTRPA"),
             ("Sign-in","One-time code:\nQXTRPA\nExpires in 5 minutes.","QXTRPA"),
             ("","OTP:\nABCD-EFGH","ABCD-EFGH"),
@@ -444,9 +444,9 @@ mod tests {
             ("","Verification code: QXTRPA.com"),
             ("","Verification code: abcdefghijkl"),
             ("","Verification code: ABC"),
-        ] {assert_eq!(code(subject,body),None,"普通英文不能被放大成验证码：{body}");}
+        ] {assert_eq!(code(subject,body),None,"普通英文不能被放大成驗證碼：{body}");}
         let body=html_to_text("<h1>Account verification</h1><p><b>WELCOME</b></p><p>Please sign in.</p>");
-        assert_eq!(extract("Verification code",&body,&["WELCOME".into()]),None,"标题和加粗单词不能单独证明这是验证码");
+        assert_eq!(extract("Verification code",&body,&["WELCOME".into()]),None,"標題和加粗單詞不能單獨證明這是驗證碼");
     }
 
     #[test]
@@ -458,7 +458,7 @@ mod tests {
 
     #[test]
     fn regression_traditional_verification_codes() {
-        let body="我們收到您要申請一次性驗證碼來與 Microsoft 帳戶搭配使用。\n您的一次性驗證碼為：431872\n僅在官方網站或應用程式上輸入此代碼。不要與任何人分享。";
+        let body="我們收到您要申請一次性驗證碼來與 Microsoft 帳戶搭配使用。\n您的一次性驗證碼為：431872\n僅在官方網站或應用程式上輸入此程式碼。不要與任何人分享。";
         assert_eq!(code("您的一次性驗證碼",body),Some("431872".into()));
         for (subject,body,expected) in [
             ("登入驗證碼","您的一次性驗證碼為：4318729","4318729"),
@@ -466,26 +466,26 @@ mod tests {
             ("", "您的動態密碼：482913，5 分鐘內有效。","482913"),
         ] {assert_eq!(code(subject,body),Some(expected.into()),"{body}");}
         for body in ["驗證碼通知：訂單號 431872 已出貨","驗證碼通知：電話 431872","驗證碼通知：金額 431872","驗證碼請見圖片"] {
-            assert_eq!(code("",body),None,"不能把普通数字当成验证码：{body}");
+            assert_eq!(code("",body),None,"不能把普通數字當成驗證碼：{body}");
         }
     }
 
     #[test]
     fn chinese_codes_with_strong_keyword() {
-        assert_eq!(code("【某某】验证码", "您的验证码是：834921，10分钟内有效。"), Some("834921".into()));
-        assert_eq!(code("", "动态密码：482913（5分钟内有效）"), Some("482913".into()));
-        assert_eq!(code("", "验证码 906213"), Some("906213".into()));
-        assert_eq!(code("", "安全码：4021"), Some("4021".into()));
-        assert_eq!(code("", "验证码\n735164\n请勿泄露"), Some("735164".into()));
+        assert_eq!(code("【某某】驗證碼", "您的驗證碼是：834921，10分鐘內有效。"), Some("834921".into()));
+        assert_eq!(code("", "動態密碼：482913（5分鐘內有效）"), Some("482913".into()));
+        assert_eq!(code("", "驗證碼 906213"), Some("906213".into()));
+        assert_eq!(code("", "安全碼：4021"), Some("4021".into()));
+        assert_eq!(code("", "驗證碼\n735164\n請勿洩露"), Some("735164".into()));
     }
 
     #[test]
     fn unicode_whitespace_before_code_is_safe() {
         for space in ['\u{00a0}', '\u{2002}', '\u{2003}', '\u{202f}', '\u{3000}'] {
-            let text = format!("验证码：{space}834921");
+            let text = format!("驗證碼：{space}834921");
             assert_eq!(code("", &text), Some("834921".into()));
             assert_eq!(code(&text, ""), Some("834921".into()));
-            assert_eq!(code("", &format!("验证码：{space}https://example.com/834921")), None);
+            assert_eq!(code("", &format!("驗證碼：{space}https://example.com/834921")), None);
         }
     }
 
@@ -495,39 +495,39 @@ mod tests {
             code("Your verification code", "Your verification code is 552310. It expires in 10 minutes."),
             Some("552310".into())
         );
-        assert_eq!(code("", "验证码：A1B2C3"), Some("A1B2C3".into()));
-        assert_eq!(code("验证码 K7Q2-9XMP", "10 分钟内有效"), Some("K7Q2-9XMP".into()));
+        assert_eq!(code("", "驗證碼：A1B2C3"), Some("A1B2C3".into()));
+        assert_eq!(code("驗證碼 K7Q2-9XMP", "10 分鐘內有效"), Some("K7Q2-9XMP".into()));
     }
 
     #[test]
     fn full_width_digits_are_normalized() {
-        assert_eq!(code("", "您的验证码是：８３４９２１，10分钟内有效"), Some("834921".into()));
+        assert_eq!(code("", "您的驗證碼是：８３４９２１，10分鐘內有效"), Some("834921".into()));
     }
 
     #[test]
     fn emphasized_html_without_nearby_keyword() {
-        let body = html_to_text("<p>尊敬的用户，您正在进行登录操作。</p><p>本次校验：<b>834921</b></p>");
-        let emph = emphasized("<p>尊敬的用户，您正在进行登录操作。</p><p>本次校验：<b>834921</b></p>");
+        let body = html_to_text("<p>尊敬的使用者，您正在進行登入操作。</p><p>本次校驗：<b>834921</b></p>");
+        let emph = emphasized("<p>尊敬的使用者，您正在進行登入操作。</p><p>本次校驗：<b>834921</b></p>");
         assert_eq!(extract("", &body, &emph).map(|c| c.text), Some("834921".into()));
     }
 
     #[test]
     fn negatives_are_rejected() {
         let cases = [
-            ("", "您的订单号 12345678 已发货"),
-            ("", "订单 482913，金额 ￥1,299.00"),
-            ("", "会议号 123 456 789"),
-            ("", "2026年10月30日 13:20 开始"),
-            ("", "客服电话 400-800-8888"),
-            ("", "优惠券码 SAVE20，立减 20 元"),
+            ("", "您的訂單號 12345678 已發貨"),
+            ("", "訂單 482913，金額 ￥1,299.00"),
+            ("", "會議號 123 456 789"),
+            ("", "2026年10月30日 13:20 開始"),
+            ("", "客服電話 400-800-8888"),
+            ("", "優惠券碼 SAVE20，立減 20 元"),
             ("", "https://example.com/verify/482913"),
-            ("", "卡尾号 8891"),
-            ("", "邮编 200120"),
-            ("", "验证码有效期至 2026-10-30"),
-            ("", "产品型号 SKU-8891 已出库"),
-            ("", "验证码请见图片"),
-            ("", "您的快递 773456789012 已到驿站"),
-            ("", "验证码：请在邮箱中查看"),
+            ("", "卡尾號 8891"),
+            ("", "郵編 200120"),
+            ("", "驗證碼有效期至 2026-10-30"),
+            ("", "產品型號 SKU-8891 已出庫"),
+            ("", "驗證碼請見圖片"),
+            ("", "您的快遞 773456789012 已到驛站"),
+            ("", "驗證碼：請在信箱中檢視"),
         ];
         for (subject, body) in cases {
             assert_eq!(code(subject, body), None, "should reject: {body}");
@@ -537,15 +537,15 @@ mod tests {
     #[test]
     fn order_number_does_not_beat_real_code() {
         assert_eq!(
-            code("", "验证码：834921，如非本人操作请忽略。订单号 987654"),
+            code("", "驗證碼：834921，如非本人操作請忽略。訂單號 987654"),
             Some("834921".into())
         );
     }
 
     #[test]
     fn html_to_text_strips_tags_and_entities() {
-        let text = html_to_text("<div>验证码&nbsp;123456</div><script>var x=1</script>");
-        assert!(text.contains("验证码 123456"));
+        let text = html_to_text("<div>驗證碼&nbsp;123456</div><script>var x=1</script>");
+        assert!(text.contains("驗證碼 123456"));
         assert!(!text.contains("var x"));
     }
 }

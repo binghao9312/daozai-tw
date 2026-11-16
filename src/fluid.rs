@@ -344,12 +344,12 @@ mod tests {
     #[test]
     fn collapsed_is_translucent_and_expanded_fades_toward_the_bottom() {
         let (top, bottom) = Fluid::glass_alpha(0.0);
-        assert!((top - bottom).abs() < 1e-6, "收起时是一条均匀的半透药丸");
+        assert!((top - bottom).abs() < 1e-6, "收起時是一條均勻的半透藥丸");
         assert!(top > 0.45 && top < 0.75, "半透但不能糊掉文字：{top}");
 
         let (top, bottom) = Fluid::glass_alpha(1.0);
-        assert!(top > 0.85, "展开后顶部要压得住文字：{top}");
-        assert!(bottom < 0.45, "展开后下半段要透出桌面：{bottom}");
+        assert!(top > 0.85, "展開後頂部要壓得住文字：{top}");
+        assert!(bottom < 0.45, "展開後下半段要透出桌面：{bottom}");
         assert!(top > bottom);
     }
 
@@ -361,8 +361,8 @@ mod tests {
         for c in [a, b] {
             let mx = c.r().max(c.g()).max(c.b()) as i32;
             let mn = c.r().min(c.g()).min(c.b()) as i32;
-            assert!(mx - mn <= 8, "底色应接近中性灰，色差只有 {}", mx - mn);
-            assert!(c.r() > 18, "微灰不能退化成纯黑");
+            assert!(mx - mn <= 8, "底色應接近中性灰，色差只有 {}", mx - mn);
+            assert!(c.r() > 18, "微灰不能退化成純黑");
         }
     }
 
@@ -381,11 +381,11 @@ mod tests {
             f.advance(f.t + 0.016, 0.016);
             let cur = lum(f.compose(60.0, 10.0, 419.0, 140.0, 1.0));
             let step = (cur as i32 - prev as i32).abs();
-            assert!(step <= 8, "第 {i} 帧亮度跳了 {step}，切歌会显得突兀");
+            assert!(step <= 8, "第 {i} 幀亮度跳了 {step}，切歌會顯得突兀");
             prev = cur;
         }
         let green = f.compose(60.0, 10.0, 419.0, 140.0, 1.0);
-        assert!(green.g() > red.g(), "淡入结束应当换成新主色");
+        assert!(green.g() > red.g(), "淡入結束應當換成新主色");
     }
 
     #[test]
@@ -399,11 +399,11 @@ mod tests {
         f.advance(20.0, 0.016);
         f.advance(20.0 + TINT_FADE + 0.05, 0.016);
         let after = f.compose(60.0, 70.0, 419.0, 140.0, 1.0);
-        assert!(lum(colored) != lum(after) || colored.r() != after.r(), "必须淡回中性");
+        assert!(lum(colored) != lum(after) || colored.r() != after.r(), "必須淡回中性");
         // 回到中性后不应再带明显色相
         let mx = after.r().max(after.g()).max(after.b()) as i32;
         let mn = after.r().min(after.g()).min(after.b()) as i32;
-        assert!(mx - mn <= 10, "音乐停止后底色应当回到中性灰：{}", mx - mn);
+        assert!(mx - mn <= 10, "音樂停止後底色應當回到中性灰：{}", mx - mn);
     }
 
     #[test]
@@ -411,9 +411,9 @@ mod tests {
         let mut f = Fluid::new();
         f.advance(1.0, 0.016);
         f.set_tint([0.9, 0.3, 0.2]);
-        assert!(f.animating(), "淡入期间要刷新");
+        assert!(f.animating(), "淡入期間要重新整理");
         f.advance(1.0 + TINT_FADE + 0.1, 0.016);
-        assert!(!f.animating(), "淡入结束就该停手");
+        assert!(!f.animating(), "淡入結束就該停手");
     }
 
     #[test]
@@ -424,12 +424,12 @@ mod tests {
         for _ in 0..40 {
             f.advance(f.t + 0.016, 0.016);
         }
-        assert!(f.glow_a > 0.9, "光标在岛上时光晕要亮起来：{}", f.glow_a);
+        assert!(f.glow_a > 0.9, "游標在島上時光暈要亮起來：{}", f.glow_a);
         f.set_cursor(None);
         for _ in 0..60 {
             f.advance(f.t + 0.016, 0.016);
         }
-        assert_eq!(f.glow_a, 0.0, "移开后光晕必须完全消失");
+        assert_eq!(f.glow_a, 0.0, "移開後光暈必須完全消失");
     }
 
     #[test]
@@ -444,7 +444,7 @@ mod tests {
             f.advance(f.t + 0.016, 0.016);
         }
         let after = f.compose(point.0, point.1, 419.0, 140.0, 1.0);
-        assert!(lum(after) > lum(before) + 15, "中间偏上区域必须有明显光晕");
+        assert!(lum(after) > lum(before) + 15, "中間偏上區域必須有明顯光暈");
     }
 
     #[test]
@@ -461,7 +461,7 @@ mod tests {
             let y = 2.0 + i as f32 * 5.0;
             let cur = lum(f.compose(209.5, y, 419.0, 140.0, 1.0));
             let step = (cur as i32 - prev as i32).abs();
-            assert!(step <= 60, "第 {i} 个采样点亮度跳了 {step}，光晕不连续");
+            assert!(step <= 60, "第 {i} 個取樣點亮度跳了 {step}，光暈不連續");
             prev = cur;
         }
     }
@@ -482,8 +482,8 @@ mod tests {
         }
         let playing = f.compose(120.0, 92.0, 419.0, 140.0, 1.0);
         let spread = f.compose(120.0, 62.0, 419.0, 140.0, 1.0);
-        assert!(lum(playing) > lum(before), "进度头要亮于底色");
-        assert!(lum(spread) > lum(before), "光要散得开，不能只是一颗硬点");
+        assert!(lum(playing) > lum(before), "進度頭要亮於底色");
+        assert!(lum(spread) > lum(before), "光要散得開，不能只是一顆硬點");
         // 柔和：单通道抬升不超过 30 级（旧版是 40 级以上的硬白核）
         let lift = (lum(playing) - lum(before)) as f32 / 3.0;
         assert!(lift < 30.0, "追光太亮了：+{lift:.0}/255");
@@ -494,9 +494,9 @@ mod tests {
             f.advance(f.t + 0.016, 0.016);
         }
         let dragging = f.compose(120.0, 92.0, 419.0, 140.0, 1.0);
-        assert!(lum(dragging) > lum(playing), "拖动应当比播放时更亮");
+        assert!(lum(dragging) > lum(playing), "拖動應當比播放時更亮");
         let lift = (lum(dragging) - lum(before)) as f32 / 3.0;
-        assert!(lift < 55.0, "拖动光也太亮了：+{lift:.0}/255");
+        assert!(lift < 55.0, "拖動光也太亮了：+{lift:.0}/255");
 
         // 追光随位置移动：同一个采样点，头压过来时才亮
         // （底色本身左边偏彩、右边偏灰，跨点比亮度会被底色差淹没，所以固点比）。
@@ -506,22 +506,22 @@ mod tests {
             f.advance(f.t + 0.016, 0.016);
         }
         let moved = f.compose(300.0, 92.0, 419.0, 140.0, 1.0);
-        assert!(lum(moved) > lum(at300), "追光要跟着走");
+        assert!(lum(moved) > lum(at300), "追光要跟著走");
 
         // 并且是**朝后**拖：同样离开头部 40 DIP，头后的抬升要远大于头前。
         let behind = f.compose(260.0, 92.0, 419.0, 140.0, 1.0);
         let ahead = f.compose(340.0, 92.0, 419.0, 140.0, 1.0);
         let lift_behind = lum(behind) as i32 - lum(base_behind) as i32;
         let lift_ahead = lum(ahead) as i32 - lum(base_ahead) as i32;
-        assert!(lift_behind > lift_ahead + 6, "光应当朝后拖：头后 +{lift_behind}，头前 +{lift_ahead}");
+        assert!(lift_behind > lift_ahead + 6, "光應當朝後拖：頭後 +{lift_behind}，頭前 +{lift_ahead}");
 
         // 没有音源后收干净
         f.set_seek(None, 0.0);
         for _ in 0..80 {
             f.advance(f.t + 0.016, 0.016);
         }
-        assert_eq!(f.seek_a, 0.0, "没有音源后必须收干净");
-        assert!(!f.animating(), "收干净后不应继续刷新");
+        assert_eq!(f.seek_a, 0.0, "沒有音源後必須收乾淨");
+        assert!(!f.animating(), "收乾淨後不應繼續重新整理");
     }
 
     #[test]
@@ -533,7 +533,7 @@ mod tests {
             }
         }
         let t = Fluid::tint_from_image(&img);
-        assert!(t[0] > t[1] && t[0] > t[2], "主色应当偏红：{t:?}");
+        assert!(t[0] > t[1] && t[0] > t[2], "主色應當偏紅：{t:?}");
     }
 
     #[test]
@@ -550,7 +550,7 @@ mod tests {
                 let c = f.compose(80.0, y, 419.0, 140.0, expand);
                 let (at, ab) = Fluid::glass_alpha(expand);
                 let floor = at.min(ab) * 255.0 - 1.0;
-                assert!(c.a() as f32 >= floor, "alpha 不能被压到低于底色：{}", c.a());
+                assert!(c.a() as f32 >= floor, "alpha 不能被壓到低於底色：{}", c.a());
             }
         }
     }

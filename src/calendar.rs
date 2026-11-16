@@ -119,7 +119,7 @@ impl Provider {
             Provider::Exchange => [
                 "伺服器填 Exchange 郵件伺服器地址，例如 mail.example.com",
                 "使用者名稱一般是信箱，也可能是「網域\\使用者名稱」；密碼用信箱密碼",
-                "唯讀同步日曆；Microsoft 365 已不支援密碼登入，暫無法連接",
+                "唯讀同步日曆；Microsoft 365 已不支援密碼登入，暫無法連線",
             ],
             Provider::Feishu | Provider::DingTalk | Provider::WeCom => [
                 "已停用此中國服務，請改用 Google 日曆或 iCloud",
@@ -241,14 +241,14 @@ pub fn save_config(cfg: &Config) -> Result<(), String> {
 
 fn save_configs(accounts: &[Config], active: Provider) -> Result<(), String> {
     let accounts: Vec<serde_json::Value> = accounts.iter()
-        .map(|cfg| serde_json::from_slice(&encode_config(cfg)).expect("日历配置可以序列化")).collect();
+        .map(|cfg| serde_json::from_slice(&encode_config(cfg)).expect("日曆配置可以序列化")).collect();
     let data = serde_json::to_vec(&serde_json::json!({"active": active.key(), "accounts": accounts}))
-        .map_err(|e| format!("配置序列化失败：{e}"))?;
+        .map_err(|e| format!("配置序列化失敗：{e}"))?;
     let path = config_path();
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| format!("创建配置目录失败：{e}"))?;
+        std::fs::create_dir_all(parent).map_err(|e| format!("建立配置目錄失敗：{e}"))?;
     }
-    crate::model::atomic_write(&path, &data).map_err(|e| format!("写配置失败：{e}"))
+    crate::model::atomic_write(&path, &data).map_err(|e| format!("寫配置失敗：{e}"))
 }
 
 pub fn select_provider(provider: Provider) -> Result<(), String> {
@@ -266,7 +266,7 @@ pub fn save_connection(cfg: &Config, password: &str, old: Option<&Config>) -> Re
     if let Err(error) = save_config(cfg) {
         if let Some(password) = previous_password {
             if let Err(restore) = secrets::save(cfg, &password) {
-                return Err(format!("{error}；恢复原凭据失败：{restore}"));
+                return Err(format!("{error}；恢復原憑據失敗：{restore}"));
             }
         } else {
             secrets::delete(cfg);
@@ -293,14 +293,14 @@ pub mod secrets {
     /// 凭据只进 Windows 凭据管理器；键是「平台:用户名」，值是密码。
     pub fn save(cfg: &super::Config, password: &str) -> Result<(), String> {
         let entry = keyring::Entry::new(super::SERVICE, &name(cfg))
-            .map_err(|e| format!("凭据管理器不可用：{e}"))?;
-        entry.set_password(password).map_err(|e| format!("保存密码失败：{e}"))
+            .map_err(|e| format!("憑據管理器不可用：{e}"))?;
+        entry.set_password(password).map_err(|e| format!("儲存密碼失敗：{e}"))
     }
 
     pub fn load(cfg: &super::Config) -> Result<String, String> {
         let entry = keyring::Entry::new(super::SERVICE, &name(cfg))
-            .map_err(|e| format!("凭据管理器不可用：{e}"))?;
-        entry.get_password().map_err(|_| "没有保存密码".to_string())
+            .map_err(|e| format!("憑據管理器不可用：{e}"))?;
+        entry.get_password().map_err(|_| "沒有儲存密碼".to_string())
     }
 
     pub fn delete(cfg: &super::Config) {
@@ -317,10 +317,10 @@ pub mod secrets {
 #[cfg(not(windows))]
 pub mod secrets {
     pub fn save(_cfg: &super::Config, _password: &str) -> Result<(), String> {
-        Err("仅 Windows 支持凭据管理器".into())
+        Err("僅 Windows 支援憑據管理器".into())
     }
     pub fn load(_cfg: &super::Config) -> Result<String, String> {
-        Err("仅 Windows 支持凭据管理器".into())
+        Err("僅 Windows 支援憑據管理器".into())
     }
     pub fn delete(_cfg: &super::Config) {}
 }
@@ -336,9 +336,9 @@ pub fn parse_paste(text: &str) -> Option<(String, String)> {
         .replace('：', ":")
         .replace('＝', "=");
     let lower = flat.to_ascii_lowercase();
-    let user_labels = ["用户名", "帐号", "账号", "邮箱", "账户", "username", "user name", "account", "email", "login"];
-    let pass_labels = ["密码", "口令", "password", "pass word", "pwd", "pass"];
-    let skip_labels = ["服务器地址", "服务器", "地址", "server", "url"];
+    let user_labels = ["使用者名稱", "帳號", "帳號", "信箱", "賬戶", "username", "user name", "account", "email", "login"];
+    let pass_labels = ["密碼", "口令", "password", "pass word", "pwd", "pass"];
+    let skip_labels = ["伺服器地址", "伺服器", "地址", "server", "url"];
 
     let mut marks: Vec<(usize, usize, u8)> = Vec::new(); // (start, end, 0=user 1=pass 2=skip)
     for (kind, labels) in [(0u8, &user_labels[..]), (1u8, &pass_labels[..]), (2u8, &skip_labels[..])] {
@@ -414,15 +414,15 @@ pub struct Failure {
 impl Failure {
     fn status(provider: Provider, code: u16) -> Self {
         let message = match code {
-            401 if provider.custom_server() => "验证账号失败（401），请核对用户名和密码".to_string(),
-            401 => format!("验证账号失败（401），请核对用户名和{}提供的专用密码", provider.label()),
-            403 => "日历服务器拒绝访问（403），请核对同步地址、专用密码及日历授权".to_string(),
-            404 => "服务器地址不对（404）".to_string(),
-            405 => "当前地址不支持日历同步（405），请核对平台提供的 CalDAV 地址".to_string(),
-            407 => "网络需要代理认证（407）".to_string(),
-            429 => "请求太频繁（429），稍后再试".to_string(),
-            500..=599 => format!("服务器出错（{code}），稍后再试"),
-            _ => format!("服务器返回 {code}"),
+            401 if provider.custom_server() => "驗證帳號失敗（401），請核對使用者名稱和密碼".to_string(),
+            401 => format!("驗證帳號失敗（401），請核對使用者名稱和{}提供的專用密碼", provider.label()),
+            403 => "日曆伺服器拒絕訪問（403），請核對同步地址、專用密碼及日曆授權".to_string(),
+            404 => "伺服器地址不對（404）".to_string(),
+            405 => "當前地址不支援日曆同步（405），請核對平臺提供的 CalDAV 地址".to_string(),
+            407 => "網路需要代理認證（407）".to_string(),
+            429 => "請求太頻繁（429），稍後再試".to_string(),
+            500..=599 => format!("伺服器出錯（{code}），稍後再試"),
+            _ => format!("伺服器返回 {code}"),
         };
         Self { status: Some(code), message, request_url: None,report:None,kind:"http" }
     }
@@ -433,7 +433,7 @@ impl Failure {
     }
 
     fn at_stage(mut self, stage: &str) -> Self {
-        if self.status != Some(401) { self.message = format!("{stage}失败，{}", self.message); }
+        if self.status != Some(401) { self.message = format!("{stage}失敗，{}", self.message); }
         self
     }
 
@@ -454,17 +454,17 @@ enum TransportIssue { Untrusted, Validity, Name, Revoked, Certificate, Tls, Time
 impl TransportIssue {
     fn details(self) -> (&'static str, &'static str) {
         match self {
-            Self::Untrusted => ("certificate_untrusted", "日历服务器证书不受信任，请先在 Windows 中信任服务器证书或其颁发机构"),
-            Self::Validity => ("certificate_validity", "日历服务器证书不在有效期内，请检查系统时间或联系管理员更新证书"),
-            Self::Name => ("certificate_name", "日历服务器证书与服务器地址不匹配，请使用证书对应的域名或联系管理员更新证书"),
-            Self::Revoked => ("certificate_revoked", "日历服务器证书已被吊销，请联系管理员更新证书"),
-            Self::Certificate => ("certificate_invalid", "日历服务器证书验证失败，请联系管理员检查证书及证书链"),
-            Self::Tls => ("tls_handshake", "无法与日历服务器建立安全连接（TLS 握手失败），请检查服务器证书和 TLS 配置"),
-            Self::Timeout => ("timeout", "日历服务器连接超时，请检查网络或稍后重试"),
-            Self::Dns => ("dns", "无法解析日历服务器地址，请核对域名和网络"),
-            Self::Refused => ("connection_refused", "日历服务器拒绝连接，请核对服务器端口及服务是否启动"),
-            Self::Proxy => ("proxy", "无法连接日历代理服务器，请检查代理配置及认证"),
-            Self::Network => ("network", "连不上服务器，检查网络"),
+            Self::Untrusted => ("certificate_untrusted", "日曆伺服器證書不受信任，請先在 Windows 中信任伺服器證書或其頒發機構"),
+            Self::Validity => ("certificate_validity", "日曆伺服器證書不在有效期內，請檢查系統時間或聯絡管理員更新證書"),
+            Self::Name => ("certificate_name", "日曆伺服器證書與伺服器地址不匹配，請使用證書對應的域名或聯絡管理員更新證書"),
+            Self::Revoked => ("certificate_revoked", "日曆伺服器證書已被吊銷，請聯絡管理員更新證書"),
+            Self::Certificate => ("certificate_invalid", "日曆伺服器證書驗證失敗，請聯絡管理員檢查證書及證書鏈"),
+            Self::Tls => ("tls_handshake", "無法與日曆伺服器建立安全連線（TLS 握手失敗），請檢查伺服器證書和 TLS 配置"),
+            Self::Timeout => ("timeout", "日曆伺服器連線超時，請檢查網路或稍後重試"),
+            Self::Dns => ("dns", "無法解析日曆伺服器地址，請核對域名和網路"),
+            Self::Refused => ("connection_refused", "日曆伺服器拒絕連線，請核對伺服器埠及服務是否啟動"),
+            Self::Proxy => ("proxy", "無法連線日曆代理伺服器，請檢查代理配置及認證"),
+            Self::Network => ("network", "連不上伺服器，檢查網路"),
         }
     }
 }
@@ -545,7 +545,7 @@ fn agent() -> Result<ureq::Agent, Failure> {
     // 仅日历使用系统证书验证，继承用户已信任的自签证书和私有 CA。
     #[cfg(windows)]
     let builder = builder.tls_connector(std::sync::Arc::new(native_tls::TlsConnector::new()
-        .map_err(|_| Failure::text("无法初始化日历安全连接，请重启岛仔后重试"))?));
+        .map_err(|_| Failure::text("無法初始化日曆安全連線，請重啟島仔後重試"))?));
     Ok(builder.build())
 }
 
@@ -572,13 +572,13 @@ fn dav_response(
     agent: &ureq::Agent, method: &str, url: &str, depth: &str,
     body: &str, cfg: &Config, password: &str,
 ) -> Result<(String,String), Failure> {
-    let base=url::Url::parse(&cfg.base()).map_err(|_|Failure::text("日历服务器地址无效"))?;
-    let mut target=url::Url::parse(url).map_err(|_|Failure::text("日历地址无效"))?;
+    let base=url::Url::parse(&cfg.base()).map_err(|_|Failure::text("日曆伺服器地址無效"))?;
+    let mut target=url::Url::parse(url).map_err(|_|Failure::text("日曆地址無效"))?;
     for attempt in 0..4 {
         let local=base.host_str().is_some_and(|host|host.parse::<std::net::IpAddr>().is_ok_and(|ip|ip.is_loopback()));
         if !same_service(cfg.provider,&target,&base) || !target.username().is_empty() || target.password().is_some()
             || !(target.scheme()=="https" || target.scheme()=="http" && local) {
-            return Err(Failure::text("日历返回了不可信地址，请重新连接"));
+            return Err(Failure::text("日曆返回了不可信地址，請重新連線"));
         }
         let res = agent
         .request(method, target.as_str())
@@ -588,8 +588,8 @@ fn dav_response(
         .send_string(body);
         match res {
             Ok(r) if matches!(r.status(),301|302|303|307|308) && attempt<3 => {
-                target=target.join(r.header("Location").ok_or_else(||Failure::text("日历重定向缺少地址"))?)
-                    .map_err(|_|Failure::text("日历重定向地址无效"))?;
+                target=target.join(r.header("Location").ok_or_else(||Failure::text("日曆重定向缺少地址"))?)
+                    .map_err(|_|Failure::text("日曆重定向地址無效"))?;
             }
             Ok(r) if r.status()>=300=>return Err(Failure::status(cfg.provider,r.status()).at_url(&target)),
             Ok(r)=>return r.into_string().map(|xml|(xml,target.to_string())).map_err(|e|Failure::transport(&e)),
@@ -597,7 +597,7 @@ fn dav_response(
             Err(e)=>return Err(Failure::transport(&e)),
         }
     }
-    Err(Failure::text("日历重定向次数过多"))
+    Err(Failure::text("日曆重定向次數過多"))
 }
 
 /// iCloud 的日历实际放在 `pNN-caldav.icloud.com` 上，发现过程会从入口跳过去；
@@ -656,10 +656,10 @@ impl ReadReport {
     }
     pub fn warning(&self)->String{
         let mut parts=Vec::new();
-        if self.failed>0{parts.push(format!("{} 处日历读取失败",self.failed));}
-        if self.invalid>0{parts.push(format!("{} 条日程无法解析",self.invalid));}
-        if self.unsupported>0{parts.push(format!("{} 条待办等非日程记录已跳过",self.unsupported));}
-        if self.limited{parts.push("已达到读取上限，结果可能不完整".into());}
+        if self.failed>0{parts.push(format!("{} 處日曆讀取失敗",self.failed));}
+        if self.invalid>0{parts.push(format!("{} 條日程無法解析",self.invalid));}
+        if self.unsupported>0{parts.push(format!("{} 條待辦等非日程記錄已跳過",self.unsupported));}
+        if self.limited{parts.push("已達到讀取上限，結果可能不完整".into());}
         if !parts.is_empty(){if let Some(issue)=&self.issue{parts.push(issue.clone());}}
         parts.join("；")
     }
@@ -727,18 +727,18 @@ fn fetch_range(cfg: &Config, password: &str, lo: chrono::DateTime<chrono::Utc>, 
     let agent = agent()?;
     // 每次都发现全部日历：已保存的地址可能指向空日历，会遮蔽同一账号下的其他日历。
     // 逐个查询，单个日历失败不影响其他日历，全部失败才报错。
-    let (calendars,mut report)=discover_calendars(&agent,cfg,password).map_err(|e|e.at_stage("查找日历"))?;
-    let href=calendars.first().cloned().ok_or_else(||Failure::text("没有找到可读取的日历"))?;
+    let (calendars,mut report)=discover_calendars(&agent,cfg,password).map_err(|e|e.at_stage("查詢日曆"))?;
+    let href=calendars.first().cloned().ok_or_else(||Failure::text("沒有找到可讀取的日曆"))?;
     let mut events=Vec::new();
     let mut first_error=None;
     let mut ok=false;
     for collection in &calendars {
         match fetch_collection(&agent,cfg,password,collection,lo,hi) {
             Ok(found)=>{ok=true;events.extend(found.events);report.merge(found.report);}
-            Err(error)=>{report.failed+=1;report.status=report.status.or(error.status);let error=error.at_stage("读取日程");report.problem(error.message.clone());first_error.get_or_insert(error);}
+            Err(error)=>{report.failed+=1;report.status=report.status.or(error.status);let error=error.at_stage("讀取日程");report.problem(error.message.clone());first_error.get_or_insert(error);}
         }
     }
-    if !ok {return Err(first_error.unwrap_or_else(||Failure::text("没有找到日历")).with_report(report));}
+    if !ok {return Err(first_error.unwrap_or_else(||Failure::text("沒有找到日曆")).with_report(report));}
     if events.is_empty() && report.invalid>0{return Err(Failure::text(report.warning()).with_report(report));}
     events.sort_by_key(|m|m.start);
     let mut seen=std::collections::HashSet::new();events.retain(|m|seen.insert(dedupe_key(m)));
@@ -769,7 +769,7 @@ fn fetch_collection(agent:&ureq::Agent,cfg:&Config,password:&str,href:&str,lo:ch
         xml=dav(&agent,"REPORT",&href,"1",&body,cfg,password)?;
         has_data=calendar_data(&xml).iter().any(|data|!data.trim().is_empty());
         if !has_data && report_status_error(&xml).is_none() {
-            return Err(Failure::text("服务器未返回日程内容，请检查日历读取权限"));
+            return Err(Failure::text("伺服器未返回日程內容，請檢查日曆讀取許可權"));
         }
     }
     let ParsedEvents{events,mut report}=parse_events_in_range(&xml,lo,hi);
@@ -781,12 +781,12 @@ fn fetch_collection(agent:&ureq::Agent,cfg:&Config,password:&str,href:&str,lo:ch
 }
 
 fn report_resource_refs(xml:&str,href:&str)->Result<String,Failure> {
-    let base=url::Url::parse(href).map_err(|_|Failure::text("日历地址无效"))?;
+    let base=url::Url::parse(href).map_err(|_|Failure::text("日曆地址無效"))?;
     let mut refs=String::new();
     for (resource,is_calendar,_) in responses(xml) {
-        let target=base.join(&resource).map_err(|_|Failure::text("日程地址无效"))?;
+        let target=base.join(&resource).map_err(|_|Failure::text("日程地址無效"))?;
         if target.origin()!=base.origin() || !target.username().is_empty() || target.password().is_some() {
-            return Err(Failure::text("日历返回了不可信地址，请重新连接"));
+            return Err(Failure::text("日曆返回了不可信地址，請重新連線"));
         }
         if is_calendar || target.path().trim_end_matches('/')==base.path().trim_end_matches('/') {continue;}
         let escaped=target[url::Position::BeforePath..url::Position::AfterQuery].replace('&',"&amp;").replace('<',"&lt;").replace('>',"&gt;");
@@ -815,7 +815,7 @@ fn discover_calendars(agent: &ureq::Agent, cfg: &Config, password: &str) -> Resu
             return Ok(calendar);
         }
     }
-    Err(Failure::text("没有找到日历，请确认这个账号能在客户端里同步日程"))
+    Err(Failure::text("沒有找到日曆，請確認這個帳號能在客戶端裡同步日程"))
 }
 
 fn discover_at(agent:&ureq::Agent,cfg:&Config,password:&str,start:&str,depth:&str)->Result<Option<(Vec<String>,ReadReport)>,Failure>{
@@ -858,7 +858,7 @@ fn discover_at(agent:&ureq::Agent,cfg:&Config,password:&str,start:&str,depth:&st
     }
     if !queue.is_empty(){report.limited=true;}
     report.calendars=found.len();
-    if found.is_empty(){if let Some(error)=first_error{Err(error.with_report(report))}else if report.limited{Err(Failure::text("日历服务发现次数过多，请重新连接").with_report(report))}else{Ok(None)}}else{Ok(Some((found,report)))}
+    if found.is_empty(){if let Some(error)=first_error{Err(error.with_report(report))}else if report.limited{Err(Failure::text("日曆服務發現次數過多，請重新連線").with_report(report))}else{Ok(None)}}else{Ok(Some((found,report)))}
 }
 
 // ---------------------------------------------------------------- XML
@@ -916,7 +916,7 @@ fn calendar_collections(xml:&str,base:&str)->Vec<String>{
 
 #[cfg(test)]
 fn discover(agent:&ureq::Agent,cfg:&Config,password:&str)->Result<String,Failure>{
-    discover_calendars(agent,cfg,password)?.0.into_iter().next().ok_or_else(||Failure::text("没有找到日历"))
+    discover_calendars(agent,cfg,password)?.0.into_iter().next().ok_or_else(||Failure::text("沒有找到日曆"))
 }
 
 /// 只选择日历集合或已有的 UUID 兼容路径，不能把主目录/收件箱当成日历。
@@ -971,7 +971,7 @@ pub fn events_from_ics(ics: &str, lo: chrono::DateTime<chrono::Utc>, hi: chrono:
 }
 
 pub fn inspect_ics(ics:&str,lo:chrono::DateTime<chrono::Utc>,hi:chrono::DateTime<chrono::Utc>)->Result<ParsedEvents,String>{
-    if !ical_lines(ics).iter().any(|line|matches!(line.as_str(),"BEGIN:VCALENDAR"|"BEGIN:VEVENT")){return Err("不是有效的日历文件（.ics）".into());}
+    if !ical_lines(ics).iter().any(|line|matches!(line.as_str(),"BEGIN:VCALENDAR"|"BEGIN:VEVENT")){return Err("不是有效的日曆檔案（.ics）".into());}
     let escaped = ics.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
     let xml = format!("<d:response><c:calendar-data>{escaped}</c:calendar-data></d:response>");
     Ok(parse_events_in_range(&xml,lo,hi))
@@ -1068,7 +1068,7 @@ fn parse_events_in_range(xml:&str,lo:chrono::DateTime<chrono::Utc>,hi:chrono::Da
             "END:VEVENT"=>if let Some(body)=body.take(){blocks.push(body);},
             _=>if let Some(body)=&mut body{body.push_str(&line);body.push('\n');},
         }}
-        if body.is_some(){report.invalid+=1;report.problem("日程内容不完整");}
+        if body.is_some(){report.invalid+=1;report.problem("日程內容不完整");}
     }
     let field=|body:&str,name:&str|{
         let mut nested=0;
@@ -1086,7 +1086,7 @@ fn parse_events_in_range(xml:&str,lo:chrono::DateTime<chrono::Utc>,hi:chrono::Da
         let valid_start=cancelled(body)||!crate::mail::meetings_of(&format!("BEGIN:VEVENT\n{body}END:VEVENT")).is_empty();
         if id.contains("RANGE=")||at.is_none()||!valid_start{
             if let Some(uid)=field(body,"UID"){invalid_series.insert(uid);}
-            report.problem("部分重复日程的修改规则或时间暂无法解析");
+            report.problem("部分重複日程的修改規則或時間暫無法解析");
         }else{overrides.insert((field(body,"UID").unwrap_or_default(),at.unwrap()));}
     }}
     let mut events=Vec::new();
@@ -1104,7 +1104,7 @@ fn parse_events_in_range(xml:&str,lo:chrono::DateTime<chrono::Utc>,hi:chrono::Da
         if field(&body,"UID").is_some_and(|uid|invalid_series.contains(&uid)){report.invalid+=1;continue;}
         if cancelled(&body){report.cancelled+=1;continue;}
         let Some(base)=crate::mail::meetings_of(&format!("BEGIN:VEVENT\n{body}END:VEVENT")).into_iter().next()else{
-            report.invalid+=1;report.problem("部分日程的时间或时区无法解析");continue;
+            report.invalid+=1;report.problem("部分日程的時間或時區無法解析");continue;
         };
         if field(&body,"RECURRENCE-ID").is_some()||field(&body,"RRULE").is_none(){
             if (field(&body,"RECURRENCE-ID").is_some()||!overrides.contains(&(field(&body,"UID").unwrap_or_default(),base.start))) && !add_event(base,&mut report){break;}
@@ -1115,7 +1115,7 @@ fn parse_events_in_range(xml:&str,lo:chrono::DateTime<chrono::Utc>,hi:chrono::Da
             if line.starts_with("BEGIN:"){nested+=1;continue;}if line.starts_with("END:"){nested-=1;continue;}
             if nested==0 && matches!(line.split([';',':']).next(),Some("DTSTART"|"RRULE"|"RDATE"|"EXDATE")){rules.push(line);}
         }
-        let Ok(set)=rules.join("\n").parse::<rrule::RRuleSet>()else{report.invalid+=1;report.problem("部分日程的重复规则无法解析");continue;};
+        let Ok(set)=rules.join("\n").parse::<rrule::RRuleSet>()else{report.invalid+=1;report.problem("部分日程的重複規則無法解析");continue;};
         let duration=base.end.map_or(0,|end|end-base.start);
         let result=set.after((lo-chrono::Duration::seconds(duration.max(1))).with_timezone(&rrule::Tz::UTC)).before(hi.with_timezone(&rrule::Tz::UTC)).all(2000);
         report.limited|=result.limited;if result.dates.is_empty(){report.outside+=1;}
@@ -1257,7 +1257,7 @@ fn run_with(cmd_rx: Receiver<Cmd>, ev: Sender<Event>, interval: Duration, mut sy
                                 let mut saved = c.clone();
                                 saved.href = Some(f.href);
                                 let warning=f.report.warning();
-                                (true,if warning.is_empty(){"连接成功".into()}else{format!("部分日程未同步：{warning}")}, f.events.len(), Some(saved))
+                                (true,if warning.is_empty(){"連線成功".into()}else{format!("部分日程未同步：{warning}")}, f.events.len(), Some(saved))
                             }
                             Err(e) => (false, e.message, 0, None),
                         };
@@ -1285,7 +1285,7 @@ fn sync_once(
         Ok(p) => p,
         Err(e) => {
             // 没配置凭据：静默，只记日志。
-            eprintln!("[calendar] 凭据不可用：{e}");
+            eprintln!("[calendar] 憑據不可用：{e}");
             let _ = ev.send(Event::Failed { config:cfg.clone(),message: e.clone() });
             if let Some(month) = month { let _ = ev.send(Event::MonthLoaded { config: cfg.clone(), month, result: Err(e) }); }
             return;
@@ -1298,7 +1298,7 @@ fn sync_once(
             let _ = ev.send(Event::Warning{config:cfg.clone(),month:None,message:warning});
         }
         Err(e) => {
-            eprintln!("[calendar] 同步失败：{}", e.message);
+            eprintln!("[calendar] 同步失敗：{}", e.message);
             let _ = ev.send(Event::Failed { config:cfg.clone(),message: e.message });
         }
     }
@@ -1356,7 +1356,7 @@ mod tests {
         let cfg=Config{provider:Provider::DingTalk,username:"test".into(),href:Some(format!("{base}empty/")),server:Some(base)};
         let result=fetch_month(&cfg,"test",NaiveDate::from_ymd_opt(2026,11,1).unwrap());
         stop.send(()).unwrap();worker.join().unwrap();
-        assert_eq!(result.unwrap().events.len(),1,"已保存的空日历不能遮蔽其他日历");
+        assert_eq!(result.unwrap().events.len(),1,"已儲存的空日曆不能遮蔽其他日曆");
     }
 
     #[test]
@@ -1466,8 +1466,8 @@ mod tests {
                     let error=result.err().unwrap();
                     assert_eq!(error.status,Some(code),"well_known={well_known} redirect={redirect} paths={paths:?}");
                     let expected=if well_known {vec!["/","/.well-known/caldav","/account/"]} else {vec!["/","/account/"]};
-                    assert_eq!(paths,expected,"实际日历服务失败后应保留错误");
-                    assert!(error.message.contains("查找日历"),"{}",error.message);
+                    assert_eq!(paths,expected,"實際日曆服務失敗後應保留錯誤");
+                    assert!(error.message.contains("查詢日曆"),"{}",error.message);
                 }
             }
         }
@@ -1506,7 +1506,7 @@ mod tests {
             let error=fetch_month(&cfg,"synthetic-password",NaiveDate::from_ymd_opt(2026,11,1).unwrap()).err().unwrap();
             worker.join().unwrap();
             assert_eq!(error.status,Some(code));
-            assert!(error.message.contains(if code==401 {"验证账号失败"} else {"读取日程失败"}),"{}",error.message);
+            assert!(error.message.contains(if code==401 {"驗證帳號失敗"} else {"讀取日程失敗"}),"{}",error.message);
             assert!(error.message.contains(&code.to_string()),"{}",error.message);
         }
     }
@@ -1514,7 +1514,7 @@ mod tests {
     #[test]
     fn discovery_only_selects_calendar_collections_including_self() {
         let xml=r#"<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:response><d:href>/dav/account/</d:href><d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype><c:calendar-home-set><d:href>/dav/home/</d:href></c:calendar-home-set></d:prop></d:propstat></d:response></d:multistatus>"#;
-        assert_eq!(pick_calendar(xml,"https://example.com/"),None,"日历主目录属性不能被当成日历集合类型");
+        assert_eq!(pick_calendar(xml,"https://example.com/"),None,"日曆主目錄屬性不能被當成日曆集合型別");
         let calendar=xml.replace("<d:collection/>","<d:collection/><c:calendar/>");
         assert_eq!(pick_calendar(&calendar,"https://example.com/dav/account/"),Some("https://example.com/dav/account/".into()));
     }
@@ -1562,7 +1562,7 @@ mod tests {
         let client=ureq::AgentBuilder::new().timeout(Duration::from_millis(100)).build();
         assert!(dav(&client,"REPORT",&url,"1","",&cfg,"synthetic-secret").is_err());
         server.set_nonblocking(true).unwrap();
-        assert!(server.accept().is_err(),"不可信地址不能收到携带凭据的请求");
+        assert!(server.accept().is_err(),"不可信地址不能收到攜帶憑據的請求");
     }
 
     #[test]
@@ -1597,9 +1597,9 @@ mod tests {
 
     #[test]
     fn calendar_limit_counts_only_unique_events_in_range(){
-        let old="BEGIN:VEVENT\nUID:old\nDTSTART:20200101T120000Z\nSUMMARY:历史\nEND:VEVENT\n";
+        let old="BEGIN:VEVENT\nUID:old\nDTSTART:20200101T120000Z\nSUMMARY:歷史\nEND:VEVENT\n";
         let current="BEGIN:VEVENT\nUID:today\nDTSTART:20261112T120000Z\nSUMMARY:今天\nEND:VEVENT\n";
-        let daily="BEGIN:VEVENT\nUID:daily\nDTSTART:20261113T120000Z\nRRULE:FREQ=DAILY;COUNT=2\nSUMMARY:重复\nEND:VEVENT\n";
+        let daily="BEGIN:VEVENT\nUID:daily\nDTSTART:20261113T120000Z\nRRULE:FREQ=DAILY;COUNT=2\nSUMMARY:重複\nEND:VEVENT\n";
         let ics=format!("BEGIN:VCALENDAR\n{}{}{daily}END:VCALENDAR",old.repeat(5000),current.repeat(2));
         let result=inspect_ics(&ics,"2026-11-01T00:00:00Z".parse().unwrap(),"2026-12-01T00:00:00Z".parse().unwrap()).unwrap();
         assert_eq!(result.events.len(),3);
@@ -1609,17 +1609,17 @@ mod tests {
 
     #[test]
     fn quality_different_meetings_without_uid_are_not_merged() {
-        let a=crate::mail::Meeting{ all_day:false,title:"设计评审".into(),start:100,end:None,at:String::new(),uid:String::new()};
-        let b=crate::mail::Meeting{ all_day:false,title:"客户会议".into(),..a.clone()};
+        let a=crate::mail::Meeting{ all_day:false,title:"設計評審".into(),start:100,end:None,at:String::new(),uid:String::new()};
+        let b=crate::mail::Meeting{ all_day:false,title:"客戶會議".into(),..a.clone()};
         assert_ne!(dedupe_key(&a),dedupe_key(&b));
     }
     #[test]
     fn recurring_events_respect_edits_cancellations_and_exdates(){
-        let data="BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:daily\nSUMMARY:原标题\nDTSTART;TZID=Asia/Shanghai:20261103T112000\nDTEND;TZID=Asia/Shanghai:20261103T115000\nRRULE:FREQ=DAILY;COUNT=4\nEXDATE;TZID=Asia/Shanghai:20261106T112000\nEND:VEVENT\nBEGIN:VEVENT\nUID:daily\nSUMMARY:修改标题\nRECURRENCE-ID;TZID=Asia/Shanghai:20261103T112000\nDTSTART;TZID=Asia/Shanghai:20261103T112000\nDTEND;TZID=Asia/Shanghai:20261103T115000\nEND:VEVENT\nBEGIN:VEVENT\nUID:daily\nRECURRENCE-ID;TZID=Asia/Shanghai:20261104T112000\nDTSTART;TZID=Asia/Shanghai:20261104T112000\nSTATUS:CANCELLED\nEND:VEVENT\nEND:VCALENDAR";
+        let data="BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:daily\nSUMMARY:原標題\nDTSTART;TZID=Asia/Shanghai:20261103T112000\nDTEND;TZID=Asia/Shanghai:20261103T115000\nRRULE:FREQ=DAILY;COUNT=4\nEXDATE;TZID=Asia/Shanghai:20261106T112000\nEND:VEVENT\nBEGIN:VEVENT\nUID:daily\nSUMMARY:修改標題\nRECURRENCE-ID;TZID=Asia/Shanghai:20261103T112000\nDTSTART;TZID=Asia/Shanghai:20261103T112000\nDTEND;TZID=Asia/Shanghai:20261103T115000\nEND:VEVENT\nBEGIN:VEVENT\nUID:daily\nRECURRENCE-ID;TZID=Asia/Shanghai:20261104T112000\nDTSTART;TZID=Asia/Shanghai:20261104T112000\nSTATUS:CANCELLED\nEND:VEVENT\nEND:VCALENDAR";
         let xml=format!("<c:calendar-data>{}</c:calendar-data>",data.replace('\n',"&#xD;&#xA;"));
         let lo="2026-11-01T00:00:00Z".parse().unwrap();let hi="2026-12-01T00:00:00Z".parse().unwrap();
         let events=events_in_range(&xml,lo,hi).unwrap();
-        assert_eq!(events.len(),2);assert_eq!(events[0].title,"修改标题");assert_eq!(events[1].title,"原标题");
+        assert_eq!(events.len(),2);assert_eq!(events[0].title,"修改標題");assert_eq!(events[1].title,"原標題");
         assert_eq!(events[1].start-events[0].start,2*86400);assert_eq!(events[0].end.unwrap()-events[0].start,1800);
         let cancelled=format!("<c:calendar-data>BEGIN:VCALENDAR\nMETHOD:CANCEL\n{data}</c:calendar-data>");
         assert!(events_in_range(&cancelled,lo,hi).unwrap().is_empty());
@@ -1643,41 +1643,41 @@ mod tests {
 
     #[test]
     fn feishu_hex_entities_preserve_event_lines(){
-        let xml="<C:calendar-data>BEGIN:VCALENDAR&#xD;&#xA;BEGIN:VEVENT&#xD;&#xA;UID:test&#xD;&#xA;SUMMARY:测试&#xD;&#xA;DTSTART:20261103T032000Z&#xD;&#xA;END:VEVENT&#xD;&#xA;END:VCALENDAR</C:calendar-data>";
+        let xml="<C:calendar-data>BEGIN:VCALENDAR&#xD;&#xA;BEGIN:VEVENT&#xD;&#xA;UID:test&#xD;&#xA;SUMMARY:測試&#xD;&#xA;DTSTART:20261103T032000Z&#xD;&#xA;END:VEVENT&#xD;&#xA;END:VCALENDAR</C:calendar-data>";
         assert_eq!(events_from_report(xml).len(),1);
         assert_eq!(unescape_xml("&amp;#xA;"),"&#xA;");
     }
 
     #[test]
-    #[ignore="显式执行已连接日历的只读实测"]
+    #[ignore="顯式執行已連線日曆的只讀實測"]
     fn live_calendar_read_only_probe(){
-        let configs=load_configs();assert!(!configs.is_empty(),"尚未保存日历连接");
+        let configs=load_configs();assert!(!configs.is_empty(),"尚未儲存日曆連線");
         for cfg in configs {
-        let password=secrets::load(&cfg).expect("日历凭据不可用");
-        let day=fetch(&cfg,&password).expect("提醒窗口同步失败");
-        let month=fetch_month(&cfg,&password,chrono::Local::now().date_naive()).expect("月份同步失败");
+        let password=secrets::load(&cfg).expect("日曆憑據不可用");
+        let day=fetch(&cfg,&password).expect("提醒視窗同步失敗");
+        let month=fetch_month(&cfg,&password,chrono::Local::now().date_naive()).expect("月份同步失敗");
         let today=chrono::Local::now().date_naive();
         println!("provider={} day_events={} month_events={} today_events={}",cfg.provider.key(),day.events.len(),month.events.len(),month.events.iter().filter(|m|chrono::DateTime::from_timestamp(m.start,0).unwrap().with_timezone(&chrono::Local).date_naive()==today).count());
         }
     }
 
     #[test]
-    #[ignore="显式验证已连接账号重新发现日历，不输出账号或日程内容"]
+    #[ignore="顯式驗證已連線帳號重新發現日曆，不輸出帳號或日程內容"]
     fn live_calendar_discovery_read_only_probe(){
-        let mut cfg=load_config().expect("尚未保存日历连接");
-        let password=secrets::load(&cfg).expect("日历凭据不可用");
+        let mut cfg=load_config().expect("尚未儲存日曆連線");
+        let password=secrets::load(&cfg).expect("日曆憑據不可用");
         cfg.href=None;
-        let fetched=fetch(&cfg,&password).expect("重新发现及查询日历失败");
+        let fetched=fetch(&cfg,&password).expect("重新發現及查詢日曆失敗");
         assert!(!fetched.href.is_empty());
     }
 
     #[test]
-    #[ignore="需要本轮创建的飞书个人测试日程"]
+    #[ignore="需要本輪建立的飛書個人測試日程"]
     fn live_calendar_test_samples() {
         let cfg=load_config().unwrap();let password=secrets::load(&cfg).unwrap();
         let month=fetch_month(&cfg,&password,NaiveDate::from_ymd_opt(2026,11,3).unwrap()).unwrap();
-        let samples=month.events.iter().filter(|m|m.title.starts_with("【岛仔测试】")).collect::<Vec<_>>();
-        let repeated=samples.iter().filter(|m|m.title.contains("重复与取消验证")).collect::<Vec<_>>();
+        let samples=month.events.iter().filter(|m|m.title.starts_with("【島仔測試】")).collect::<Vec<_>>();
+        let repeated=samples.iter().filter(|m|m.title.contains("重複與取消驗證")).collect::<Vec<_>>();
         assert_eq!(repeated.len(),2);
         assert_eq!(repeated.iter().map(|m|chrono::DateTime::from_timestamp(m.start,0).unwrap().with_timezone(&chrono::Local).day()).collect::<Vec<_>>(),vec![3,5]);
         assert!(samples.iter().any(|m|m.all_day));
@@ -1711,9 +1711,9 @@ mod tests {
                     }
                     let request=String::from_utf8(buf).unwrap();
                     assert!(request.contains(if index==0 {"calendar-query"} else {"calendar-multiget"}));
-                    assert!(request.contains("<d:getetag/>"),"钉钉要求查询与批量读取同时请求 ETag，否则返回 400");
+                    assert!(request.contains("<d:getetag/>"),"釘釘要求查詢與批次讀取同時請求 ETag，否則返回 400");
                     if index==1 {assert!(request.contains("<d:href>/calendar/item.ics</d:href>"));}
-                    let data=if index==1 && succeeds {"BEGIN:VCALENDAR&#xD;&#xA;BEGIN:VEVENT&#xD;&#xA;UID:test&#xD;&#xA;SUMMARY:测试&#xD;&#xA;DTSTART:20261103T032000Z&#xD;&#xA;RRULE:FREQ=DAILY;COUNT=2&#xD;&#xA;END:VEVENT&#xD;&#xA;END:VCALENDAR"} else {""};
+                    let data=if index==1 && succeeds {"BEGIN:VCALENDAR&#xD;&#xA;BEGIN:VEVENT&#xD;&#xA;UID:test&#xD;&#xA;SUMMARY:測試&#xD;&#xA;DTSTART:20261103T032000Z&#xD;&#xA;RRULE:FREQ=DAILY;COUNT=2&#xD;&#xA;END:VEVENT&#xD;&#xA;END:VCALENDAR"} else {""};
                     let status=if data.is_empty(){404}else{200};
                     let xml=format!("<d:multistatus><d:response><d:href>/calendar/item.ics</d:href><d:propstat><d:prop><c:calendar-data>{data}</c:calendar-data></d:prop><d:status>HTTP/1.1 {status} Result</d:status></d:propstat></d:response></d:multistatus>");
                     write!(socket,"HTTP/1.1 207 Multi-Status\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",xml.len(),xml).unwrap();
@@ -1750,7 +1750,7 @@ mod tests {
                     assert!(request.contains(if index==0 {"calendar-query"} else if index==1 {"PROPFIND"} else {"calendar-multiget"}));
                     if index != 1 { assert!(request.contains("<c:expand")); }
                     if index==2 {assert!(request.contains("<d:href>/calendar/item/</d:href>"));}
-                    let data=if index==2 && succeeds {"BEGIN:VCALENDAR&#xD;&#xA;BEGIN:VEVENT&#xD;&#xA;UID:test&#xD;&#xA;SUMMARY:测试&#xD;&#xA;DTSTART:20261103T032000Z&#xD;&#xA;RRULE:FREQ=DAILY;COUNT=2&#xD;&#xA;END:VEVENT&#xD;&#xA;END:VCALENDAR"} else {""};
+                    let data=if index==2 && succeeds {"BEGIN:VCALENDAR&#xD;&#xA;BEGIN:VEVENT&#xD;&#xA;UID:test&#xD;&#xA;SUMMARY:測試&#xD;&#xA;DTSTART:20261103T032000Z&#xD;&#xA;RRULE:FREQ=DAILY;COUNT=2&#xD;&#xA;END:VEVENT&#xD;&#xA;END:VCALENDAR"} else {""};
                     let status=if data.is_empty(){404}else{200};
                     let object=format!("<d:multistatus><d:response><d:href>/calendar/item/</d:href><d:propstat><d:prop><c:calendar-data>{data}</c:calendar-data></d:prop><d:status>HTTP/1.1 {status} Result</d:status></d:propstat></d:response></d:multistatus>");
                     let collection="<d:response><d:href>/calendar/</d:href><d:propstat><d:prop><d:resourcetype><d:collection/><c:calendar/></d:resourcetype></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>";
@@ -1815,20 +1815,20 @@ mod tests {
         }));
         let config=Config{provider:Provider::Feishu,username:"demo".into(),href:None,server:None};
         cmd.send(Cmd::Configure(vec![config.clone()],false)).unwrap();
-        events.recv_timeout(Duration::from_secs(1)).expect("新连接应同步一次");
+        events.recv_timeout(Duration::from_secs(1)).expect("新連線應同步一次");
         assert!(matches!(events.recv_timeout(Duration::from_millis(120)),Err(RecvTimeoutError::Timeout)));
         cmd.send(Cmd::SyncNow).unwrap();
-        events.recv_timeout(Duration::from_secs(1)).expect("关闭自动同步后仍能手动同步");
+        events.recv_timeout(Duration::from_secs(1)).expect("關閉自動同步後仍能手動同步");
         assert!(matches!(events.recv_timeout(Duration::from_millis(120)),Err(RecvTimeoutError::Timeout)));
         cmd.send(Cmd::Configure(vec![config.clone()],true)).unwrap();
-        events.recv_timeout(Duration::from_secs(1)).expect("开启后应立即更新");
-        events.recv_timeout(Duration::from_secs(1)).expect("开启后应继续定期更新");
+        events.recv_timeout(Duration::from_secs(1)).expect("開啟後應立即更新");
+        events.recv_timeout(Duration::from_secs(1)).expect("開啟後應繼續定期更新");
         cmd.send(Cmd::Configure(vec![config],false)).unwrap();
         // 等工作线程处理关闭指令，并排空恰好已经完成的一次同步。
         let _=events.recv_timeout(Duration::from_millis(120));
         assert!(matches!(events.recv_timeout(Duration::from_millis(120)),Err(RecvTimeoutError::Timeout)));
         cmd.send(Cmd::SyncNow).unwrap();
-        events.recv_timeout(Duration::from_secs(1)).expect("切换开关后手动同步仍可用");
+        events.recv_timeout(Duration::from_secs(1)).expect("切換開關後手動同步仍可用");
         drop(cmd);worker.join().unwrap();
     }
 
@@ -1836,7 +1836,7 @@ mod tests {
     fn multiple_calendars_sync_even_when_one_fails() {
         let (cmd,rx)=channel();let (tx,events)=channel();
         let worker=std::thread::spawn(move||run_with(rx,tx,Duration::from_secs(60),|cfg,_,ev|{
-            let event=if cfg.provider==Provider::Feishu {Event::Failed{config:cfg.clone(),message:"暂时不可用".into()}}
+            let event=if cfg.provider==Provider::Feishu {Event::Failed{config:cfg.clone(),message:"暫時不可用".into()}}
                 else {Event::Synced{config:cfg.clone(),events:vec![],at:String::new()}};
             ev.send(event).unwrap();
         }));
@@ -1880,33 +1880,33 @@ mod tests {
     #[test]
     fn basic_auth_is_rfc7617() {
         assert_eq!(basic_auth("Aladdin", "open sesame"), "Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==");
-        assert_eq!(basic_auth("用户", "密码"), "Basic 55So5oi3OuWvhueggQ==");
+        assert_eq!(basic_auth("使用者", "密碼"), "Basic 55So5oi3OuWvhueggQ==");
     }
 
     #[test]
     fn paste_splits_three_provider_formats() {
-        let feishu = "服务器地址：https://caldav.feishu.cn/calendars/\n用户名：u_abc@feishu\n密码：p@ss:word1";
+        let feishu = "伺服器地址：https://caldav.feishu.cn/calendars/\n使用者名稱：u_abc@feishu\n密碼：p@ss:word1";
         assert_eq!(parse_paste(feishu), Some(("u_abc@feishu".into(), "p@ss:word1".into())));
-        let ding = "账号 ding_001 密码 8f3k2j";
+        let ding = "帳號 ding_001 密碼 8f3k2j";
         assert_eq!(parse_paste(ding), Some(("ding_001".into(), "8f3k2j".into())));
-        let wecom = "用户名=wecom_user 密码=Wx!2026";
+        let wecom = "使用者名稱=wecom_user 密碼=Wx!2026";
         assert_eq!(parse_paste(wecom), Some(("wecom_user".into(), "Wx!2026".into())));
-        assert_eq!(parse_paste("就是一个用户名"), None, "拆不出密码就不猜");
+        assert_eq!(parse_paste("就是一個使用者名稱"), None, "拆不出密碼就不猜");
     }
 
     #[test]
     fn error_messages_are_human() {
-        assert_eq!(Failure::status(Provider::Feishu, 401).message, "验证账号失败（401），请核对用户名和飞书提供的专用密码");
-        assert_eq!(Failure::status(Provider::WeCom, 401).message, "验证账号失败（401），请核对用户名和企业微信提供的专用密码");
-        assert_eq!(Failure::status(Provider::Exchange, 401).message, "验证账号失败（401），请核对用户名和密码");
-        assert_eq!(Failure::status(Provider::Custom, 401).message, "验证账号失败（401），请核对用户名和密码");
+        assert_eq!(Failure::status(Provider::Feishu, 401).message, "驗證帳號失敗（401），請核對使用者名稱和飛書提供的專用密碼");
+        assert_eq!(Failure::status(Provider::WeCom, 401).message, "驗證帳號失敗（401），請核對使用者名稱和企業微信提供的專用密碼");
+        assert_eq!(Failure::status(Provider::Exchange, 401).message, "驗證帳號失敗（401），請核對使用者名稱和密碼");
+        assert_eq!(Failure::status(Provider::Custom, 401).message, "驗證帳號失敗（401），請核對使用者名稱和密碼");
         for provider in Provider::ALL {assert_eq!(Provider::parse(provider.key()),provider);}
         assert!(Provider::Exchange.exchange() && Provider::WeCom.exchange() && !Provider::Custom.exchange());
         assert!(Provider::Exchange.custom_server() && Provider::Exchange.server().is_empty());
         let saved=Config{provider:Provider::Exchange,username:"me@example.com".into(),href:None,server:Some("https://mail.example.com/".into())};
-        assert_eq!(decode_config(&encode_config(&saved)).unwrap(),saved,"Exchange 账号的服务器地址要能保存和读回");
-        assert!(Failure::transport(&std::io::Error::from(std::io::ErrorKind::TimedOut)).message.contains("连接超时"));
-        assert_eq!(Failure::status(Provider::DingTalk, 404).message, "服务器地址不对（404）");
+        assert_eq!(decode_config(&encode_config(&saved)).unwrap(),saved,"Exchange 帳號的伺服器地址要能儲存和讀回");
+        assert!(Failure::transport(&std::io::Error::from(std::io::ErrorKind::TimedOut)).message.contains("連線超時"));
+        assert_eq!(Failure::status(Provider::DingTalk, 404).message, "伺服器地址不對（404）");
     }
 
     #[test]
@@ -1917,11 +1917,11 @@ mod tests {
 
     #[test]
     fn dedupe_key_uses_uid_and_start() {
-        let a = crate::mail::Meeting { all_day:false, end:None, title: "周会".into(), start: 100, at: "01-01 09:00".into(), uid: "evt-1".into() };
-        let b = crate::mail::Meeting { all_day:false, end:None, title: "周会（日历）".into(), start: 100, at: "01-01 09:00".into(), uid: "evt-1".into() };
+        let a = crate::mail::Meeting { all_day:false, end:None, title: "週會".into(), start: 100, at: "01-01 09:00".into(), uid: "evt-1".into() };
+        let b = crate::mail::Meeting { all_day:false, end:None, title: "週會（日曆）".into(), start: 100, at: "01-01 09:00".into(), uid: "evt-1".into() };
         assert_eq!(dedupe_key(&a), dedupe_key(&b));
-        let c = crate::mail::Meeting { all_day:false, end:None, title: "无 UID".into(), start: 100, at: "".into(), uid: String::new() };
-        assert_eq!(dedupe_key(&c), "t100|无 UID");
+        let c = crate::mail::Meeting { all_day:false, end:None, title: "無 UID".into(), start: 100, at: "".into(), uid: String::new() };
+        assert_eq!(dedupe_key(&c), "t100|無 UID");
     }
 
     #[test]
@@ -1948,14 +1948,14 @@ END:VCALENDAR</c:calendar-data>"#;
 <d:response><d:href>/cal/x/1.ics</d:href><d:propstat><d:prop><c:calendar-data>BEGIN:VCALENDAR
 BEGIN:VEVENT
 UID:evt-9
-SUMMARY:周会
+SUMMARY:週會
 DTSTART:20261030T060000Z
 END:VEVENT
 END:VCALENDAR</c:calendar-data></d:prop></d:propstat></d:response>
 <d:response><d:href>/cal/y/2.ics</d:href><d:propstat><d:prop><c:calendar-data>BEGIN:VCALENDAR
 BEGIN:VEVENT
 UID:evt-9
-SUMMARY:周会副本
+SUMMARY:週會副本
 DTSTART:20261030T060000Z
 END:VEVENT
 END:VCALENDAR</c:calendar-data></d:prop></d:propstat></d:response>
@@ -1963,7 +1963,7 @@ END:VCALENDAR</c:calendar-data></d:prop></d:propstat></d:response>
         let ev = events_from_report(xml);
         assert_eq!(ev.len(), 1);
         assert_eq!(ev[0].uid, "evt-9");
-        assert_eq!(ev[0].title, "周会");
+        assert_eq!(ev[0].title, "週會");
         assert_eq!(ev[0].start, 1793340000); // 2026-10-30T06:00:00Z
     }
 
@@ -2009,7 +2009,7 @@ END:VCALENDAR</c:calendar-data></d:prop></d:propstat></d:response>
                     let xml = r#"<?xml version="1.0"?><d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:response><d:href>/calendars/u/1.ics</d:href><d:propstat><d:prop><c:calendar-data>BEGIN:VCALENDAR
 BEGIN:VEVENT
 UID:local-1
-SUMMARY:本地评审
+SUMMARY:本地評審
 DTSTART:20261031T020000Z
 END:VEVENT
 END:VCALENDAR</c:calendar-data></d:prop></d:propstat></d:response></d:multistatus>"#;
@@ -2031,7 +2031,7 @@ END:VCALENDAR</c:calendar-data></d:prop></d:propstat></d:response></d:multistatu
             href: None,
             server: Some(format!("http://127.0.0.1:{port}/calendars/")),
         };
-        let got = fetch(&cfg, "p1").expect("完整链路应成功");
+        let got = fetch(&cfg, "p1").expect("完整鏈路應成功");
         assert!(got.href.ends_with("/8f3c2d7a-1111-2222-3333-444455556666/"));
         assert_eq!(got.events.len(), 1);
         assert_eq!(got.events[0].uid, "local-1");
@@ -2054,7 +2054,7 @@ mod icloud_and_ics_tests {
         assert!(Provider::ICloud.all_calendars() && !Provider::Feishu.all_calendars());
         assert_eq!(normalize_server("cloud.example.com/remote.php/dav").as_deref(), Some("https://cloud.example.com/remote.php/dav"));
         assert_eq!(normalize_server("webcal://p01-caldav.icloud.com/x").as_deref(), Some("https://p01-caldav.icloud.com/x"));
-        assert!(normalize_server("http://example.com/dav").is_none(), "非本机地址必须 https");
+        assert!(normalize_server("http://example.com/dav").is_none(), "非本機地址必須 https");
         assert!(normalize_server("http://127.0.0.1:5232/").is_some());
         assert!(normalize_server("https://user:pw@example.com/").is_none());
         assert!(normalize_server("  ").is_none());
@@ -2090,12 +2090,12 @@ mod icloud_and_ics_tests {
 
     #[test]
     fn ics_file_events_expand_weekly_repeats() {
-        let ics = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Apple Inc.//macOS//EN\r\nBEGIN:VEVENT\r\nUID:apple-1\r\nSUMMARY:周会 & 复盘\r\nDTSTART:20261102T020000Z\r\nDTEND:20261102T030000Z\r\nRRULE:FREQ=WEEKLY;COUNT=3\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:apple-2\r\nSUMMARY:体检\r\nDTSTART;VALUE=DATE:20261110\r\nDTEND;VALUE=DATE:20261111\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+        let ics = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Apple Inc.//macOS//EN\r\nBEGIN:VEVENT\r\nUID:apple-1\r\nSUMMARY:週會 & 覆盤\r\nDTSTART:20261102T020000Z\r\nDTEND:20261102T030000Z\r\nRRULE:FREQ=WEEKLY;COUNT=3\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:apple-2\r\nSUMMARY:體檢\r\nDTSTART;VALUE=DATE:20261110\r\nDTEND;VALUE=DATE:20261111\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
         let lo = chrono::DateTime::parse_from_rfc3339("2026-11-01T00:00:00Z").unwrap().with_timezone(&chrono::Utc);
         let hi = chrono::DateTime::parse_from_rfc3339("2027-01-01T00:00:00Z").unwrap().with_timezone(&chrono::Utc);
         let events = events_from_ics(ics, lo, hi).unwrap();
-        assert_eq!(events.iter().filter(|e| e.title == "周会 & 复盘").count(), 3);
-        assert!(events.iter().any(|e| e.title == "体检" && e.all_day));
+        assert_eq!(events.iter().filter(|e| e.title == "週會 & 覆盤").count(), 3);
+        assert!(events.iter().any(|e| e.title == "體檢" && e.all_day));
         assert!(events_from_ics("hello", lo, hi).is_err());
     }
 }

@@ -308,7 +308,7 @@ mod gradient_tests {
                         for dx in [-0.5,0.0,0.5,1.0,1.5] {
                             let x=((center.x+dx*scale)*ppp).floor() as usize;
                             let expected=color.a() as f32/255.0;
-                            assert!((raster.buf[y*raster.w+x][3]-expected).abs()<0.02,"播放三角形内部应连续：ppp={ppp}, scale={scale}, offset={offset}, dx={dx}, alpha={}",raster.buf[y*raster.w+x][3]);
+                            assert!((raster.buf[y*raster.w+x][3]-expected).abs()<0.02,"播放三角形內部應連續：ppp={ppp}, scale={scale}, offset={offset}, dx={dx}, alpha={}",raster.buf[y*raster.w+x][3]);
                         }
                     }
                 }
@@ -329,8 +329,8 @@ mod gradient_tests {
                 assert!(fitted.ends_with('…'));
                 assert!(c.text_w(&fitted,10.5,W::Regular)<=180.0);
                 let layouts=ctx.fonts(|f|f.num_galleys_in_cache())-before;
-                assert!(layouts<=20,"长邮件链接只需少量排版，不应逐字重排：{layouts}");
-                println!("长链接排版次数：{layouts}");
+                assert!(layouts<=20,"長郵件連結只需少量排版，不應逐字重排：{layouts}");
+                println!("長連結排版次數：{layouts}");
             });
         });
     }
@@ -340,12 +340,12 @@ mod gradient_tests {
         let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::splat(500.0))),..Default::default()};
         let _=ctx.run(raw,|ctx|{egui::CentralPanel::default().show(ctx,|ui|{
             let c=Card::new(ui,Pos2::ZERO,ui.max_rect());
-            for text in ["", "a", "收到新的邮件与验证码", "会议提醒 🌴 完整标题", "https://example.com/short"] {
+            for text in ["", "a", "收到新的郵件與驗證碼", "會議提醒 🌴 完整標題", "https://example.com/short"] {
                 for width in [0.0,10.0,40.0,80.0,300.0] {
                     let expected=if c.text_w(text,10.5,W::Regular)<=width{text.into()}else{
                         let chars:Vec<_>=text.chars().collect();(1..chars.len()).rev().map(|n|chars[..n].iter().collect::<String>()+"…").find(|s|c.text_w(s,10.5,W::Regular)<=width).unwrap_or_else(||"…".into())
                     };
-                    assert_eq!(c.fit(text,10.5,W::Regular,width),expected,"宽度 {width} 的文字裁剪应保持原来的显示结果");
+                    assert_eq!(c.fit(text,10.5,W::Regular,width),expected,"寬度 {width} 的文字裁剪應保持原來的顯示結果");
                 }
             }
         });});
@@ -367,9 +367,9 @@ mod gradient_tests {
             let signs=[cross(a,b),cross(b,c),cross(c,a)];
             signs.iter().all(|s|*s>=0.0)||signs.iter().all(|s|*s<=0.0)
         }));
-        assert!(covers(Pos2::new(51.0,51.0)),"封面中心需要被绘制");
+        assert!(covers(Pos2::new(51.0,51.0)),"封面中心需要被繪製");
         for (x,y) in [(20.5,20.5),(81.5,20.5),(20.5,81.5),(81.5,81.5)] {
-            assert!(!covers(Pos2::new(x,y)),"渐变不能覆盖圆角之外的区域");
+            assert!(!covers(Pos2::new(x,y)),"漸變不能覆蓋圓角之外的區域");
         }
     }
 }

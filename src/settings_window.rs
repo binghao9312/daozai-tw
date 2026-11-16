@@ -132,7 +132,7 @@ mod tests {
         observe(&mut state,false,false);let normal=state.current;assert_eq!(normal.unwrap().position,[-1500.0,120.0]);assert!(!path.exists());
         observe(&mut state,true,false);observe(&mut state,false,true);assert_eq!(state.current,normal);
         state.close();let bytes=std::fs::read(&path).unwrap();assert_eq!(serde_json::from_slice::<Placement>(&bytes).unwrap(),normal.unwrap());
-        assert_eq!(State::load_at(path.clone()).saved,normal,"重启后应读回原始普通窗口位置与大小");
+        assert_eq!(State::load_at(path.clone()).saved,normal,"重啟後應讀回原始普通視窗位置與大小");
         state.close();assert_eq!(std::fs::read(&path).unwrap(),bytes);std::fs::remove_file(path).unwrap();
     }
     #[test]

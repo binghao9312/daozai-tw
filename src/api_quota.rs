@@ -14,7 +14,7 @@ pub fn custom_credentials(account:&Account)->Option<relay::script::Credential>{
     serde_json::from_str(&load(account.slot.as_deref()?).ok()?).ok()
 }
 fn script_path(slot:&str)->Result<PathBuf,String>{
-    let id=slot.strip_prefix("script-").filter(|s|s.len()==48&&s.bytes().all(|b|b.is_ascii_hexdigit())).ok_or("查询脚本凭据引用无效")?;
+    let id=slot.strip_prefix("script-").filter(|s|s.len()==48&&s.bytes().all(|b|b.is_ascii_hexdigit())).ok_or("查詢指令碼憑據引用無效")?;
     Ok(crate::model::config_dir().join("credentials").join(format!("relay-script-{id}.bin")))
 }
 
@@ -22,69 +22,69 @@ fn endpoint(provider:Provider,source:&str)->Result<String,String>{
     if provider.relay(){return relay::validate_base_url(source);}
     match provider {
         Provider::OpenCodeGo=>Ok(String::new()),
-        Provider::MiniMax|Provider::Glm=>match source {""|"cn"=>Ok("cn".into()),"global"=>Ok("global".into()),_=>Err("请选择中国区或国际区，密钥不会自动跨区重试".into())},
-        _=>Err("该服务不使用此连接方式".into())
+        Provider::MiniMax|Provider::Glm=>match source {""|"cn"=>Ok("cn".into()),"global"=>Ok("global".into()),_=>Err("請選擇中國區或國際區，金鑰不會自動跨區重試".into())},
+        _=>Err("該服務不使用此連線方式".into())
     }
 }
 fn request(agent:&ureq::Agent,provider:Provider,source:&str,key:&str,cancel:Option<&std::sync::atomic::AtomicBool>)->Result<Snapshot,(String,u64)>{
-    if cancel.is_some_and(|c|c.load(std::sync::atomic::Ordering::Acquire)){return Err(("已取消连接".into(),0));}
+    if cancel.is_some_and(|c|c.load(std::sync::atomic::Ordering::Acquire)){return Err(("已取消連線".into(),0));}
     let source=endpoint(provider,source).map_err(|e|(e,0))?;
     match provider {
         Provider::OpenCodeGo=>plans::request(agent,PlanProvider::OpenCodeGo,key),
         Provider::MiniMax=>plans::request(agent,if source=="global"{PlanProvider::MiniMaxGlobal}else{PlanProvider::MiniMaxChina},key),
         Provider::Glm=>plans::request(agent,if source=="global"{PlanProvider::GlmGlobal}else{PlanProvider::GlmChina},key),
         Provider::RelayCustom=>{
-            let c:relay::script::Credential=serde_json::from_str(key).map_err(|_|("查询脚本凭据无效，请重新连接".into(),0))?;
+            let c:relay::script::Credential=serde_json::from_str(key).map_err(|_|("查詢指令碼憑據無效，請重新連線".into(),0))?;
             relay::script::request(agent,&source,&c,||cancel.is_some_and(|c|c.load(std::sync::atomic::Ordering::Acquire)))
         },
         Provider::NewApi if key.starts_with('{')=>{
-            let c:NewApiUserToken=serde_json::from_str(key).map_err(|_|("用户 Token 凭据无效，请重新连接".into(),0))?;
+            let c:NewApiUserToken=serde_json::from_str(key).map_err(|_|("使用者 Token 憑據無效，請重新連線".into(),0))?;
             relay::request_new_api_user(agent,&source,&c.access_token,&c.user_id,||cancel.is_some_and(|c|c.load(std::sync::atomic::Ordering::Acquire)))
         },
         Provider::NewApi|Provider::OneApi|Provider::Sub2Api|Provider::RelayGeneral=>relay::request_cancellable(agent,match provider{Provider::NewApi=>Kind::NewApi,Provider::OneApi=>Kind::OneApi,Provider::RelayGeneral=>Kind::General,_=>Kind::Sub2Api},&source,key,||cancel.is_some_and(|c|c.load(std::sync::atomic::Ordering::Acquire))),
-        _=>Err(("不支持的 API 服务".into(),0))
+        _=>Err(("不支援的 API 服務".into(),0))
     }
 }
 #[cfg(windows)]
-fn credential(slot:&str)->Result<keyring::Entry,String>{keyring::Entry::new("Daozai.ApiQuota",slot).map_err(|_|"无法打开 Windows 凭据管理器".into())}
+fn credential(slot:&str)->Result<keyring::Entry,String>{keyring::Entry::new("Daozai.ApiQuota",slot).map_err(|_|"無法開啟 Windows 憑據管理器".into())}
 #[cfg(windows)]
 fn save(slot:&str,key:&str)->Result<(),String>{
     if slot.starts_with("script-"){
         let path=script_path(slot)?;let sealed=super::gemini::protect(key.as_bytes(),true)?;
-        std::fs::create_dir_all(path.parent().unwrap()).map_err(|_|"无法创建查询脚本凭据目录")?;
-        return crate::model::atomic_write(&path,&sealed).map_err(|_|"无法安全保存查询脚本".into());
+        std::fs::create_dir_all(path.parent().unwrap()).map_err(|_|"無法建立查詢指令碼憑據目錄")?;
+        return crate::model::atomic_write(&path,&sealed).map_err(|_|"無法安全儲存查詢指令碼".into());
     }
-    credential(slot)?.set_password(key).map_err(|_|"无法安全保存凭据，未添加账号".into())
+    credential(slot)?.set_password(key).map_err(|_|"無法安全儲存憑據，未新增帳號".into())
 }
 #[cfg(not(windows))]
-fn save(_slot:&str,_key:&str)->Result<(),String>{Err("当前系统不支持安全保存 API Key，未添加账号".into())}
+fn save(_slot:&str,_key:&str)->Result<(),String>{Err("當前系統不支援安全儲存 API Key，未新增帳號".into())}
 #[cfg(windows)]
 fn load(slot:&str)->Result<String,String>{
     if slot.starts_with("script-"){
-        let sealed=std::fs::read(script_path(slot)?).map_err(|_|"无法读取查询脚本，请重新连接")?;
-        let raw=super::gemini::protect(&sealed,false)?;return String::from_utf8(raw).map_err(|_|"查询脚本凭据无效".into());
+        let sealed=std::fs::read(script_path(slot)?).map_err(|_|"無法讀取查詢指令碼，請重新連線")?;
+        let raw=super::gemini::protect(&sealed,false)?;return String::from_utf8(raw).map_err(|_|"查詢指令碼憑據無效".into());
     }
-    credential(slot)?.get_password().map_err(|_|"无法读取账号凭据，请重新连接".into())
+    credential(slot)?.get_password().map_err(|_|"無法讀取帳號憑據，請重新連線".into())
 }
 #[cfg(not(windows))]
-fn load(_slot:&str)->Result<String,String>{Err("当前系统不支持读取 API Key".into())}
+fn load(_slot:&str)->Result<String,String>{Err("當前系統不支援讀取 API Key".into())}
 fn delete_slot(slot:&str)->Result<(),String>{
-    if slot.starts_with("script-"){return match std::fs::remove_file(script_path(slot)?){Ok(())=>Ok(()),Err(e)if e.kind()==std::io::ErrorKind::NotFound=>Ok(()),Err(_)=>Err("查询脚本凭据清理未完成".into())};}
-    #[cfg(windows)] {match credential(slot)?.delete_credential(){Ok(())|Err(keyring::Error::NoEntry)=>Ok(()),Err(_)=>Err("Windows 凭据清理未完成，将保留引用以便重试".into())}}
-    #[cfg(not(windows))] {let _=slot;Err("当前系统不支持清理 Windows 凭据".into())}
+    if slot.starts_with("script-"){return match std::fs::remove_file(script_path(slot)?){Ok(())=>Ok(()),Err(e)if e.kind()==std::io::ErrorKind::NotFound=>Ok(()),Err(_)=>Err("查詢指令碼憑據清理未完成".into())};}
+    #[cfg(windows)] {match credential(slot)?.delete_credential(){Ok(())|Err(keyring::Error::NoEntry)=>Ok(()),Err(_)=>Err("Windows 憑據清理未完成，將保留引用以便重試".into())}}
+    #[cfg(not(windows))] {let _=slot;Err("當前系統不支援清理 Windows 憑據".into())}
 }
 fn journal_path()->PathBuf{crate::model::config_dir().join("ai-quota-vault-cleanup.json")}
 fn journal_read()->Result<Vec<String>,String>{
     match std::fs::read(journal_path()){
-        Ok(raw)=>serde_json::from_slice(&raw).map_err(|_|"凭据清理记录损坏，请先检查数据目录".into()),
+        Ok(raw)=>serde_json::from_slice(&raw).map_err(|_|"憑據清理記錄損壞，請先檢查資料目錄".into()),
         Err(e)if e.kind()==std::io::ErrorKind::NotFound=>Ok(vec![]),
-        Err(_)=>Err("无法读取凭据清理记录".into())
+        Err(_)=>Err("無法讀取憑據清理記錄".into())
     }
 }
 fn journal_save(slots:&[String])->Result<(),String>{
-    let path=journal_path();if let Some(dir)=path.parent(){std::fs::create_dir_all(dir).map_err(|_|"无法创建凭据清理记录")?;}
-    let raw=serde_json::to_vec(slots).map_err(|_|"无法生成凭据清理记录")?;
-    crate::model::atomic_write(&path,&raw).map_err(|_|"无法安全保存凭据清理记录".into())
+    let path=journal_path();if let Some(dir)=path.parent(){std::fs::create_dir_all(dir).map_err(|_|"無法建立憑據清理記錄")?;}
+    let raw=serde_json::to_vec(slots).map_err(|_|"無法生成憑據清理記錄")?;
+    crate::model::atomic_write(&path,&raw).map_err(|_|"無法安全儲存憑據清理記錄".into())
 }
 // Journal only opaque references BEFORE modifying vault/config, so every failure
 // leaves enough information to retry without storing any secret outside the vault.
@@ -95,28 +95,28 @@ fn retained_cleanup(slots:Vec<String>,active:&[&str],mut delete:impl FnMut(&str)
     slots.into_iter().filter(|s|!active.contains(&s.as_str())&&delete(s).is_err()).collect()
 }
 fn persisted_active_slots(value:&serde_json::Value)->Result<Vec<String>,String>{
-    let accounts=value["accounts"].as_array().ok_or("额度配置不完整，已暂停凭据清理")?;
+    let accounts=value["accounts"].as_array().ok_or("額度配置不完整，已暫停憑據清理")?;
     let mut active=Vec::new();
     for row in accounts{
-        let provider=row["provider"].as_str().and_then(Provider::parse).ok_or("额度配置含未知账号，已暂停凭据清理")?;
-        if row["id"].as_str().is_none()||row["alias"].as_str().is_none()||row["source"].as_str().is_none(){return Err("额度账号配置不完整，已暂停凭据清理".into());}
-        if provider.api_key(){active.push(row["slot"].as_str().filter(|s|!s.is_empty()).ok_or("额度凭据引用缺失，已暂停清理")?.into());}
+        let provider=row["provider"].as_str().and_then(Provider::parse).ok_or("額度配置含未知帳號，已暫停憑據清理")?;
+        if row["id"].as_str().is_none()||row["alias"].as_str().is_none()||row["source"].as_str().is_none(){return Err("額度帳號配置不完整，已暫停憑據清理".into());}
+        if provider.api_key(){active.push(row["slot"].as_str().filter(|s|!s.is_empty()).ok_or("額度憑據引用缺失，已暫停清理")?.into());}
     }
     Ok(active)
 }
 pub fn cleanup_pending(config:&Config)->Result<(),String>{
     let slots=journal_read()?;if slots.is_empty(){return Ok(());}
     // Never interpret Config::load's recovery default as evidence of no accounts.
-    let raw=std::fs::read(crate::model::config_dir().join("ai-quota.json")).map_err(|_|"无法确认已保存账号，已暂停凭据清理")?;
-    let value=serde_json::from_slice(&raw).map_err(|_|"额度配置损坏，已暂停凭据清理")?;
+    let raw=std::fs::read(crate::model::config_dir().join("ai-quota.json")).map_err(|_|"無法確認已儲存帳號，已暫停憑據清理")?;
+    let value=serde_json::from_slice(&raw).map_err(|_|"額度配置損壞，已暫停憑據清理")?;
     let persisted=persisted_active_slots(&value)?;
     let mut active:Vec<_>=config.accounts.iter().filter(|a|a.provider.api_key()).filter_map(|a|a.slot.as_deref()).collect();
     active.extend(persisted.iter().map(String::as_str));
     let retained=retained_cleanup(slots,&active,delete_slot);journal_save(&retained)?;
-    if retained.is_empty(){Ok(())}else{Err("账号配置已保留，部分旧凭据尚未清理；下次启动会重试".into())}
+    if retained.is_empty(){Ok(())}else{Err("帳號配置已保留，部分舊憑據尚未清理；下次啟動會重試".into())}
 }
 pub fn fetch(agent:&ureq::Agent,account:&Account)->Result<Snapshot,(String,u64)>{
-    let slot=account.slot.as_deref().ok_or(("请连接 API Key".into(),0))?;
+    let slot=account.slot.as_deref().ok_or(("請連線 API Key".into(),0))?;
     request(agent,account.provider,&account.source.to_string_lossy(),&load(slot).map_err(|e|(e,0))?,None)
 }
 
@@ -128,7 +128,7 @@ impl Validated {
     pub fn finish(self)->Result<Connected,String>{
         // A random reference prevents config files exposing a reusable key fingerprint.
         use ring::rand::SecureRandom;
-        let mut bytes=[0u8;24];ring::rand::SystemRandom::new().fill(&mut bytes).map_err(|_|"无法生成安全凭据引用")?;
+        let mut bytes=[0u8;24];ring::rand::SystemRandom::new().fill(&mut bytes).map_err(|_|"無法生成安全憑據引用")?;
         let slot=bytes.iter().map(|b|format!("{b:02x}")).collect::<String>();
         let slot=if self.provider==Provider::RelayCustom{format!("script-{slot}")}else{slot};
         queue_cleanup(&slot)?;
@@ -163,30 +163,30 @@ impl Connect {
     fn start_inner(provider:Provider,source:String,alias:String,key:String,automatic:bool)->Self{
         let(tx,rx)=mpsc::channel();let cancel=std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));let worker_cancel=cancel.clone();
         let deadline=automatic.then(||std::time::Instant::now()+relay::AUTO_TIMEOUT);
-        if VALIDATING.compare_exchange(false,true,std::sync::atomic::Ordering::AcqRel,std::sync::atomic::Ordering::Acquire).is_err(){let _=tx.send(Err("上次验证仍在结束，请稍后重试".into()));return Self{rx,cancel,deadline};}
+        if VALIDATING.compare_exchange(false,true,std::sync::atomic::Ordering::AcqRel,std::sync::atomic::Ordering::Acquire).is_err(){let _=tx.send(Err("上次驗證仍在結束，請稍後重試".into()));return Self{rx,cancel,deadline};}
         std::thread::spawn(move||{let _slot=ValidationSlot;
             let result=(||{
                 let source=if provider.relay(){relay::normalize_base_url(&source)?}else{endpoint(provider,&source)?};
-                let key=key.trim();if !(provider==Provider::RelayCustom||(provider==Provider::NewApi&&!automatic&&key.starts_with('{')))&&(key.is_empty()||key.len()>8192||key.chars().any(char::is_whitespace)||key.chars().any(char::is_control)){return Err("请输入有效的 API Key".into());}
+                let key=key.trim();if !(provider==Provider::RelayCustom||(provider==Provider::NewApi&&!automatic&&key.starts_with('{')))&&(key.is_empty()||key.len()>8192||key.chars().any(char::is_whitespace)||key.chars().any(char::is_control)){return Err("請輸入有效的 API Key".into());}
                 let (provider,snapshot)=if automatic{
                     let (kind,snapshot)=relay::detect_cancellable(super::http_agent_with_connect_timeout,&source,key,||worker_cancel.load(std::sync::atomic::Ordering::Acquire)).map_err(|e|e.0)?;
                     (match kind{Kind::NewApi=>Provider::NewApi,Kind::OneApi=>Provider::OneApi,Kind::Sub2Api=>Provider::Sub2Api,Kind::General=>Provider::RelayGeneral},snapshot)
                 }else{(provider,request(&super::http_agent(),provider,&source,key,Some(&worker_cancel)).map_err(|e|e.0)?)};
-                if worker_cancel.load(std::sync::atomic::Ordering::Acquire){return Err("已取消连接".into());}
-                let alias=if alias.trim().is_empty(){if automatic{url::Url::parse(&source).ok().and_then(|u|u.host_str().map(str::to_owned)).unwrap_or_else(||"中转站".into())}else{provider.name().into()}}else{alias.trim().to_owned()};
+                if worker_cancel.load(std::sync::atomic::Ordering::Acquire){return Err("已取消連線".into());}
+                let alias=if alias.trim().is_empty(){if automatic{url::Url::parse(&source).ok().and_then(|u|u.host_str().map(str::to_owned)).unwrap_or_else(||"中轉站".into())}else{provider.name().into()}}else{alias.trim().to_owned()};
                 Ok(Validated{provider,source,alias,key:key.into(),snapshot})
             })();let _=tx.send(result);
         });Self{rx,cancel,deadline}
     }
     pub fn poll(&self)->Option<Result<Validated,String>>{
-        if self.deadline.is_some_and(|d|std::time::Instant::now()>=d){self.cancel.store(true,std::sync::atomic::Ordering::Release);return Some(Err("自动识别超时，请稍后重试或在高级设置中手动选择".into()));}
+        if self.deadline.is_some_and(|d|std::time::Instant::now()>=d){self.cancel.store(true,std::sync::atomic::Ordering::Release);return Some(Err("自動識別超時，請稍後重試或在高階設定中手動選擇".into()));}
         self.rx.try_recv().ok()
     }
 }
 impl Config {
     pub fn connect_api(&mut self,connected:&Connected,target:Option<&str>)->Result<String,String>{
         if let Some(id)=target {
-            let a=self.accounts.iter_mut().find(|a|a.id==id&&(a.provider==connected.provider||(a.provider.relay()&&connected.provider.relay()))).ok_or("原账号已移除，请重新添加")?;
+            let a=self.accounts.iter_mut().find(|a|a.id==id&&(a.provider==connected.provider||(a.provider.relay()&&connected.provider.relay()))).ok_or("原帳號已移除，請重新新增")?;
             if let Some(slot)=&a.slot{queue_cleanup(slot)?;}
             a.provider=connected.provider;a.source=PathBuf::from(&connected.source);a.slot=Some(connected.slot.clone());a.alias=connected.alias.clone();a.enabled=true;
             let id=a.id.clone();self.selected=id.clone();return Ok(id);
@@ -199,8 +199,8 @@ impl Config {
     use super::*;
     #[test]
     fn explicit_reconnection_can_change_relay_template_and_keep_preferences(){
-        let mut config=Config::default();config.accounts.push(Account{id:"original-relay".into(),provider:Provider::NewApi,alias:"原账号".into(),source:"https://relay.example".into(),slot:None,enabled:true,pinned:true});config.colors.insert("original-relay".into(),super::super::Accent::Gold);
-        let connected=Connected{provider:Provider::RelayGeneral,source:"https://relay.example".into(),alias:"我的中转站".into(),slot:"synthetic-ref".into(),snapshot:Snapshot::default()};
+        let mut config=Config::default();config.accounts.push(Account{id:"original-relay".into(),provider:Provider::NewApi,alias:"原帳號".into(),source:"https://relay.example".into(),slot:None,enabled:true,pinned:true});config.colors.insert("original-relay".into(),super::super::Accent::Gold);
+        let connected=Connected{provider:Provider::RelayGeneral,source:"https://relay.example".into(),alias:"我的中轉站".into(),slot:"synthetic-ref".into(),snapshot:Snapshot::default()};
         assert_eq!(config.connect_api(&connected,Some("original-relay")).unwrap(),"original-relay");assert_eq!(config.accounts[0].provider,Provider::RelayGeneral);assert!(config.accounts[0].pinned);assert_eq!(config.colors["original-relay"],super::super::Accent::Gold);
     }
     #[test]
@@ -230,7 +230,7 @@ impl Config {
         struct Cleanup(String);impl Drop for Cleanup{fn drop(&mut self){let _=delete_slot(&self.0);}}
         let _cleanup=Cleanup(slot.clone());
         let secret=serde_json::to_string(&NewApiUserToken{access_token:"synthetic-saved-user-token".into(),user_id:"42".into()}).unwrap();save(&slot,&secret).unwrap();
-        let connected=Connected{provider:Provider::NewApi,source:"https://relay.example".into(),alias:"测试站点".into(),slot,snapshot:Snapshot::default()};
+        let connected=Connected{provider:Provider::NewApi,source:"https://relay.example".into(),alias:"測試站點".into(),slot,snapshot:Snapshot::default()};
         let mut config=Config::default();config.connect_api(&connected,None).unwrap();let json=config.json();
         assert!(!json.to_string().contains("synthetic-saved-user-token"));let restored=Config::from_json(&json);let account=&restored.accounts[0];
         assert_eq!(new_api_user_id(account).as_deref(),Some("42"));
@@ -248,10 +248,10 @@ impl Config {
         let slot=format!("script-{:048x}",chrono::Utc::now().timestamp_nanos_opt().unwrap());
         struct Cleanup(String);impl Drop for Cleanup{fn drop(&mut self){let _=delete_slot(&self.0);}}
         let _cleanup=Cleanup(slot.clone());
-        let c=relay::script::Credential{script:format!("{}\n/*{}*/",relay::script::DEFAULT_SCRIPT,"说明".repeat(2000)),api_key:"synthetic-script-secret".into(),access_token:String::new(),user_id:String::new()};
+        let c=relay::script::Credential{script:format!("{}\n/*{}*/",relay::script::DEFAULT_SCRIPT,"說明".repeat(2000)),api_key:"synthetic-script-secret".into(),access_token:String::new(),user_id:String::new()};
         let raw=serde_json::to_string(&c).unwrap();save(&slot,&raw).unwrap();assert_eq!(load(&slot).unwrap(),raw);
         let sealed=std::fs::read(script_path(&slot).unwrap()).unwrap();assert!(!sealed.windows(c.api_key.len()).any(|w|w==c.api_key.as_bytes()));
-        let mut config=Config::default();let connected=Connected{provider:Provider::RelayCustom,source:"https://relay.example".into(),alias:"自定义中转".into(),slot:slot.clone(),snapshot:Snapshot::default()};config.connect_api(&connected,None).unwrap();
+        let mut config=Config::default();let connected=Connected{provider:Provider::RelayCustom,source:"https://relay.example".into(),alias:"自定義中轉".into(),slot:slot.clone(),snapshot:Snapshot::default()};config.connect_api(&connected,None).unwrap();
         let json=config.json();assert!(!json.to_string().contains("synthetic-script-secret"));let restored=Config::from_json(&json);
         assert_eq!(custom_credentials(&restored.accounts[0]).unwrap().script,c.script);
         let agent=ureq::AgentBuilder::new().middleware(|r:ureq::Request,_:ureq::MiddlewareNext|{assert_eq!(r.header("Authorization"),Some("Bearer synthetic-script-secret"));ureq::Response::new(200,"OK",r#"{"balance":1.1}"#)}).build();
@@ -261,9 +261,9 @@ impl Config {
     #[test]
     fn expired_detection_discards_even_a_ready_success_and_cancels_the_worker(){
         let (tx,rx)=mpsc::channel();let cancel=std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        tx.send(Ok(Validated{provider:Provider::Sub2Api,source:"https://relay.example/prefix".into(),alias:"中转".into(),key:"synthetic".into(),snapshot:Snapshot::default()})).ok().unwrap();
+        tx.send(Ok(Validated{provider:Provider::Sub2Api,source:"https://relay.example/prefix".into(),alias:"中轉".into(),key:"synthetic".into(),snapshot:Snapshot::default()})).ok().unwrap();
         let connection=Connect{rx,cancel:cancel.clone(),deadline:Some(std::time::Instant::now())};
-        assert!(connection.poll().unwrap().err().unwrap().contains("超时"));assert!(cancel.load(std::sync::atomic::Ordering::Acquire));
+        assert!(connection.poll().unwrap().err().unwrap().contains("超時"));assert!(cancel.load(std::sync::atomic::Ordering::Acquire));
     }
     #[cfg(windows)]
     #[test]
@@ -293,7 +293,7 @@ impl Config {
         assert!(endpoint(Provider::Glm,"https://evil.example").is_err());assert!(endpoint(Provider::Kimi,"").is_err());
     }
     #[test] fn config_has_only_opaque_reference_and_endpoint(){
-        let c=Connected{provider:Provider::NewApi,source:"https://relay.example".into(),alias:"测试".into(),slot:"random-reference".into(),snapshot:Snapshot::default()};
+        let c=Connected{provider:Provider::NewApi,source:"https://relay.example".into(),alias:"測試".into(),slot:"random-reference".into(),snapshot:Snapshot::default()};
         let mut config=Config::default();let id=config.connect_api(&c,None).unwrap();
         let value=config.json();assert_eq!(value["accounts"][0]["slot"],"random-reference");assert_eq!(config.accounts[0].id,id);
         assert_eq!(Config::from_json(&value),config);

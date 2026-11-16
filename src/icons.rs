@@ -59,7 +59,7 @@ impl Cache {
 fn load_preview(path:&Path)->Loaded {
     let info=std::fs::metadata(path);
     let is_dir=info.as_ref().is_ok_and(|metadata|metadata.is_dir());
-    let metadata=info.map(|metadata|if is_dir{"文件夹".into()}else{crate::model::human_size(metadata.len())}).unwrap_or_else(|_|"已移动".into());
+    let metadata=info.map(|metadata|if is_dir{"資料夾".into()}else{crate::model::human_size(metadata.len())}).unwrap_or_else(|_|"已移動".into());
     Loaded{image:file_icon(path,is_dir),metadata}
 }
 
@@ -243,10 +243,10 @@ mod tests {
         }).collect();
         std::fs::remove_file(&picture).unwrap();std::fs::remove_dir(&dir).unwrap();
         if initialized{unsafe{CoUninitialize();}}
-        for ((actual,expected),kind) in previews.into_iter().zip(["文件夹系统图标","图片内容缩略图"]){
-            assert!(actual.size[0]<=96&&actual.size[1]<=96,"{kind}不能上传大图");
+        for ((actual,expected),kind) in previews.into_iter().zip(["資料夾系統圖示","圖片內容縮圖"]){
+            assert!(actual.size[0]<=96&&actual.size[1]<=96,"{kind}不能上傳大圖");
             assert_eq!(actual.size,expected.size,"{kind}尺寸不符");
-            assert!(actual.pixels==expected.pixels,"{kind}应使用对应的系统图像");
+            assert!(actual.pixels==expected.pixels,"{kind}應使用對應的系統影象");
         }
     }
 
@@ -254,7 +254,7 @@ mod tests {
     fn oversized_shell_thumbnails_are_reduced_before_upload(){
         let preview=preview_image(1024,512,vec![255;1024*512*4]).unwrap();
         assert_eq!(preview.size,[96,48]);
-        assert!(preview.pixels.len()<=96*96,"缩略图插件返回大图时也必须限制单项内存");
+        assert!(preview.pixels.len()<=96*96,"縮圖外掛返回大圖時也必須限制單項記憶體");
     }
     #[test]
     fn slow_preview_keeps_ui_nonblocking_and_requests_bounded(){
@@ -262,17 +262,17 @@ mod tests {
         let(started,ready)=mpsc::channel();let(release,blocked)=mpsc::channel();
         cache.start(ctx.clone(),move|_|{
             let _=started.send(());let _=blocked.recv();
-            Loaded{image:None,metadata:"文件夹".into()}
+            Loaded{image:None,metadata:"資料夾".into()}
         });
         let path=Path::new("blocked-preview");
         assert!(cache.get(&ctx,path).is_none());
         ready.recv_timeout(Duration::from_secs(2)).unwrap();
         let at=Instant::now();
         for _ in 0..100 {assert!(cache.get(&ctx,path).is_none());}
-        assert!(at.elapsed()<Duration::from_millis(200),"慢磁盘或缩略图插件不能阻塞界面");
-        assert_eq!(cache.pending.len(),1,"同一文件不能反复排队");
+        assert!(at.elapsed()<Duration::from_millis(200),"慢磁碟或縮圖外掛不能阻塞介面");
+        assert_eq!(cache.pending.len(),1,"同一檔案不能反覆排隊");
         for i in 0..100{cache.get(&ctx,Path::new(&format!("queued-{i}")));}
-        assert!(cache.pending.len()<=9,"在途请求和排队请求必须有上限");
+        assert!(cache.pending.len()<=9,"在途請求和排隊請求必須有上限");
         release.send(()).unwrap();
     }
 
@@ -285,8 +285,8 @@ mod tests {
             while cache.get(&ctx,&path).is_none(){assert!(Instant::now()<deadline);std::thread::sleep(Duration::from_millis(1));}
         }
         assert_eq!(cache.entries.len(),32);
-        assert!(ctx.tex_manager().read().num_allocated()<=33,"滚动大量文件不能无限保留 GPU 缩略图");
+        assert!(ctx.tex_manager().read().num_allocated()<=33,"滾動大量檔案不能無限保留 GPU 縮圖");
         cache.clear();
-        assert!(ctx.tex_manager().read().num_allocated()<=1,"清空置物架后应释放缩略图纹理");
+        assert!(ctx.tex_manager().read().num_allocated()<=1,"清空置物架後應釋放縮圖紋理");
     }
 }

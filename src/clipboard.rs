@@ -315,7 +315,7 @@ mod tests {
             let (done,finished)=std::sync::mpsc::channel();
             std::thread::spawn(move||{let _=win::run(shared,Box::new(||{}),&thread_stop);let _=done.send(());});
             if !stop_first {std::thread::sleep(std::time::Duration::from_millis(200));stop.request();}
-            finished.recv_timeout(std::time::Duration::from_secs(3)).expect("监听线程应在停止后退出");
+            finished.recv_timeout(std::time::Duration::from_secs(3)).expect("監聽執行緒應在停止後退出");
         }
     }
 
@@ -323,30 +323,30 @@ mod tests {
     fn history_copy_preserves_order_but_external_copy_promotes() {
         let shared = Shared { history: Default::default(), enabled: Arc::new(AtomicBool::new(true)) };
         shared.lock().items.clear();
-        shared.record("较早的一条");
-        shared.record("最近的一条");
+        shared.record("較早的一條");
+        shared.record("最近的一條");
         let before = shared.lock().items.clone();
-        assert!(!shared.record_update("较早的一条", true));
+        assert!(!shared.record_update("較早的一條", true));
         assert_eq!(shared.lock().items, before);
-        assert!(shared.record_update("较早的一条", false));
-        assert_eq!(shared.lock().items[0].text, "较早的一条");
+        assert!(shared.record_update("較早的一條", false));
+        assert_eq!(shared.lock().items[0].text, "較早的一條");
     }
     #[test]
     fn history_dedupes_caps_and_keeps_pins() {
         let mut h = History::default();
-        assert!(!h.push("   \n", "09:00"), "空白不记录");
+        assert!(!h.push("   \n", "09:00"), "空白不記錄");
         assert!(h.push("a", "09:00") && h.push("b", "09:01"));
-        assert!(!h.push("b", "09:02"), "与最新一条相同不重复记录");
+        assert!(!h.push("b", "09:02"), "與最新一條相同不重複記錄");
         assert!(h.push("a", "09:03"));
         assert_eq!(h.items.iter().map(|c| c.text.as_str()).collect::<Vec<_>>(), ["a", "b"]);
         assert_eq!(h.items[0].at, "09:03");
         h.items[1].pinned = true; // b
         for i in 0..(MAX_RECENT + 5) { h.push(&format!("n{i}"), "10:00"); }
         assert_eq!(h.items.iter().filter(|c| !c.pinned).count(), MAX_RECENT);
-        assert!(h.items.iter().any(|c| c.text == "b" && c.pinned), "固定的不会被挤掉");
+        assert!(h.items.iter().any(|c| c.text == "b" && c.pinned), "固定的不會被擠掉");
         h.clear_recent();
         assert_eq!(h.items.len(), 1);
-        assert!(!h.push(&"x".repeat(MAX_CHARS + 1), "10:00"), "超长内容不记录");
+        assert!(!h.push(&"x".repeat(MAX_CHARS + 1), "10:00"), "超長內容不記錄");
     }
 
     #[test]
@@ -356,7 +356,7 @@ mod tests {
         let mut history = History::load_from(path.clone());
         assert!(history.items[0].pinned);
         history.push("保留", "09:00");
-        history.push("删除", "09:01");
+        history.push("刪除", "09:01");
         history.remove(0);
         let mut reopened = History::load_from(path.clone());
         assert_eq!(reopened.items, history.items);
@@ -371,7 +371,7 @@ mod tests {
     fn pinned_round_trip_and_preview() {
         let mut h = History::default();
         h.push("第一行\n第二行  末尾", "08:00");
-        h.push("临时", "08:01");
+        h.push("臨時", "08:01");
         h.items[1].pinned = true;
         let back = History::from_json(&h.to_json());
         assert_eq!(back.items, h.items);

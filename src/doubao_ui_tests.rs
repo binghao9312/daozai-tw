@@ -31,10 +31,10 @@ fn has_text(h: &H, expected: &str) -> bool {
 fn doubao_activity_is_visible_on_the_island_and_in_account_details() {
     let _guard=ENV_LOCK.lock().unwrap_or_else(|error|error.into_inner());let mut h=H::new();fixture(&mut h);
     h.app.show_page(6);h.hover(H::local(260.0,60.0),1.0);
-    for label in ["5 小时","本周","活动额度","75%"] { assert!(has_text(&h,label),"额度面板缺少 {label}"); }
+    for label in ["5 小時","本週","活動額度","75%"] { assert!(has_text(&h,label),"額度面板缺少 {label}"); }
     for _ in 0..5 { settings_frame(&mut h,vec![]); }
-    assert!(has_text(&h,"活动额度：剩余 75.0%"),"账号明细应保留活动额度");
-    assert!(has_text(&h,"5 小时：剩余 72.0%") && has_text(&h,"本周：剩余 44.0%"));
+    assert!(has_text(&h,"活動額度：剩餘 75.0%"),"帳號明細應保留活動額度");
+    assert!(has_text(&h,"5 小時：剩餘 72.0%") && has_text(&h,"本週：剩餘 44.0%"));
 }
 
 #[test]
@@ -47,7 +47,7 @@ fn doubao_closing_either_window_cancels_validation_and_clears_the_cookie() {
         if close_settings { h.app.settings_open=false;h.app.quota_tick(); } else { h.app.quota_close_connection(); }
         assert!(cancel.load(std::sync::atomic::Ordering::Acquire));
         assert!(h.app.quota.doubao_connecting.is_none() && h.app.quota.doubao_cookie.is_empty());
-        assert!(h.app.quota.config.accounts.is_empty(),"关闭窗口不能新增账号");
+        assert!(h.app.quota.config.accounts.is_empty(),"關閉視窗不能新增帳號");
     }
 }
 
@@ -56,9 +56,9 @@ fn doubao_connection_offers_official_login_without_an_extension() {
     let _guard=ENV_LOCK.lock().unwrap_or_else(|error|error.into_inner());let mut h=H::new();
     h.app.open_settings();h.app.quota.provider=crate::quota::Provider::Doubao;h.app.quota.connect_open=true;
     for _ in 0..5 { settings_frame(&mut h,vec![]); }
-    for label in ["添加账号","浏览器登录","从本机导入","使用 Cookie 连接"] { assert!(has_text(&h,label),"连接窗口缺少 {label}"); }
-    assert!(!has_text(&h,"Kimi"),"豆包登录不能依赖浏览器扩展");
-    assert!(!has_text(&h,"登录 JSON"),"豆包不应走登录文件导入");
+    for label in ["新增帳號","瀏覽器登入","從本機匯入","使用 Cookie 連線"] { assert!(has_text(&h,label),"連線視窗缺少 {label}"); }
+    assert!(!has_text(&h,"Kimi"),"豆包登入不能依賴瀏覽器擴充套件");
+    assert!(!has_text(&h,"登入 JSON"),"豆包不應走登入檔案匯入");
 }
 
 #[test]

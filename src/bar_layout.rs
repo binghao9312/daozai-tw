@@ -158,7 +158,7 @@ mod tests {
             assert_eq!(layout.width,(width-removed).max(96.0));
             let mut boxes:Vec<_>=layout.x.iter().enumerate().filter_map(|(i,x)|x.map(|x|(x-layout.widths[i]/2.0,x+layout.widths[i]/2.0))).collect();
             boxes.sort_by(|a,b|a.0.total_cmp(&b.0));
-            assert!(boxes.windows(2).all(|p|p[1].0-p[0].1>=6.9),"关闭时间后相邻组件不应重叠");
+            assert!(boxes.windows(2).all(|p|p[1].0-p[0].1>=6.9),"關閉時間後相鄰元件不應重疊");
             let after=layout.x.clone();layout.hide_clock();assert_eq!(layout.x,after);
         }}
         let mut empty=Layout::new(false,0,false,false,false,false,false);
@@ -167,14 +167,14 @@ mod tests {
     #[test]
     fn weather_can_be_reordered_independently_of_the_clock(){
         let order=[WEATHER,FOCUS,MUSIC,QUOTA,CLOCK,PET,BATTERY];
-        assert!(valid_order(&order),"天气应有独立的排列位置");
+        assert!(valid_order(&order),"天氣應有獨立的排列位置");
         for quotas in 0..=5 {for enabled in [false,true] {
             let mut layout=Layout::new(true,quotas,true,true,false,true,enabled);
             layout.reorder(&order);layout.widen(WEATHER,18.0);layout.widen_clock(40.0);
             let positions:Vec<_>=order.iter().filter_map(|slot|layout.x[*slot]).collect();
             assert!(positions.windows(2).all(|pair|pair[0]<pair[1]));
             let boxes:Vec<_>=order.iter().flat_map(|&slot|if slot==QUOTA{layout.quota_slots().collect()}else{vec![slot]}).filter_map(|slot|layout.x[slot].map(|x|(x-layout.widths[slot]/2.0,x+layout.widths[slot]/2.0))).collect();
-            assert!(boxes.windows(2).all(|pair|pair[1].0-pair[0].1>=6.9),"排序和加宽后组件不能重叠");
+            assert!(boxes.windows(2).all(|pair|pair[1].0-pair[0].1>=6.9),"排序和加寬後元件不能重疊");
         }}
     }
     #[test] fn deepseek_balance_follows_more_and_never_overlaps(){
@@ -228,7 +228,7 @@ mod tests {
             assert_eq!(layout.quota_slots().count(),quotas);
             assert!(boxes.first().unwrap().0>=-layout.width/2.0+15.9);
             assert!(boxes.last().unwrap().1<=layout.width/2.0-15.9);
-            assert!(boxes.windows(2).all(|pair|pair[1].0-pair[0].1>=6.9),"组件不能挤在一起：{layout:?}");
+            assert!(boxes.windows(2).all(|pair|pair[1].0-pair[0].1>=6.9),"元件不能擠在一起：{layout:?}");
             assert_eq!(layout.clearance(CLOCK),1.0);
         }}}}}}}
     }
@@ -238,15 +238,15 @@ mod tests {
             for quotas in 0..=3 {for battery in [false,true] {
                 let mut layout=Layout::new(battery,quotas,true,true,false,true,true);
                 layout.reorder(&order);
-                let (clock,weather)=match (layout.x[CLOCK],layout.x[WEATHER]) {(Some(c),Some(w))=>(c,w),_=>panic!("时钟与天气都应就位：{layout:?}")};
-                assert!(weather>clock+22.0+6.9,"天气应紧跟时钟右侧：时钟 {clock}，天气 {weather}");
+                let (clock,weather)=match (layout.x[CLOCK],layout.x[WEATHER]) {(Some(c),Some(w))=>(c,w),_=>panic!("時鐘與天氣都應就位：{layout:?}")};
+                assert!(weather>clock+22.0+6.9,"天氣應緊跟時鐘右側：時鐘 {clock}，天氣 {weather}");
                 // 相邻排列的时钟与天气保持标准组件间距。
                 assert!((weather-clock-(38.0+44.0)/2.0-12.0).abs()<0.01);
                 let mut boxes:Vec<_>=layout.x.iter().enumerate().filter_map(|(i,x)|x.map(|x|(x-layout.widths[i]/2.0,x+layout.widths[i]/2.0))).collect();
                 boxes.sort_by(|a,b|a.0.total_cmp(&b.0));
                 assert!(boxes.windows(2).all(|p|p[1].0-p[0].1>=6.9));
                 assert!(boxes.last().unwrap().1<=layout.width/2.0-15.9);
-                assert!(layout.clearance(WEATHER)>0.99,"天气与额度环不应对撞：{layout:?}");
+                assert!(layout.clearance(WEATHER)>0.99,"天氣與額度環不應對撞：{layout:?}");
             }}
         }
     }
@@ -259,7 +259,7 @@ mod tests {
         for (slot,x) in layout.x.iter().enumerate() {
             match (slot,x) {
                 (crate::bar_layout::WEATHER,Some(_))=>{},
-                (_,Some(x))=>assert!((*x-before[slot].unwrap()).abs()>8.0,"其余槽位应被推开：{slot}"),
+                (_,Some(x))=>assert!((*x-before[slot].unwrap()).abs()>8.0,"其餘槽位應被推開：{slot}"),
                 (_,None)=>{},
             }
         }

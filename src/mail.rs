@@ -13,7 +13,7 @@ use std::collections::HashMap;
 pub(crate) mod fetch;
 
 pub const SERVICE: &str = "Daozai.Mail";
-pub const MICROSOFT_UNSUPPORTED: &str = "Outlook、Hotmail、Live 和 Microsoft 365 云邮箱需要 OAuth 授权，岛仔暂不支持密码直连。";
+pub const MICROSOFT_UNSUPPORTED: &str = "Outlook、Hotmail、Live 和 Microsoft 365 雲信箱需要 OAuth 授權，島仔暫不支援密碼直連。";
 
 // ---------------------------------------------------------------- 邮箱类型
 
@@ -57,14 +57,14 @@ impl Provider {
 
     pub fn label(self) -> &'static str {
         match self {
-            Provider::Qq => "QQ 邮箱",
-            Provider::Mail163 => "163 邮箱",
-            Provider::Mail126 => "126 邮箱",
-            Provider::Exmail => "腾讯企业邮",
-            Provider::ICloud => "iCloud 邮箱",
+            Provider::Qq => "QQ 信箱",
+            Provider::Mail163 => "163 信箱",
+            Provider::Mail126 => "126 信箱",
+            Provider::Exmail => "騰訊企業郵",
+            Provider::ICloud => "iCloud 信箱",
             Provider::Gmail => "Gmail",
-            Provider::Microsoft => "Outlook / Hotmail（暂不支持）",
-            Provider::Custom => "自定义 IMAP",
+            Provider::Microsoft => "Outlook / Hotmail（暫不支援）",
+            Provider::Custom => "自定義 IMAP",
         }
     }
 
@@ -94,24 +94,24 @@ impl Provider {
     pub fn hint(self) -> &'static str {
         match self {
             Provider::Microsoft => MICROSOFT_UNSUPPORTED,
-            Provider::Custom => "向学校或单位管理员确认 IMAP 主机、TLS 端口及用户名。仅支持连接即加密的 IMAP over TLS（通常 993）与 LOGIN/应用专用密码。严格校验证书；不支持明文、STARTTLS、OAuth2 或网页登录/SSO。修改服务器或用户名必须重新输入该目标的授权码。",
-            Provider::Qq => "1. 登录 QQ 邮箱网页版，点右上角「设置」→ 左侧「账号与安全」。\n2. 在新页面选「安全设置」，向下找到「POP3/IMAP/SMTP/Exchange/CardDAV 服务」；未开启时先按提示开启。\n3. 点「生成授权码」，完成验证后复制到下方。这里填写授权码，不是 QQ 密码或邮箱独立密码。",
-            Provider::Mail163 | Provider::Mail126 => "1. 登录对应的网易邮箱网页版，点顶部「设置」→「POP3/SMTP/IMAP」。\n2. 确认「IMAP/SMTP 服务」已开启；首次开启时按提示完成验证。\n3. 在「授权密码管理」中点「新增授权密码」，完成验证后复制到下方。填写客户端授权码，不是邮箱登录密码。",
-            Provider::Exmail => "1. 登录腾讯企业邮网页版，在「设置」→「收发信设置」检查 IMAP/SMTP 服务。\n2. 常见网页版在「设置」→「邮箱绑定」→「客户端专用密码」→「生成新密码」获取密码；启用安全登录后须使用专用密码。\n3. 企业版本和管理员策略可能不同。找不到入口或服务被禁用时，请让企业管理员确认客户端接入方式，不要照搬 QQ 邮箱的路径。",
-            Provider::ICloud => "1. 登录 Apple 账户页面，进入「登录和安全」→「App 专用密码」。\n2. 选择「生成 App 专用密码」，按提示填写名称并完成验证；账户需已开启双重认证。\n3. 邮箱栏填写完整的 iCloud 邮箱地址，下方填写刚生成的 App 专用密码，不是 Apple 账户密码。",
-            Provider::Gmail => "1. 登录 Google 账户，进入「安全性与登录」→「您的 Google 账号登录选项」→「开启两步验证」，按提示完成设置。\n2. 打开下方「应用专用密码」页面，输入应用名称（例如：岛仔）并创建，复制生成的 16 位应用专用密码。\n3. 邮箱栏填完整 Gmail 地址，下方填应用专用密码，不是 Google 登录密码。若没有创建入口，请检查组织账号限制、高级保护或仅使用安全密钥的验证设置。",
+            Provider::Custom => "向學校或單位管理員確認 IMAP 主機、TLS 埠及使用者名稱。僅支援連線即加密的 IMAP over TLS（通常 993）與 LOGIN/應用專用密碼。嚴格校驗證書；不支援明文、STARTTLS、OAuth2 或網頁登入/SSO。修改伺服器或使用者名稱必須重新輸入該目標的授權碼。",
+            Provider::Qq => "1. 登入 QQ 信箱網頁版，點右上角「設定」→ 左側「帳號與安全」。\n2. 在新頁面選「安全設定」，向下找到「POP3/IMAP/SMTP/Exchange/CardDAV 服務」；未開啟時先按提示開啟。\n3. 點「生成授權碼」，完成驗證後複製到下方。這裡填寫授權碼，不是 QQ 密碼或信箱獨立密碼。",
+            Provider::Mail163 | Provider::Mail126 => "1. 登入對應的網易信箱網頁版，點頂部「設定」→「POP3/SMTP/IMAP」。\n2. 確認「IMAP/SMTP 服務」已開啟；首次開啟時按提示完成驗證。\n3. 在「授權密碼管理」中點「新增授權密碼」，完成驗證後複製到下方。填寫客戶端授權碼，不是信箱登入密碼。",
+            Provider::Exmail => "1. 登入騰訊企業郵網頁版，在「設定」→「收發信設定」檢查 IMAP/SMTP 服務。\n2. 常見網頁版在「設定」→「信箱繫結」→「客戶端專用密碼」→「生成新密碼」獲取密碼；啟用安全登入後須使用專用密碼。\n3. 企業版本和管理員策略可能不同。找不到入口或服務被禁用時，請讓企業管理員確認客戶端接入方式，不要照搬 QQ 信箱的路徑。",
+            Provider::ICloud => "1. 登入 Apple 賬戶頁面，進入「登入和安全」→「App 專用密碼」。\n2. 選擇「生成 App 專用密碼」，按提示填寫名稱並完成驗證；賬戶需已開啟雙重認證。\n3. 信箱欄填寫完整的 iCloud 信箱地址，下方填寫剛生成的 App 專用密碼，不是 Apple 賬戶密碼。",
+            Provider::Gmail => "1. 登入 Google 賬戶，進入「安全性與登入」→「您的 Google 帳號登入選項」→「開啟兩步驗證」，按提示完成設定。\n2. 開啟下方「應用專用密碼」頁面，輸入應用名稱（例如：島仔）並建立，複製生成的 16 位應用專用密碼。\n3. 信箱欄填完整 Gmail 地址，下方填應用專用密碼，不是 Google 登入密碼。若沒有建立入口，請檢查組織帳號限制、高階保護或僅使用安全金鑰的驗證設定。",
         }
     }
 
     pub fn setup_link(self) -> (&'static str, &'static str) {
         match self {
-            Provider::Qq => ("打开 QQ 邮箱网页版", "https://mail.qq.com/"),
-            Provider::Mail163 => ("打开 163 邮箱网页版", "https://mail.163.com/"),
-            Provider::Mail126 => ("打开 126 邮箱网页版", "https://mail.126.com/"),
-            Provider::Exmail => ("打开腾讯企业邮网页版", "https://exmail.qq.com/"),
-            Provider::ICloud => ("打开 Apple 账户", "https://account.apple.com/"),
-            Provider::Gmail => ("打开应用专用密码", "https://myaccount.google.com/apppasswords"),
-            Provider::Microsoft => ("打开 Outlook 网页版", "https://outlook.live.com/mail/"),
+            Provider::Qq => ("開啟 QQ 信箱網頁版", "https://mail.qq.com/"),
+            Provider::Mail163 => ("開啟 163 信箱網頁版", "https://mail.163.com/"),
+            Provider::Mail126 => ("開啟 126 信箱網頁版", "https://mail.126.com/"),
+            Provider::Exmail => ("開啟騰訊企業郵網頁版", "https://exmail.qq.com/"),
+            Provider::ICloud => ("開啟 Apple 賬戶", "https://account.apple.com/"),
+            Provider::Gmail => ("開啟應用專用密碼", "https://myaccount.google.com/apppasswords"),
+            Provider::Microsoft => ("開啟 Outlook 網頁版", "https://outlook.live.com/mail/"),
             Provider::Custom => ("", ""),
         }
     }
@@ -153,17 +153,17 @@ impl Account {
             return Err(MICROSOFT_UNSUPPORTED.into());
         }
         if self.provider!=Provider::Custom {return Ok((self.provider.host().into(),self.provider.port(),self.email.clone()));}
-        let c=self.custom.as_ref().ok_or("请填写自定义 IMAP 连接配置")?;
+        let c=self.custom.as_ref().ok_or("請填寫自定義 IMAP 連線配置")?;
         let host=c.host.trim().to_ascii_lowercase();
         if matches!(host.as_str(),"outlook.office365.com"|"imap-mail.outlook.com"|"outlook.live.com"|"imap.outlook.com"){
             return Err(MICROSOFT_UNSUPPORTED.into());
         }
         if host.is_empty() || host.len()>253 || !host.split('.').all(|label|!label.is_empty() && label.len()<=63 && !label.starts_with('-') && !label.ends_with('-') && label.bytes().all(|b|b.is_ascii_alphanumeric()||b==b'-')) {
-            return Err("IMAP 主机必须是域名或 IPv4 地址，不要填写网址、端口、路径或账号".into());
+            return Err("IMAP 主機必須是域名或 IPv4 地址，不要填寫網址、埠、路徑或帳號".into());
         }
-        if c.port==0 || c.port==143{return Err("仅支持 IMAP over TLS（通常 993），不支持 143/STARTTLS 或明文连接".into());}
+        if c.port==0 || c.port==143{return Err("僅支援 IMAP over TLS（通常 993），不支援 143/STARTTLS 或明文連線".into());}
         let user=if c.username.trim().is_empty(){self.email.trim()}else{c.username.trim()};
-        if user.is_empty() || user.len()>256 || user.chars().any(char::is_control){return Err("IMAP 用户名无效".into());}
+        if user.is_empty() || user.len()>256 || user.chars().any(char::is_control){return Err("IMAP 使用者名稱無效".into());}
         Ok((host,c.port,user.into()))
     }
     /// Custom secrets are bound to the TLS endpoint and exact login identity.
@@ -246,11 +246,11 @@ pub enum Status {
 impl Status {
     pub fn label(&self) -> String {
         match self {
-            Status::Idle => "未连接".into(),
-            Status::Connecting => "连接中…".into(),
-            Status::Ready => "已连接".into(),
-            Status::Auth(msg) => format!("需要授权码：{msg}"),
-            Status::Failed(msg) => format!("连接失败：{msg}"),
+            Status::Idle => "未連線".into(),
+            Status::Connecting => "連線中…".into(),
+            Status::Ready => "已連線".into(),
+            Status::Auth(msg) => format!("需要授權碼：{msg}"),
+            Status::Failed(msg) => format!("連線失敗：{msg}"),
         }
     }
     pub fn ok(&self) -> bool {
@@ -556,7 +556,7 @@ fn event_of(fields: &[(String, String)]) -> Option<Meeting> {
     let all_day=get("DTSTART").is_some_and(|value|!value.contains('T'));
     let end = parse_time("DTEND").map(|at|at.timestamp()).filter(|end|*end>naive.timestamp())
         .or_else(||all_day.then(||naive.date_naive().succ_opt()?.and_hms_opt(0,0,0)?.and_local_timezone(chrono::Local).earliest().map(|at|at.timestamp())).flatten());
-    let title = get("SUMMARY").map(|v| ics_text(&v)).filter(|t| !t.is_empty()).unwrap_or_else(|| "会议".to_string());
+    let title = get("SUMMARY").map(|v| ics_text(&v)).filter(|t| !t.is_empty()).unwrap_or_else(|| "會議".to_string());
     Some(Meeting {
         all_day,
         title,
@@ -594,14 +594,14 @@ pub mod secrets {
     /// 凭据只进 Windows 凭据管理器；键是邮箱地址，值是授权码。
     pub fn save(email: &str, password: &str) -> Result<(), String> {
         let entry = keyring::Entry::new(super::SERVICE, &email.to_ascii_lowercase())
-            .map_err(|e| format!("凭据管理器不可用：{e}"))?;
-        entry.set_password(password).map_err(|e| format!("保存授权码失败：{e}"))
+            .map_err(|e| format!("憑據管理器不可用：{e}"))?;
+        entry.set_password(password).map_err(|e| format!("儲存授權碼失敗：{e}"))
     }
 
     pub fn load(email: &str) -> Result<String, String> {
         let entry = keyring::Entry::new(super::SERVICE, &email.to_ascii_lowercase())
-            .map_err(|e| format!("凭据管理器不可用：{e}"))?;
-        entry.get_password().map_err(|_| "没有保存授权码".to_string())
+            .map_err(|e| format!("憑據管理器不可用：{e}"))?;
+        entry.get_password().map_err(|_| "沒有儲存授權碼".to_string())
     }
 
     pub fn delete(email: &str) {
@@ -614,10 +614,10 @@ pub mod secrets {
 #[cfg(not(windows))]
 pub mod secrets {
     pub fn save(_email: &str, _password: &str) -> Result<(), String> {
-        Err("仅 Windows 支持凭据管理器".into())
+        Err("僅 Windows 支援憑據管理器".into())
     }
     pub fn load(_email: &str) -> Result<String, String> {
-        Err("仅 Windows 支持凭据管理器".into())
+        Err("僅 Windows 支援憑據管理器".into())
     }
     pub fn delete(_email: &str) {}
 }
@@ -690,17 +690,17 @@ pub(crate) mod net {
         let mut byte = [0u8; 1];
         loop {
             match stream.read(&mut byte) {
-                Ok(0) => return Err("服务器关闭了连接".into()),
+                Ok(0) => return Err("伺服器關閉了連線".into()),
                 Ok(_) => {
                     buf.push(byte[0]);
                     if buf.ends_with(b"\r\n") {
                         return Ok(());
                     }
                     if buf.len() > 8192 {
-                        return Err("服务器响应过长".into());
+                        return Err("伺服器響應過長".into());
                     }
                 }
-                Err(e) => return Err(format!("读取失败：{e}")),
+                Err(e) => return Err(format!("讀取失敗：{e}")),
             }
         }
     }
@@ -710,13 +710,13 @@ pub(crate) mod net {
         let tls = TlsConnector::builder()
             .min_protocol_version(Some(native_tls::Protocol::Tlsv12))
             .build()
-            .map_err(|e| format!("TLS 初始化失败：{e}"))?;
+            .map_err(|e| format!("TLS 初始化失敗：{e}"))?;
         let tcp = TcpStream::connect((host.as_str(), port))
-            .map_err(|e| format!("无法连接 {host}：{e}"))?;
+            .map_err(|e| format!("無法連線 {host}：{e}"))?;
         let timeout = Some(Duration::from_secs(20));
         let _ = tcp.set_read_timeout(timeout);
         let _ = tcp.set_write_timeout(timeout);
-        let mut stream = tls.connect(&host, tcp).map_err(|e| format!("TLS 握手失败：{e}"))?;
+        let mut stream = tls.connect(&host, tcp).map_err(|e| format!("TLS 握手失敗：{e}"))?;
 
         // 1) 读问候，直到 "* OK" / "* PREAUTH"
         let mut greeting = Vec::new();
@@ -726,13 +726,13 @@ pub(crate) mod net {
             let upper = String::from_utf8_lossy(&line).to_ascii_uppercase();
             greeting.extend_from_slice(&line);
             if upper.starts_with("* BYE") {
-                return Err("服务器拒绝连接".into());
+                return Err("伺服器拒絕連線".into());
             }
             if upper.starts_with("* OK") || upper.starts_with("* PREAUTH") {
                 break;
             }
             if greeting.len() > 8192 {
-                return Err("服务器问候异常".into());
+                return Err("伺服器問候異常".into());
             }
         }
 
@@ -740,7 +740,7 @@ pub(crate) mod net {
         if account.provider.needs_id() {
             stream
                 .write_all(b"A0001 ID (\"name\" \"daozai\" \"version\" \"0.5.5\" \"vendor\" \"daozai\")\r\n")
-                .map_err(|e| format!("发送 ID 失败：{e}"))?;
+                .map_err(|e| format!("傳送 ID 失敗：{e}"))?;
             let _ = stream.flush();
             let mut ok = false;
             for _ in 0..20 {
@@ -753,13 +753,13 @@ pub(crate) mod net {
                 }
             }
             if !ok {
-                return Err("服务器不接受 ID 命令".into());
+                return Err("伺服器不接受 ID 命令".into());
             }
         }
 
         // 3) 把问候交回 imap，再正常登录
         let mut client = imap::Client::new(Prefixed::new(greeting, stream));
-        client.read_greeting().map_err(|e| format!("服务器问候异常：{e}"))?;
+        client.read_greeting().map_err(|e| format!("伺服器問候異常：{e}"))?;
         let session = client
             .login(username, password)
             .map_err(|(e, _)| login_error(e))?;
@@ -768,16 +768,16 @@ pub(crate) mod net {
 
     pub fn login_error(e: imap::Error) -> String {
         match e {
-            imap::Error::No(_) | imap::Error::Bad(_) => "登录被拒绝，请检查用户名、授权码和管理员的 IMAP/认证策略（不支持 OAuth-only）".into(),
-            imap::Error::Io(_) => "登录时网络连接中断，请重试".into(),
-            _ => "IMAP 登录失败，请核对服务器及认证方式".into(),
+            imap::Error::No(_) | imap::Error::Bad(_) => "登入被拒絕，請檢查使用者名稱、授權碼和管理員的 IMAP/認證策略（不支援 OAuth-only）".into(),
+            imap::Error::Io(_) => "登入時網路連線中斷，請重試".into(),
+            _ => "IMAP 登入失敗，請核對伺服器及認證方式".into(),
         }
     }
 
     /// 测试连接：连上、登录、选 INBOX，然后退出。
     pub fn probe(account: &Account, password: &str) -> Result<(), String> {
         let mut session = connect(account, password)?;
-        session.select("INBOX").map_err(|e| format!("无法打开收件箱：{e}"))?;
+        session.select("INBOX").map_err(|e| format!("無法開啟收件箱：{e}"))?;
         let _ = session.logout();
         Ok(())
     }
@@ -878,7 +878,7 @@ mod service {
                             let _ = ev.send(Event::Test {
                                 account: account.email,
                                 ok: result.is_ok(),
-                                note: result.err().unwrap_or_else(|| "连接成功".into()),
+                                note: result.err().unwrap_or_else(|| "連線成功".into()),
                             });
                         });
                 }
@@ -964,9 +964,9 @@ mod service {
         let mut session=client.login("test","test").unwrap();
         let start=std::time::Instant::now();
         let result=wait_for_change(&mut session);
-        assert!(server.join().unwrap(),"服务端未推送时，必须在 14 秒内主动结束等待并补查");
+        assert!(server.join().unwrap(),"服務端未推送時，必須在 14 秒內主動結束等待並補查");
         result.unwrap();
-        if push {assert!(start.elapsed()<Duration::from_secs(2),"有推送时必须立即处理，不能等待检查间隔");}
+        if push {assert!(start.elapsed()<Duration::from_secs(2),"有推送時必須立即處理，不能等待檢查間隔");}
         }
     }
 
@@ -1015,7 +1015,7 @@ mod service {
             let Ok(mailbox)=session.select("INBOX") else {
                 let _ = ev.send(Event::Status {
                     account: account.email.clone(),
-                    status: Status::Failed("无法打开收件箱".into()),
+                    status: Status::Failed("無法開啟收件箱".into()),
                 });
                 if sleep_stop(&stop, next_retry_delay(30,&mut failures)) {
                     return;
@@ -1041,11 +1041,11 @@ mod service {
         stop:&AtomicBool,interval:&AtomicU64,ev:&Sender<Event>,
     )->Result<(),String> {
         match last_uid {
-            Some(last)=>fetch_new(session,account,last,ev).map_err(|_|"读取新邮件失败，正在重连")?,
-            None=>{*last_uid=Some(recent(session,account,ev).map_err(|_|"读取最近邮件失败，正在重连")?);}
+            Some(last)=>fetch_new(session,account,last,ev).map_err(|_|"讀取新郵件失敗，正在重連")?,
+            None=>{*last_uid=Some(recent(session,account,ev).map_err(|_|"讀取最近郵件失敗，正在重連")?);}
         }
         let mut allow_noop=true;
-        let mut idle_supported=session.capabilities().map_err(|_|"读取收信能力失败，正在重连")?.has_str("IDLE");
+        let mut idle_supported=session.capabilities().map_err(|_|"讀取收信能力失敗，正在重連")?.has_str("IDLE");
         let _=ev.send(Event::Status{account:account.email.clone(),status:Status::Ready});
         loop {
             if stop.load(Ordering::Relaxed){let _=session.logout();return Ok(());}
@@ -1056,18 +1056,18 @@ mod service {
                     Ok(())=>{},
                     // 服务器明确拒绝推送时，本次连接改为轮询；重连后重新检查推送能力。
                     Err(imap::Error::No(_)|imap::Error::Bad(_))=>idle_supported=false,
-                    Err(_)=>return Err("邮件推送连接中断，正在重连".into()),
+                    Err(_)=>return Err("郵件推送連線中斷，正在重連".into()),
                 }
             }else{
                 wait_for_poll(session,cycle_started,interval.load(Ordering::Relaxed),&mut allow_noop,|at|sleep_until_stop(stop,at))
-                    .map_err(|_|"邮件连接中断，正在重连")?;
+                    .map_err(|_|"郵件連線中斷，正在重連")?;
             }
             if stop.load(Ordering::Relaxed){let _=session.logout();return Ok(());}
-            fetch_new(session,account,last_uid.as_mut().unwrap(),ev).map_err(|_|"读取新邮件失败，正在重连")?;
+            fetch_new(session,account,last_uid.as_mut().unwrap(),ev).map_err(|_|"讀取新郵件失敗，正在重連")?;
             if idle_supported && *last_uid==previous && cycle_started.elapsed()<Duration::from_secs(5) {
                 if sleep_stop(stop,5){let _=session.logout();return Ok(());}
                 // 冷却后补读新邮件，并消费等待期间到达的通知，再进入下一轮推送等待。
-                fetch_new(session,account,last_uid.as_mut().unwrap(),ev).map_err(|_|"读取新邮件失败，正在重连")?;
+                fetch_new(session,account,last_uid.as_mut().unwrap(),ev).map_err(|_|"讀取新郵件失敗，正在重連")?;
             }
         }
     }
@@ -1100,7 +1100,7 @@ mod service {
                         Ok(0)=>break,
                         Ok(_)=>{},
                         Err(error) if error.kind()==std::io::ErrorKind::ConnectionReset=>break,
-                        Err(error)=>panic!("模拟收信连接读取失败：{error}"),
+                        Err(error)=>panic!("模擬收信連線讀取失敗：{error}"),
                     }
                     let line=line.trim_end();commands.push(line.to_string());
                     if line=="DONE" {
@@ -1224,7 +1224,7 @@ mod service {
             let worker=std::thread::spawn(move || sleep_stop(&worker_stop,30));
             std::thread::sleep(Duration::from_millis(50));stop.store(true,Ordering::Relaxed);
             assert!(worker.join().unwrap());
-            assert!(started.elapsed()<Duration::from_secs(2),"停止监听应打断后台等待");
+            assert!(started.elapsed()<Duration::from_secs(2),"停止監聽應打斷後臺等待");
         }
 
         #[test]
@@ -1235,7 +1235,7 @@ mod service {
             let result=monitor(&mut session,&account(),&mut last,&stop,&AtomicU64::new(120),&ev);
             let elapsed=started.elapsed();drop(session);let commands=server.join().unwrap();
             assert!(result.is_ok(),"{result:?}");assert_eq!(last,Some(40));
-            assert!(elapsed>=Duration::from_secs(5),"两次空推送之间应降频，实际耗时 {elapsed:?}");
+            assert!(elapsed>=Duration::from_secs(5),"兩次空推送之間應降頻，實際耗時 {elapsed:?}");
             assert_eq!(commands.iter().filter(|command|command.ends_with(" IDLE")).count(),2);
             assert!(!rx.try_iter().any(|event|matches!(event,Event::Mail{..})));
         }
@@ -1248,7 +1248,7 @@ mod service {
             drop(session);let commands=server.join().unwrap();
             assert!(result.is_ok(),"{result:?}");assert_eq!(last,Some(41));
             assert!(rx.try_iter().any(|event|matches!(event,Event::Mail{item,new:true} if item.uid==41)));
-            assert_eq!(commands.iter().filter(|command|command.ends_with(" IDLE")).count(),1,"冷却结束后应先检查期间到达的新邮件");
+            assert_eq!(commands.iter().filter(|command|command.ends_with(" IDLE")).count(),1,"冷卻結束後應先檢查期間到達的新郵件");
         }
 
         #[test]
@@ -1274,8 +1274,8 @@ mod service {
                 let events:Vec<_>=rx.try_iter().collect();
                 let mail=events.iter().position(|event|matches!(event,Event::Mail{item,new:false} if item.uid==42)).unwrap();
                 let ready=events.iter().position(|event|matches!(event,Event::Status{status:Status::Ready,..})).unwrap();
-                assert!(mail<ready,"成功读取后再显示已连接");
-                assert!(!events.iter().any(|event|matches!(event,Event::Mail{new:true,..})),"首次加载应保持静默");
+                assert!(mail<ready,"成功讀取後再顯示已連線");
+                assert!(!events.iter().any(|event|matches!(event,Event::Mail{new:true,..})),"首次載入應保持靜默");
             }
         }
 
@@ -1285,10 +1285,10 @@ mod service {
             let (ev,rx)=channel();let mut last=Some(40);
             let result=monitor(&mut session,&account(),&mut last,&stop,&AtomicU64::new(0),&ev);
             drop(session);let commands=server.join().unwrap();
-            assert!(result.is_ok(),"推送被拒绝后应继续轮询收信：{result:?} commands={commands:?}");
+            assert!(result.is_ok(),"推送被拒絕後應繼續輪詢收信：{result:?} commands={commands:?}");
             assert_eq!(last,Some(41));
             assert!(rx.try_iter().any(|event|matches!(event,Event::Mail{item,new:true} if item.uid==41)));
-            assert!(!commands.iter().any(|command|command=="DONE"),"尚未进入推送状态时不能发送 DONE");
+            assert!(!commands.iter().any(|command|command=="DONE"),"尚未進入推送狀態時不能傳送 DONE");
             assert!(commands.iter().any(|command|command.ends_with(" NOOP")));
         }
 
@@ -1298,7 +1298,7 @@ mod service {
             let (ev,rx)=channel();let mut last=Some(40);
             assert!(monitor(&mut session,&account(),&mut last,&stop,&AtomicU64::new(0),&ev).is_err());
             drop(session);server.join().unwrap();
-            assert_eq!(last,Some(41),"重连后应先补读断线期间到达的邮件");
+            assert_eq!(last,Some(41),"重連後應先補讀斷線期間到達的郵件");
             assert!(rx.try_iter().any(|event|matches!(event,Event::Mail{item,new:true} if item.uid==41)));
         }
 
@@ -1308,7 +1308,7 @@ mod service {
             let (ev,rx)=channel();let mut last=None;
             assert!(monitor(&mut session,&account(),&mut last,&stop,&AtomicU64::new(0),&ev).is_err());
             drop(session);server.join().unwrap();
-            assert_eq!(last,None,"最近邮件读取失败后不能提交最大 UID");
+            assert_eq!(last,None,"最近郵件讀取失敗後不能提交最大 UID");
             assert!(!rx.try_iter().any(|event|matches!(event,Event::Status{status:Status::Ready,..})));
         }
 
@@ -1320,7 +1320,7 @@ mod service {
             fetch_new(&mut session,&account(),&mut last,&ev).unwrap();
             drop(session);server.join().unwrap();
             let uids:Vec<_>=rx.try_iter().filter_map(|event|match event {Event::Mail{item,new:true}=>Some(item.uid),_=>None}).collect();
-            assert_eq!(uids,vec![1,2,3,4,5,6,7],"批量读取不能跳过前面的新邮件");
+            assert_eq!(uids,vec![1,2,3,4,5,6,7],"批次讀取不能跳過前面的新郵件");
             assert_eq!(last,7);
         }
     }
@@ -1347,7 +1347,7 @@ mod service {
     }
 
     #[test]
-    #[ignore = "需要真实 QQ 邮箱及新测试邮件，验证后台监听"]
+    #[ignore = "需要真實 QQ 信箱及新測試郵件，驗證後臺監聽"]
     fn qq_live_notification_worker() {
         let accounts=load_accounts().into_iter().filter(|a|a.provider==Provider::Qq&&a.enabled).collect::<Vec<_>>();
         assert!(!accounts.is_empty());
@@ -1358,8 +1358,8 @@ mod service {
                 match event {
                     Event::Status{status,..}=>println!("worker_status={status:?}"),
                     Event::Mail{new,item}=>{
-                        println!("worker_mail new={new} test_message={}",item.subject.starts_with("岛仔"));
-                        if new && item.subject=="岛仔后台监听实测" {
+                        println!("worker_mail new={new} test_message={}",item.subject.starts_with("島仔"));
+                        if new && item.subject=="島仔後臺監聽實測" {
                             service.sync(&[],120);return;
                         }
                     },
@@ -1367,20 +1367,20 @@ mod service {
                 }
             }
         }
-        service.sync(&[],120);panic!("160 秒内未收到新邮件事件");
+        service.sync(&[],120);panic!("160 秒內未收到新郵件事件");
     }
 
     #[test]
-    #[ignore="需要本轮已发送的日历邀请和普通日期邮件"]
+    #[ignore="需要本輪已傳送的日曆邀請和普通日期郵件"]
     fn qq_live_calendar_mail_probe() {
         let account=load_accounts().into_iter().find(|a|a.provider==Provider::Qq&&a.enabled).unwrap();
         let password=secrets::load(&account.credential_key()).unwrap();
         let mut session=net::connect(&account,&password).unwrap();session.examine("INBOX").unwrap();
         let (tx,rx)=std::sync::mpsc::channel();recent(&mut session,&account,&tx).unwrap();
         let items=rx.try_iter().filter_map(|ev|if let Event::Mail{item,..}=ev{Some(item)}else{None}).collect::<Vec<_>>();
-        let invite=items.iter().find(|m|m.subject=="【岛仔测试】邮件日程邀请：收件箱合并验证").expect("测试邀请未到达");
+        let invite=items.iter().find(|m|m.subject=="【島仔測試】郵件日程邀請：收件箱合併驗證").expect("測試邀請未到達");
         assert_eq!(invite.meeting.as_ref().unwrap().uid,"daozai-mail-test-20261103-1500");
-        let plain=items.iter().find(|m|m.subject=="DAOZAI-DATE-TEST-20261103").expect("普通日期邮件未到达");
+        let plain=items.iter().find(|m|m.subject=="DAOZAI-DATE-TEST-20261103").expect("普通日期郵件未到達");
         assert!(plain.meeting.is_none());session.logout().unwrap();
         println!("invitation_recognized=true plain_date_rejected=true");
     }
@@ -1392,18 +1392,18 @@ mod service {
         let (rest,parsed)=imap_proto::parse_response(response).unwrap();
         assert!(matches!(parsed,imap_proto::Response::Capabilities(caps) if caps.iter().any(|c|matches!(c,imap_proto::Capability::Atom("IDLE")))));
         assert_eq!(rest,b"a2 OK capabilities\r\n");
-        assert!(imap_proto::parse_response(b"* CAPABILITY IDLE \r\n").is_err(),"仍需校验 IMAP4rev1");
+        assert!(imap_proto::parse_response(b"* CAPABILITY IDLE \r\n").is_err(),"仍需校驗 IMAP4rev1");
     }
 
     #[test]
-    #[ignore="本机腾讯企业邮箱只读连接诊断；不输出凭据或邮件内容"]
+    #[ignore="本機騰訊企業信箱只讀連線診斷；不輸出憑據或郵件內容"]
     fn exmail_live_capability_probe() {
-        let account=load_accounts().into_iter().find(|a|a.enabled && a.custom.as_ref().is_some_and(|c|c.host=="imap.exmail.qq.com")).expect("未配置腾讯企业邮箱");
-        let password=secrets::load(&account.credential_key()).expect("无法读取本机凭据");
-        let mut session=net::connect(&account,&password).expect("登录失败");
-        session.examine("INBOX").expect("只读打开失败");
+        let account=load_accounts().into_iter().find(|a|a.enabled && a.custom.as_ref().is_some_and(|c|c.host=="imap.exmail.qq.com")).expect("未配置騰訊企業信箱");
+        let password=secrets::load(&account.credential_key()).expect("無法讀取本機憑據");
+        let mut session=net::connect(&account,&password).expect("登入失敗");
+        session.examine("INBOX").expect("只讀開啟失敗");
         let (tx,rx)=std::sync::mpsc::channel();
-        recent(&mut session,&account,&tx).expect("最近邮件读取失败");
+        recent(&mut session,&account,&tx).expect("最近郵件讀取失敗");
         drop(rx);
         match session.capabilities(){
             Ok(caps)=>println!("capabilities=ok idle={}",caps.has_str("IDLE")),
@@ -1413,30 +1413,30 @@ mod service {
     }
 
     #[test]
-    #[ignore = "需要本机已连接的 QQ 邮箱，显式执行只读实测"]
+    #[ignore = "需要本機已連線的 QQ 信箱，顯式執行只讀實測"]
     fn qq_live_read_only_probe() {
         let accounts=load_accounts();
-        let account=accounts.iter().find(|a|a.provider==Provider::Qq&&a.enabled).expect("未找到已启用 QQ 邮箱");
-        let password=secrets::load(&account.credential_key()).expect("读取邮箱凭据失败");
-        let mut session=net::connect(account,&password).expect("真实登录失败");
-        session.examine("INBOX").expect("只读打开收件箱失败");
-        println!("idle_supported={}",session.capabilities().expect("读取能力失败").has_str("IDLE"));
-        let before=session.uid_search("UNSEEN").expect("读取未读状态失败");
+        let account=accounts.iter().find(|a|a.provider==Provider::Qq&&a.enabled).expect("未找到已啟用 QQ 信箱");
+        let password=secrets::load(&account.credential_key()).expect("讀取信箱憑據失敗");
+        let mut session=net::connect(account,&password).expect("真實登入失敗");
+        session.examine("INBOX").expect("只讀開啟收件箱失敗");
+        println!("idle_supported={}",session.capabilities().expect("讀取能力失敗").has_str("IDLE"));
+        let before=session.uid_search("UNSEEN").expect("讀取未讀狀態失敗");
         let (tx,rx)=std::sync::mpsc::channel();
-        let mut last=recent(&mut session,account,&tx).expect("最近邮件读取失败");
+        let mut last=recent(&mut session,account,&tx).expect("最近郵件讀取失敗");
         let initial=rx.try_iter().collect::<Vec<_>>();
         assert!(initial.iter().all(|e|matches!(e,Event::Mail{new:false,..})));
         println!("login=ok readonly_inbox=ok recent_parsed={}",initial.len());
         for event in &initial {if let Event::Mail{item,..}=event{
             println!("subject_chars={} sender_chars={} body_bytes={} links={} max_link_chars={}",item.subject.chars().count(),item.from.chars().count(),item.summary.len(),item.links.len(),item.links.iter().map(|l|l.label.chars().count()).max().unwrap_or(0));
         }}
-        let received=initial.iter().any(|e|matches!(e,Event::Mail{item,..} if item.subject=="岛仔收信测试"&&item.code.as_deref()==Some("482731")&&!item.links.is_empty()));
+        let received=initial.iter().any(|e|matches!(e,Event::Mail{item,..} if item.subject=="島仔收信測試"&&item.code.as_deref()==Some("482731")&&!item.links.is_empty()));
         println!("test_message_with_code_and_link={received}");
-        fetch_new(&mut session,account,&mut last,&tx).expect("增量收取失败");
+        fetch_new(&mut session,account,&mut last,&tx).expect("增量收取失敗");
         let added=rx.try_iter().count();
-        let after=session.uid_search("UNSEEN").expect("检查未读状态失败");
+        let after=session.uid_search("UNSEEN").expect("檢查未讀狀態失敗");
         println!("incremental_fetch=ok new_messages={} unseen_unchanged={}",added,before==after);
-        session.logout().expect("退出失败");
+        session.logout().expect("退出失敗");
     }
 
     fn fetch_new<S:std::io::Read+std::io::Write>(
@@ -1494,10 +1494,10 @@ Content-Type: multipart/alternative; boundary=\"b\"\r\n\r\n\
 --b\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nWeekly  Flat text\r\n\
 --b\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<h1>Weekly</h1><ul><li>Flat text</li></ul>\r\n--b--\r\n";
         let parsed=super::parse_message(raw);
-        assert!(!parsed.text.trim().is_empty(),"text/plain 仍要保留作摘要与兜底");
-        assert!(parsed.html.contains("<h1>"),"HTML 原文必须保留");
+        assert!(!parsed.text.trim().is_empty(),"text/plain 仍要保留作摘要與兜底");
+        assert!(parsed.html.contains("<h1>"),"HTML 原文必須保留");
         let lines=crate::mail_format::lines(&parsed.html,&parsed.text);
-        assert_eq!(lines[0].kind,crate::mail_format::Kind::Title,"真实邮件应走 HTML 排版");
+        assert_eq!(lines[0].kind,crate::mail_format::Kind::Title,"真實郵件應走 HTML 排版");
         assert!(lines.iter().any(|l|l.kind==crate::mail_format::Kind::Bullet));
     }
     #[test]
@@ -1510,14 +1510,14 @@ Content-Type: multipart/alternative; boundary=\"b\"\r\n\r\n\
 
     #[test]
     fn quality_alarm_fields_do_not_replace_meeting_fields() {
-        let event="BEGIN:VEVENT\nDTSTART:20261101T060000Z\nBEGIN:VALARM\nSUMMARY:闹钟文案\nEND:VALARM\nSUMMARY:正式会议\nEND:VEVENT";
-        assert_eq!(super::meetings_of(event)[0].title,"正式会议");
+        let event="BEGIN:VEVENT\nDTSTART:20261101T060000Z\nBEGIN:VALARM\nSUMMARY:鬧鐘文案\nEND:VALARM\nSUMMARY:正式會議\nEND:VEVENT";
+        assert_eq!(super::meetings_of(event)[0].title,"正式會議");
     }
 
     #[test]
     fn quality_ics_unfolding_preserves_content_spaces() {
-        let event="BEGIN:VEVENT\nDTSTART:20261101T060000Z\nSUMMARY:项目\n  评审\nEND:VEVENT";
-        assert_eq!(super::meetings_of(event)[0].title,"项目 评审");
+        let event="BEGIN:VEVENT\nDTSTART:20261101T060000Z\nSUMMARY:專案\n  評審\nEND:VEVENT";
+        assert_eq!(super::meetings_of(event)[0].title,"專案 評審");
     }
     #[test]
     fn email_links_preserve_targets_labels_and_query_parameters() {
@@ -1542,16 +1542,16 @@ Content-Type: multipart/alternative; boundary=\"b\"\r\n\r\n\
 
     #[test]
     fn parses_subject_sender_and_code() {
-        let parsed = parse_message(&raw("验证码", "您的验证码是：834921，10分钟内有效。"));
-        assert_eq!(parsed.subject, "验证码");
+        let parsed = parse_message(&raw("驗證碼", "您的驗證碼是：834921，10分鐘內有效。"));
+        assert_eq!(parsed.subject, "驗證碼");
         assert_eq!(parsed.from, "小牛");
         assert_eq!(code_of(&parsed).as_deref(), Some("834921"));
     }
 
     #[test]
     fn html_only_mail_still_finds_code() {
-        let html = "<html><body><p>您正在登录</p><p>验证码：<b>906213</b></p></body></html>";
-        let raw = format!("From: a@b.c\r\nSubject: 登录\r\nContent-Type: text/html; charset=utf-8\r\n\r\n{html}");
+        let html = "<html><body><p>您正在登入</p><p>驗證碼：<b>906213</b></p></body></html>";
+        let raw = format!("From: a@b.c\r\nSubject: 登入\r\nContent-Type: text/html; charset=utf-8\r\n\r\n{html}");
         let parsed = parse_message(raw.as_bytes());
         assert_eq!(code_of(&parsed).as_deref(), Some("906213"));
     }
@@ -1584,12 +1584,12 @@ Content-Type: multipart/alternative; boundary=\"b\"\r\n\r\n\
 
     #[test]
     fn summary_flattens_body_and_caps_length() {
-        let parsed = parse_message(&raw("周会", "第一行\n\n  第二行   有空格\r\n第三行"));
+        let parsed = parse_message(&raw("週會", "第一行\n\n  第二行   有空格\r\n第三行"));
         assert_eq!(summary_of(&parsed), "第一行 第二行 有空格 第三行");
         let long = "字".repeat(400);
-        let parsed = parse_message(&raw("长", &long));
+        let parsed = parse_message(&raw("長", &long));
         let s = summary_of(&parsed);
-        assert_eq!(s.chars().count(), 201, "200 字 + 省略号");
+        assert_eq!(s.chars().count(), 201, "200 字 + 省略號");
         assert!(s.ends_with('…'));
         // 没有正文时摘要为空，界面只显示主题
         assert_eq!(summary_of(&parse_message(&raw("空", ""))), "");
@@ -1597,8 +1597,8 @@ Content-Type: multipart/alternative; boundary=\"b\"\r\n\r\n\
 
     #[test]
     fn full_body_keeps_paragraphs_and_content_beyond_preview_and_old_fetch_limit() {
-        let text=format!("第一段\n\n{}\n\n最后一段：完整正文结束", "正文内容".repeat(10000));
-        let parsed=parse_message(&raw("长邮件",&text));
+        let text=format!("第一段\n\n{}\n\n最後一段：完整正文結束", "正文內容".repeat(10000));
+        let parsed=parse_message(&raw("長郵件",&text));
         assert_eq!(body_of(&parsed),text);
         let html=parse_message(b"Content-Type: text/html; charset=utf-8\r\n\r\n<p>First paragraph</p><p>Last paragraph</p>");
         assert_eq!(body_of(&html),"First paragraph\nLast paragraph");
@@ -1608,7 +1608,7 @@ Content-Type: multipart/alternative; boundary=\"b\"\r\n\r\n\
 VERSION:2.0\r\n\
 BEGIN:VEVENT\r\n\
 UID:demo-1@example.com\r\n\
-SUMMARY:产品评审会\r\n\
+SUMMARY:產品評審會\r\n\
 DTSTART;TZID=Asia/Shanghai:20261030T143000\r\n\
 DTEND;TZID=Asia/Shanghai:20261030T153000\r\n\
 END:VEVENT\r\n\
@@ -1616,8 +1616,8 @@ END:VCALENDAR\r\n";
 
     #[test]
     fn ics_meeting_title_and_start() {
-        let m = meeting_of(ICS).expect("应当识别出会议");
-        assert_eq!(m.title, "产品评审会");
+        let m = meeting_of(ICS).expect("應當識別出會議");
+        assert_eq!(m.title, "產品評審會");
         let start = chrono::Utc
             .with_ymd_and_hms(2026, 10, 30, 6, 30, 0)
             .earliest()
@@ -1638,7 +1638,7 @@ END:VCALENDAR\r\n";
         assert_eq!(meeting.end,Some(meeting.start+3600));
         for end in ["","DTEND:20261030T060000Z\n","DTEND:invalid\n","DTEND;TZID=Unknown/Zone:20261030T153000\n"] {
             let meeting=meeting_of(&format!("BEGIN:VEVENT\nDTSTART:20261030T063000Z\n{end}END:VEVENT")).unwrap();
-            assert!(meeting.end.is_none(),"缺失或无效的结束时间应保留为空");
+            assert!(meeting.end.is_none(),"缺失或無效的結束時間應保留為空");
         }
     }
 
@@ -1646,7 +1646,7 @@ END:VCALENDAR\r\n";
     fn ics_utc_and_folded_lines() {
         // 折行：CRLF + 一个空格被删掉，"Design s" + "ync" = "Design sync"
         let utc = "BEGIN:VCALENDAR\nBEGIN:VEVENT\nSUMMARY:Design s\n ync\nDTSTART:20261030T063000Z\nEND:VEVENT\nEND:VCALENDAR\n";
-        let m = meeting_of(utc).expect("Z 时间应能解析");
+        let m = meeting_of(utc).expect("Z 時間應能解析");
         assert_eq!(m.title, "Design sync");
         let local = chrono::DateTime::from_timestamp(m.start, 0)
             .unwrap()
@@ -1658,7 +1658,7 @@ END:VCALENDAR\r\n";
 
     #[test]
     fn ics_named_time_zone_uses_its_own_offset() {
-        let ics = "BEGIN:VEVENT\nSUMMARY:跨时区会议\nDTSTART;TZID=America/New_York:20261030T090000\nEND:VEVENT\n";
+        let ics = "BEGIN:VEVENT\nSUMMARY:跨時區會議\nDTSTART;TZID=America/New_York:20261030T090000\nEND:VEVENT\n";
         let m = meeting_of(ics).unwrap();
         assert_eq!(m.start, chrono::DateTime::parse_from_rfc3339("2026-10-30T13:00:00Z").unwrap().timestamp());
         let unknown = "BEGIN:VEVENT\nDTSTART;TZID=Unknown/Zone:20261030T090000\nEND:VEVENT\n";
@@ -1667,7 +1667,7 @@ END:VCALENDAR\r\n";
 
     #[test]
     fn all_day_calendar_event_has_exclusive_end() {
-        let event=meeting_of("BEGIN:VEVENT\nUID:all-day\nSUMMARY:全天\nDTSTART;VALUE=DATE:20261103\nDTEND;VALUE=DATE:20261105\nEND:VEVENT").expect("全天日程应可展示");
+        let event=meeting_of("BEGIN:VEVENT\nUID:all-day\nSUMMARY:全天\nDTSTART;VALUE=DATE:20261103\nDTEND;VALUE=DATE:20261105\nEND:VEVENT").expect("全天日程應可展示");
         assert_eq!(event.end.unwrap()-event.start,2*86400);
     }
 
@@ -1677,19 +1677,19 @@ END:VCALENDAR\r\n";
         let all_day = "BEGIN:VEVENT\nSUMMARY:放假\nDTSTART;VALUE=DATE:20261030\nEND:VEVENT\n";
         assert!(meeting_of(all_day).unwrap().all_day);
         assert!(meeting_of("").is_none());
-        assert!(meeting_of("会议时间：10月30日 14:30").is_none());
+        assert!(meeting_of("會議時間：10月30日 14:30").is_none());
     }
 
     #[test]
     fn calendar_part_is_collected_from_mime() {
         let raw = format!(
-            "From: a@b.c\r\nSubject: 邀请\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=XYZ\r\n\r\n--XYZ\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n会议邀请见附件\r\n--XYZ\r\nContent-Type: text/calendar; charset=utf-8; method=REQUEST\r\n\r\n{ICS}\r\n--XYZ--\r\n"
+            "From: a@b.c\r\nSubject: 邀請\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=XYZ\r\n\r\n--XYZ\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n會議邀請見附件\r\n--XYZ\r\nContent-Type: text/calendar; charset=utf-8; method=REQUEST\r\n\r\n{ICS}\r\n--XYZ--\r\n"
         );
         let parsed = parse_message(raw.as_bytes());
-        assert!(parsed.calendar.contains("产品评审会"));
+        assert!(parsed.calendar.contains("產品評審會"));
         let m = meeting_of(&parsed.calendar).unwrap();
-        assert_eq!(m.title, "产品评审会");
-        assert_eq!(summary_of(&parsed), "会议邀请见附件");
+        assert_eq!(m.title, "產品評審會");
+        assert_eq!(summary_of(&parsed), "會議邀請見附件");
     }
 }
 
@@ -1697,16 +1697,16 @@ END:VCALENDAR\r\n";
 mod custom_endpoint_tests {
  #[test] fn microsoft_cloud_accounts_report_unsupported_before_connecting(){
   let a=Account{email:"test@hotmail.com".into(),provider:Provider::Microsoft,custom:None,enabled:true};
-  let error=a.endpoint().expect_err("尚未支持的微软邮箱不能发起连接");
-  assert!(error.contains("OAuth")&&error.contains("暂不支持"));
-  assert!(Provider::Microsoft.label().contains("暂不支持"));
+  let error=a.endpoint().expect_err("尚未支援的微軟信箱不能發起連線");
+  assert!(error.contains("OAuth")&&error.contains("暫不支援"));
+  assert!(Provider::Microsoft.label().contains("暫不支援"));
   for host in ["outlook.office365.com"," IMAP-MAIL.OUTLOOK.COM ","outlook.live.com","imap.outlook.com"]{
    let b=Account{email:"student@example.edu".into(),provider:Provider::Custom,custom:Some(CustomImap{host:host.into(),port:993,username:String::new()}),..a.clone()};
-   assert_eq!(b.endpoint().unwrap_err(),error,"微软云主机应显示同一提示");
+   assert_eq!(b.endpoint().unwrap_err(),error,"微軟雲主機應顯示同一提示");
   }
   for email in ["user@outlook.com","user@hotmail.com","user@live.com"," USER@OUTLOOK.COM "]{
    let b=Account{email:email.into(),provider:Provider::Qq,custom:None,enabled:true};
-   assert_eq!(b.endpoint().unwrap_err(),error,"误选服务商也不能引导用户尝试密码");
+   assert_eq!(b.endpoint().unwrap_err(),error,"誤選服務商也不能引導使用者嘗試密碼");
   }
  }
  use super::*;

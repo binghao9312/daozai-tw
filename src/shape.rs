@@ -253,7 +253,7 @@ mod tests {
                     for j in [i, i + 1] {
                         let offset = edge_normal(&pts, j) / ppp;
                         assert!((offset.dot(normal) * ppp - 1.0).abs() < 0.001,
-                            "羽化必须沿每段轮廓保持一物理像素：边 {i}，顶点 {j}，缩放 {ppp}");
+                            "羽化必須沿每段輪廓保持一物理畫素：邊 {i}，頂點 {j}，縮放 {ppp}");
                     }
                 }
             }
@@ -281,7 +281,7 @@ mod dock_tests {
         let left = outline_docked(rect, Dock::Left, 17.6, 16.0, 33.0);
         let b = Rect::from_points(&left);
         assert!((b.left() - 0.0).abs() < 0.01 && (b.right() - 419.0).abs() < 0.01, "{b:?}");
-        assert!(b.top() < 100.0 - 17.0 && b.bottom() > 240.0 + 17.0, "肩部沿屏幕边缘上下展开：{b:?}");
+        assert!(b.top() < 100.0 - 17.0 && b.bottom() > 240.0 + 17.0, "肩部沿螢幕邊緣上下展開：{b:?}");
         // 肩部只在贴边处
         assert!(left.iter().filter(|p| p.y < 99.0).all(|p| p.x < 16.5));
         let right_rect = Rect::from_min_size(Pos2::new(81.0, 100.0), Vec2::new(419.0, 140.0));
@@ -306,7 +306,7 @@ mod cache_tests {
     #[test]
     fn unchanged_outline_reuses_geometry_across_frames(){
         let ctx=egui::Context::default();let first=frame(&ctx,300.0,1.0);let second=frame(&ctx,300.0,1.0);
-        assert!(std::sync::Arc::ptr_eq(&first,&second),"稳定轮廓不能每帧重新分配网格");
+        assert!(std::sync::Arc::ptr_eq(&first,&second),"穩定輪廓不能每幀重新分配網格");
         let changed=frame(&ctx,320.0,1.0);assert_ne!(first.vertices,changed.vertices);
         let scaled=frame(&ctx,320.0,0.5);assert_ne!(changed.vertices,scaled.vertices);
     }
@@ -319,7 +319,7 @@ mod cache_tests {
             let expected=fill_mesh(Rect::from_min_size(Pos2::ZERO,Vec2::new(300.0+i as f32/10.0,30.0)),5.0,8.0,12.5,Color32::BLACK,1.0);
             assert_eq!(mesh.vertices,expected.vertices);assert_eq!(mesh.indices,expected.indices);
             let count=ctx.memory_mut(|m|egui::cache::CacheTrait::len(m.caches.cache::<FillCache>()));
-            assert!(count<=2,"动画不能累积历史轮廓：{count}");
+            assert!(count<=2,"動畫不能累積歷史輪廓：{count}");
         }
     }
 }

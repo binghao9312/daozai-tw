@@ -67,7 +67,7 @@ pub(crate) fn atomic_write(path:&Path,body:&[u8])->std::io::Result<()> {
     use std::sync::atomic::{AtomicU64,Ordering};
     static SERIAL:AtomicU64=AtomicU64::new(0);
     let (tmp,mut file)=loop {
-        let mut name=path.file_name().ok_or_else(||std::io::Error::other("缺少文件名"))?.to_os_string();
+        let mut name=path.file_name().ok_or_else(||std::io::Error::other("缺少檔名"))?.to_os_string();
         name.push(format!(".{}-{}.tmp",std::process::id(),SERIAL.fetch_add(1,Ordering::Relaxed)));
         let tmp=path.with_file_name(name);
         match fs::OpenOptions::new().write(true).create_new(true).open(&tmp) {
@@ -120,15 +120,15 @@ impl Skin {
         match value { "fluid" => Self::Fluid, "cream" => Self::Cream, "glass_light" => Self::GlassLight, "glass" | "glass_dark" => Self::GlassDark, _ => Self::Classic }
     }
     pub fn label(self) -> &'static str {
-        match self { Self::Classic => "经典", Self::Fluid => "悬浮云", Self::Cream => "奶油", Self::GlassLight => "毛玻璃·浅", Self::GlassDark => "毛玻璃·深" }
+        match self { Self::Classic => "經典", Self::Fluid => "懸浮雲", Self::Cream => "奶油", Self::GlassLight => "毛玻璃·淺", Self::GlassDark => "毛玻璃·深" }
     }
     pub fn description(self) -> &'static str {
         match self {
-            Self::Classic => "纯黑岛体，与屏幕刘海融为一体，资源占用最低。",
-            Self::Fluid => "半透明灰底随音乐封面换色，光晕跟随鼠标，播放进度带有渐隐光尾。皮肤作者：啵（@hanhb123）。",
-            Self::Cream => "暖白底色配深棕文字和橙色强调，柔和明亮。",
-            Self::GlassLight => "浅色磨砂玻璃，透出身后桌面的颜色，文字为深色；按背景明暗自动调整，保证清晰。",
-            Self::GlassDark => "深色磨砂玻璃，透出身后桌面的颜色，文字为白色；按背景明暗自动调整，保证清晰。",
+            Self::Classic => "純黑島體，與螢幕劉海融為一體，資源佔用最低。",
+            Self::Fluid => "半透明灰底隨音樂封面換色，光暈跟隨滑鼠，播放進度帶有漸隱光尾。皮膚作者：啵（@hanhb123）。",
+            Self::Cream => "暖白底色配深棕文字和橙色強調，柔和明亮。",
+            Self::GlassLight => "淺色磨砂玻璃，透出身後桌面的顏色，文字為深色；按背景明暗自動調整，保證清晰。",
+            Self::GlassDark => "深色磨砂玻璃，透出身後桌面的顏色，文字為白色；按背景明暗自動調整，保證清晰。",
         }
     }
     pub fn is_glass(self) -> bool { matches!(self, Self::GlassLight | Self::GlassDark) }
@@ -151,12 +151,12 @@ impl IslandShape {
         match value { "pill" => Self::Pill, _ => Self::Notch }
     }
     pub fn label(self) -> &'static str {
-        match self { Self::Notch => "刘海", Self::Pill => "胶囊" }
+        match self { Self::Notch => "劉海", Self::Pill => "膠囊" }
     }
     pub fn description(self) -> &'static str {
         match self {
-            Self::Notch => "贴着屏幕顶边，顶部两侧向外柔和过渡，像屏幕刘海。",
-            Self::Pill => "悬浮在屏幕顶边下方，四角圆润，收起时是完整的胶囊。",
+            Self::Notch => "貼著螢幕頂邊，頂部兩側向外柔和過渡，像螢幕劉海。",
+            Self::Pill => "懸浮在螢幕頂邊下方，四角圓潤，收起時是完整的膠囊。",
         }
     }
 }
@@ -179,7 +179,7 @@ impl Dock {
         match value { "left" => Self::Left, "right" => Self::Right, _ => Self::Top }
     }
     pub fn label(self) -> &'static str {
-        match self { Self::Top => "顶部", Self::Left => "左侧", Self::Right => "右侧" }
+        match self { Self::Top => "頂部", Self::Left => "左側", Self::Right => "右側" }
     }
     pub fn is_side(self) -> bool { self != Self::Top }
 }
@@ -527,13 +527,13 @@ fn weekday_bit(date: &str) -> Option<u8> {
 /// 「每天」「工作日」「周末」「每周一、三、五」。
 pub fn repeat_label(mask: u8) -> String {
     match mask & REPEAT_ALL {
-        0 => "不重复".into(),
+        0 => "不重複".into(),
         REPEAT_ALL => "每天".into(),
         REPEAT_WORKDAYS => "工作日".into(),
-        REPEAT_WEEKEND => "周末".into(),
+        REPEAT_WEEKEND => "週末".into(),
         mask => {
             let days: Vec<&str> = (0..7).filter(|i| mask & (1 << i) != 0).map(|i| WEEKDAY_NAMES[i]).collect();
-            format!("每周{}", days.join("、"))
+            format!("每週{}", days.join("、"))
         }
     }
 }
@@ -544,7 +544,7 @@ pub fn repeat_tag(mask: u8) -> String {
         0 => String::new(),
         REPEAT_ALL => "每天".into(),
         REPEAT_WORKDAYS => "工作日".into(),
-        REPEAT_WEEKEND => "周末".into(),
+        REPEAT_WEEKEND => "週末".into(),
         mask => format!("周{}", (0..7).filter(|i| mask & (1 << i) != 0).map(|i| WEEKDAY_NAMES[i]).collect::<String>()),
     }
 }
@@ -828,7 +828,7 @@ impl Shelf {
     /// 原工具的做法：记录文件所在位置，不复制文件本体（官网说明
     /// "the shelf remembers where your files live"）。
     pub fn add(&mut self, src: &Path) -> std::io::Result<()> {
-        if !src.exists() { return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "文件不存在")); }
+        if !src.exists() { return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "檔案不存在")); }
         if !self.items.iter().any(|p| p == src) {
             self.items.push(src.to_path_buf());
             self.save();
@@ -874,7 +874,7 @@ mod tests {
         assert_eq!(island_size_value(112), 110);
         for skin in Skin::ALL { assert_eq!(Skin::parse(skin.key()), skin); }
         assert_eq!(Skin::parse("unknown"), Skin::Classic);
-        assert_eq!(Skin::parse("glass"), Skin::GlassDark, "旧版本保存的毛玻璃即深色毛玻璃");
+        assert_eq!(Skin::parse("glass"), Skin::GlassDark, "舊版本儲存的毛玻璃即深色毛玻璃");
         for shape in IslandShape::ALL { assert_eq!(IslandShape::parse(shape.key()), shape); }
         assert_eq!(Settings::default().island_shape, IslandShape::Notch);
         let mut s = Settings::default();
@@ -897,8 +897,8 @@ mod tests {
         let failed_tmp=blocked.with_extension("tmp").exists();
         for entry in fs::read_dir(&dir).unwrap().flatten(){if entry.file_type().unwrap().is_file(){fs::remove_file(entry.path()).unwrap();}}
         fs::remove_dir(blocked).unwrap();fs::remove_dir(dir).unwrap();
-        assert!(saved.is_ok() && untouched,"保存不能覆盖或移走同名 .tmp 文件");
-        assert!(!failed_tmp && leftovers==0,"失败的保存应清除本次临时文件");
+        assert!(saved.is_ok() && untouched,"儲存不能覆蓋或移走同名 .tmp 檔案");
+        assert!(!failed_tmp && leftovers==0,"失敗的儲存應清除本次臨時檔案");
     }
 
     #[test]
@@ -909,7 +909,7 @@ mod tests {
         atomic_write(&path,b"focus_minutes=25\n").unwrap();
         atomic_write(&path,b"focus_minutes=26\n").unwrap();
         assert_eq!(fs::read(&path).unwrap(),b"focus_minutes=26\n");
-        assert!(!path.with_extension("tmp").exists(),"保存后不应遗留临时配置");
+        assert!(!path.with_extension("tmp").exists(),"儲存後不應遺留臨時配置");
         fs::remove_file(path).unwrap();
         fs::remove_dir(dir).unwrap();
     }
@@ -927,7 +927,7 @@ mod tests {
     #[test]
     fn weekly_todos_round_trip_and_reset_each_day() {
         // 2026-11-02 是周一。
-        let mut weekly = TodoItem::new("周会 | 准备材料");
+        let mut weekly = TodoItem::new("週會 | 準備材料");
         weekly.repeat = 0b000_0101; // 周一、周三
         weekly.due = Some("2026-11-02 09:30".into());
         weekly.toggle("2026-11-02");
@@ -937,21 +937,21 @@ mod tests {
         let loaded = TodoList::parse(&list.serialize());
         assert_eq!(loaded.items.len(), 2);
         let w = &loaded.items[0];
-        assert_eq!((w.text.as_str(), w.repeat, w.done_on.as_deref(), w.reminded_on.as_deref()), ("周会 | 准备材料", 0b101, Some("2026-11-02"), Some("2026-11-02")));
-        assert!(w.done_for("2026-11-02") && !w.done_for("2026-11-04"), "重复待办第二天自动变回未完成");
+        assert_eq!((w.text.as_str(), w.repeat, w.done_on.as_deref(), w.reminded_on.as_deref()), ("週會 | 準備材料", 0b101, Some("2026-11-02"), Some("2026-11-02")));
+        assert!(w.done_for("2026-11-02") && !w.done_for("2026-11-04"), "重複待辦第二天自動變回未完成");
         assert!(w.scheduled_on("2026-11-04") && !w.scheduled_on("2026-11-03"));
-        assert!(!w.reminder_due("2026-11-02 10:00"), "当天已提醒");
+        assert!(!w.reminder_due("2026-11-02 10:00"), "當天已提醒");
         assert!(!w.reminder_due("2026-11-04 09:00") && w.reminder_due("2026-11-04 09:30"));
-        assert!(!w.reminder_due("2026-11-03 10:00"), "不在选中的星期几不提醒");
+        assert!(!w.reminder_due("2026-11-03 10:00"), "不在選中的星期幾不提醒");
         let o = &loaded.items[1];
         assert_eq!((o.repeat, o.reminded, o.done_on.as_deref()), (0, true, Some("2026-11-01")));
         assert!(o.done_for("2026-11-09") && o.scheduled_on("2026-11-03"));
         assert_eq!(loaded.progress("2026-11-03"), (1, 1));
         assert_eq!(loaded.progress("2026-11-04"), (1, 2));
-        assert_eq!(loaded.display_order("2026-11-03"), vec![0, 1],"已完成事项应排在其他日期的未完成事项后面");
+        assert_eq!(loaded.display_order("2026-11-03"), vec![0, 1],"已完成事項應排在其他日期的未完成事項後面");
         assert_eq!(repeat_label(REPEAT_WORKDAYS), "工作日");
-        assert_eq!(repeat_label(0b101_0101), "每周一、三、五、日");
-        assert_eq!(repeat_tag(0b001_0101), "周一三五");
+        assert_eq!(repeat_label(0b101_0101), "每週一、三、五、日");
+        assert_eq!(repeat_tag(0b001_0101), "週一三五");
     }
 
     #[test]

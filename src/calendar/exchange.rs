@@ -22,7 +22,7 @@ impl Node {
         if value.is_empty() { Err(invalid()) } else { Ok(value) }
     }
 }
-fn invalid() -> Failure { Failure::text("日历服务器返回的数据不完整，请稍后重试") }
+fn invalid() -> Failure { Failure::text("日曆伺服器返回的資料不完整，請稍後重試") }
 fn node(page: u8, tag: u8, value: &str, children: Vec<Node>) -> Node {
     Node { page, tag, value: value.into(), children }
 }
@@ -85,7 +85,7 @@ fn decode(bytes: &[u8]) -> Result<Node, Failure> {
 fn endpoint(cfg: &Config) -> Result<url::Url, Failure> {
     let base = url::Url::parse(&cfg.base()).map_err(|_| invalid())?;
     let local = base.host_str().is_some_and(|h| h.parse::<std::net::IpAddr>().is_ok_and(|ip| ip.is_loopback()));
-    if !(base.scheme() == "https" || base.scheme() == "http" && local) || !base.username().is_empty() || base.password().is_some() { return Err(Failure::text("日历服务器地址不安全")); }
+    if !(base.scheme() == "https" || base.scheme() == "http" && local) || !base.username().is_empty() || base.password().is_some() { return Err(Failure::text("日曆伺服器地址不安全")); }
     // 用户可能直接粘贴完整的 ActiveSync 地址；只填主机名时补上标准路径。
     if base.path().trim_end_matches('/').to_ascii_lowercase().ends_with("/microsoft-server-activesync") {
         let mut full = base; full.set_query(None); full.set_fragment(None);
@@ -112,7 +112,7 @@ impl<'a> Session<'a> {
     fn provision(&mut self) -> Result<(), Failure> {
         self.provisioned = true;
         let label = self.cfg.provider.label();
-        let refused = || Failure::text(format!("{label}要求设备满足安全策略（如锁屏密码、远程擦除），岛仔不执行这些管控；请联系管理员允许不受管控的设备"));
+        let refused = || Failure::text(format!("{label}要求裝置滿足安全策略（如鎖屏密碼、遠端擦除），島仔不執行這些管控；請聯絡管理員允許不受管控的裝置"));
         let first = command(&self.agent, self.cfg, self.password, "Provision", &provision_request(None), None)?;
         // 服务器下发远程擦除时绝不执行，直接停止同步。
         if first.child(PROVISION, 0x0c).is_some() { return Err(refused()); }
@@ -155,14 +155,14 @@ fn command(agent: &ureq::Agent, cfg: &Config, password: &str, name: &str, root: 
     if response.status() != 200 { return Err(Failure::status(cfg.provider, response.status())); }
     let mut bytes = Vec::new();
     response.into_reader().take(16 * 1024 * 1024 + 1).read_to_end(&mut bytes).map_err(|error| Failure::transport(&error))?;
-    if bytes.len() > 16 * 1024 * 1024 { return Err(Failure::text(format!("{}单次返回的日程过多，无法完整同步", cfg.provider.label()))); }
+    if bytes.len() > 16 * 1024 * 1024 { return Err(Failure::text(format!("{}單次返回的日程過多，無法完整同步", cfg.provider.label()))); }
     decode(&bytes)
 }
 fn check_status(n: &Node, page: u8, tag: u8, label: &str) -> Result<(), Failure> {
     match n.required(page, tag)? {
         "1" => Ok(()),
-        code if NEEDS_PROVISION.contains(&code) => Err(Failure::text(format!("{label}要求设备满足安全策略，岛仔不执行这些管控；请联系管理员允许不受管控的设备"))),
-        code => Err(Failure::text(format!("{label}同步失败（Exchange {code}），请检查日历授权后重试"))),
+        code if NEEDS_PROVISION.contains(&code) => Err(Failure::text(format!("{label}要求裝置滿足安全策略，島仔不執行這些管控；請聯絡管理員允許不受管控的裝置"))),
+        code => Err(Failure::text(format!("{label}同步失敗（Exchange {code}），請檢查日曆授權後重試"))),
     }
 }
 fn sync_request(id: &str, key: &str) -> Node {
@@ -196,7 +196,7 @@ fn sync_folder(session: &mut Session, id: &str, label: &str) -> Result<std::coll
     let mut key = "0".to_string();
     let mut items = std::collections::BTreeMap::new();
     for batch in 0..101 {
-        if batch == 100 { return Err(Failure::text(format!("{label}日程数量过多，无法完整同步"))); }
+        if batch == 100 { return Err(Failure::text(format!("{label}日程數量過多，無法完整同步"))); }
         let result = session.send("Sync", &sync_request(id, &key))?;
         if result.child(AIR, 0x0e).is_some() { check_status(&result, AIR, 0x0e, label)?; }
         let collection = result.child(AIR, 0x1c).and_then(|n| n.child(AIR, 0x0f)).ok_or_else(invalid)?;
@@ -247,14 +247,14 @@ pub(super) fn fetch(cfg: &Config, password: &str, lo: DateTime<Utc>, hi: DateTim
         for (server_id, item) in &items {
             // 个别日程的重复规则暂不支持时只跳过这一条，不拖垮整个日历。
             match event_ics(item, &format!("{}:{}:{server_id}", cfg.provider.key(), folder.id)) {
-                Ok(event)=>ics.push_str(&event),Err(_)=>{report.received+=1;report.invalid+=1;report.problem("部分 Exchange 日程格式暂无法解析");}
+                Ok(event)=>ics.push_str(&event),Err(_)=>{report.received+=1;report.invalid+=1;report.problem("部分 Exchange 日程格式暫無法解析");}
             }
         }
         ics.push_str("END:VCALENDAR");
         let xml = format!("<calendar-data>{}</calendar-data>", ics.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;"));
         let parsed=super::parse_events_in_range(&xml,lo,hi);synced+=1;events.extend(parsed.events);report.merge(parsed.report);
     }
-    if report.calendars == 0 { return Err(Failure::text(if cfg.provider == Provider::WeCom {"企业微信未返回可同步的日历，请确认已开启日程同步".to_string()}else{format!("{label}账号下没有可同步的日历")})); }
+    if report.calendars == 0 { return Err(Failure::text(if cfg.provider == Provider::WeCom {"企業微信未返回可同步的日曆，請確認已開啟日程同步".to_string()}else{format!("{label}帳號下沒有可同步的日曆")})); }
     if synced == 0 { return Err(first_error.unwrap_or_else(invalid).with_report(report)); }
     if events.is_empty() && report.invalid>0{return Err(Failure::text(report.warning()).with_report(report));}
     events.sort_by_key(|m| m.start);
@@ -269,8 +269,8 @@ fn date(value: &str) -> Result<DateTime<Utc>, Failure> {
 fn escaped(value: &str) -> String { value.replace('\\', "\\\\").replace('\r', "").replace('\n', "\\n").replace(';', "\\;").replace(',', "\\,") }
 fn recurrence(n: &Node) -> Result<String, Failure> {
     let kind = n.required(CAL, 0x1c)?;
-    let freq = match kind { "0" => "DAILY", "1" => "WEEKLY", "2" | "3" => "MONTHLY", "5" | "6" => "YEARLY", _ => return Err(Failure::text("暂不支持返回的重复日程类型")) };
-    if !matches!(n.text(CAL, 0x37), "" | "0" | "1") { return Err(Failure::text("暂不支持非公历的重复日程")); }
+    let freq = match kind { "0" => "DAILY", "1" => "WEEKLY", "2" | "3" => "MONTHLY", "5" | "6" => "YEARLY", _ => return Err(Failure::text("暫不支援返回的重複日程型別")) };
+    if !matches!(n.text(CAL, 0x37), "" | "0" | "1") { return Err(Failure::text("暫不支援非公曆的重複日程")); }
     let mut rule = format!("RRULE:FREQ={freq}");
     for (tag, name) in [(0x1f, "INTERVAL"), (0x1e, "COUNT"), (0x21, "BYMONTHDAY"), (0x23, "BYMONTH")] {
         if !n.text(CAL, tag).is_empty() {
@@ -309,13 +309,13 @@ fn event_ics(item: &Node, fallback_uid: &str) -> Result<String, Failure> {
         let number = |at| i32::from_le_bytes(bytes[at..at+4].try_into().unwrap()) as i64;
         offset = -(number(0) + number(84)) * 60;
         if item.child(CAL, 0x1b).is_some() && bytes[154..156] != [0, 0] {
-            return Err(Failure::text("暂不支持含夏令时切换的重复日程"));
+            return Err(Failure::text("暫不支援含夏令時切換的重複日程"));
         }
     }
     // 按日历时区展开重复规则，避免 UTC 日期跨日后把周几或月日算错。
     let recurring = item.child(CAL, 0x1b).is_some();
     let recurrence_zone = if recurring && offset != 0 && !all_day {
-        if offset % 3600 != 0 || !(-12*3600..=14*3600).contains(&offset) { return Err(Failure::text("暂不支持此时区的重复日程")); }
+        if offset % 3600 != 0 || !(-12*3600..=14*3600).contains(&offset) { return Err(Failure::text("暫不支援此時區的重複日程")); }
         Some(format!("Etc/GMT{:+}", -offset / 3600))
     } else { None };
     let time_line = |name: &str, at: DateTime<Utc>| {
@@ -354,12 +354,12 @@ fn event_ics(item: &Node, fallback_uid: &str) -> Result<String, Failure> {
 mod tests {
     use super::*;
     #[test]
-    #[ignore="只读检查已连接企业微信返回的文件夹类型及日程数量，不输出凭据或正文"]
+    #[ignore="只讀檢查已連線企業微信返回的資料夾型別及日程數量，不輸出憑據或正文"]
     fn live_wecom_folder_diagnosis(){
-        let cfg=super::super::load_configs().into_iter().find(|c|c.provider==Provider::WeCom).expect("需要已连接的企业微信");
+        let cfg=super::super::load_configs().into_iter().find(|c|c.provider==Provider::WeCom).expect("需要已連線的企業微信");
         let password=super::super::secrets::load(&cfg).unwrap();let agent=super::super::agent().unwrap();
         let folders=command(&agent,&cfg,&password,"FolderSync",&node(FOLDER,0x16,"",vec![node(FOLDER,0x12,"0",vec![])]),None).unwrap();
-        check_status(&folders,FOLDER,0x0c,"企业微信").unwrap();
+        check_status(&folders,FOLDER,0x0c,"企業微信").unwrap();
         for (i,folder) in folders.child(FOLDER,0x0e).unwrap().children.iter().enumerate(){
             println!("folder={i} tag={} type={} selected={}",folder.tag,folder.text(FOLDER,0x0a),matches!(folder.text(FOLDER,0x0a),"8"|"13"));
             if !matches!(folder.text(FOLDER,0x0a),"8"|"13"){continue;}
@@ -367,7 +367,7 @@ mod tests {
             for page in 0..100{
                 let result=command(&agent,&cfg,&password,"Sync",&sync_request(id,&key),None).unwrap();
                 let collection=result.child(AIR,0x1c).and_then(|n|n.child(AIR,0x0f)).unwrap();
-                check_status(collection,AIR,0x0e,"企业微信").unwrap();
+                check_status(collection,AIR,0x0e,"企業微信").unwrap();
                 let count=collection.child(AIR,0x16).map_or(0,|n|n.children.len());
                 println!("folder={i} page={page} records={count} more={}",collection.child(AIR,0x14).is_some());
                 let initial=key=="0";key=collection.required(AIR,0x0b).unwrap().to_owned();
@@ -376,7 +376,7 @@ mod tests {
         }
     }
     fn sample() -> Node {
-        node(AIR, 0x1d, "", vec![node(CAL, 0x28, "test-uid", vec![]), node(CAL, 0x26, "会议<&>\n第二行", vec![]),
+        node(AIR, 0x1d, "", vec![node(CAL, 0x28, "test-uid", vec![]), node(CAL, 0x26, "會議<&>\n第二行", vec![]),
             node(CAL, 0x27, "20261103T020000Z", vec![]), node(CAL, 0x12, "20261103T030000Z", vec![])])
     }
     fn parsed(item: &Node) -> Vec<crate::mail::Meeting> {
@@ -389,7 +389,7 @@ mod tests {
         let root = node(AIR, 5, "", vec![sample(), node(AIR, 0x14, "", vec![])]);
         let bytes = encode(&root);
         let decoded = decode(&bytes).unwrap();
-        assert_eq!(decoded.children[0].text(CAL, 0x26), "会议<&>\n第二行");
+        assert_eq!(decoded.children[0].text(CAL, 0x26), "會議<&>\n第二行");
         assert!(decoded.child(AIR, 0x14).is_some());
         for end in 0..bytes.len() { assert!(decode(&bytes[..end]).is_err()); }
         assert!(decode(&[3,1,106,0,0x45,0xc3,0xff,0xff,0xff,0xff,0xff]).is_err());
@@ -443,7 +443,7 @@ mod tests {
                     let collection = request.child(AIR, 0x1c).unwrap().child(AIR, 0x0f).unwrap();
                     assert_eq!(collection.text(AIR, 0x12), "calendar");
                     assert_eq!(collection.text(AIR, 0x0b), (index-1).to_string());
-                    assert!(collection.child(AIR, 0x16).is_none(), "只读请求不发送修改命令");
+                    assert!(collection.child(AIR, 0x16).is_none(), "只讀請求不傳送修改命令");
                     let mut children = vec![node(AIR, 0x0e, "1", vec![]), node(AIR, 0x0b, &index.to_string(), vec![])];
                     if index == 2 { children.extend([node(AIR, 0x14, "", vec![]), node(AIR, 0x16, "", vec![node(AIR, 7, "", vec![node(AIR, 0x0d, "event", vec![]), sample()])])]); }
                     node(AIR, 5, "", vec![node(AIR, 0x1c, "", vec![node(AIR, 0x0f, "", children)])])
@@ -509,7 +509,7 @@ mod tests {
             Box::new(|r| {
                 let policy = r.child(PROVISION, 6).unwrap().child(PROVISION, 7).unwrap();
                 assert_eq!(policy.text(PROVISION, 9), "temp-1");
-                assert_eq!(policy.text(PROVISION, 0x0b), "2", "只读客户端不执行设备管控，必须如实回报部分执行");
+                assert_eq!(policy.text(PROVISION, 0x0b), "2", "只讀客戶端不執行裝置管控，必須如實回報部分執行");
                 (200, Some(policy_reply("1", "final-9", false)))
             }),
             Box::new(|_| (200, Some(folders()))),
@@ -521,15 +521,15 @@ mod tests {
         let seen = worker.join().unwrap();
         assert_eq!(seen.iter().map(|(c, _, _)| c.as_str()).collect::<Vec<_>>(), ["FolderSync", "Provision", "Provision", "FolderSync", "Sync", "Sync"]);
         assert_eq!(seen[2].1.as_deref(), Some("temp-1"));
-        assert!(seen[3..].iter().all(|(_, key, _)| key.as_deref() == Some("final-9")), "握手后的请求都要带最终策略标识");
+        assert!(seen[3..].iter().all(|(_, key, _)| key.as_deref() == Some("final-9")), "握手後的請求都要帶最終策略標識");
     }
 
     #[test]
     fn exchange_refuses_remote_wipe_and_handshakes_on_unprovisioned_status() {
         let (base, worker) = mock(vec![Box::new(|_| (449, None)), Box::new(|_| (200, Some(policy_reply("1", "temp", true))))]);
         let error = super::super::fetch_month(&custom(&base), "pw", chrono::NaiveDate::from_ymd_opt(2026, 11, 1).unwrap()).err().unwrap();
-        assert!(error.message.contains("不执行"), "{}", error.message);
-        assert_eq!(worker.join().unwrap().len(), 2, "收到远程擦除后不再继续请求");
+        assert!(error.message.contains("不執行"), "{}", error.message);
+        assert_eq!(worker.join().unwrap().len(), 2, "收到遠端擦除後不再繼續請求");
         // 服务器用状态 142 表示设备未登记策略：同样先握手再同步。
         let (base, worker) = mock(vec![
             Box::new(|_| (200, Some(node(FOLDER, 0x16, "", vec![node(FOLDER, 0x0c, "142", vec![])])))),
@@ -544,7 +544,7 @@ mod tests {
         // 管理员不允许不受管控的设备：如实提示，不伪装成已执行策略。
         let (base, worker) = mock(vec![Box::new(|_| (449, None)), Box::new(|_| (200, Some(policy_reply("1", "temp", false)))), Box::new(|_| (200, Some(policy_reply("2", "", false))))]);
         let error = super::super::fetch_month(&custom(&base), "pw", chrono::NaiveDate::from_ymd_opt(2026, 11, 1).unwrap()).err().unwrap();
-        assert!(error.message.contains("管理员"), "{}", error.message);
+        assert!(error.message.contains("管理員"), "{}", error.message);
         worker.join().unwrap();
     }
 
@@ -552,8 +552,8 @@ mod tests {
     fn shared_and_nested_calendars_sync_while_mail_folders_are_never_touched() {
         let folder = |id: &str, parent: &str, kind: &str, name: &str| node(FOLDER, 0x0f, "", vec![node(FOLDER, 8, id, vec![]), node(FOLDER, 9, parent, vec![]), node(FOLDER, 7, name, vec![]), node(FOLDER, 0x0a, kind, vec![])]);
         let hierarchy = node(FOLDER, 0x16, "", vec![node(FOLDER, 0x0c, "1", vec![]), node(FOLDER, 0x0e, "", vec![
-            folder("inbox", "0", "2", "收件箱"), folder("personal", "0", "8", "个人日历"), folder("shared", "personal", "18", "同事共享的日历"),
-            folder("deny", "0", "13", "无权限日历"), folder("loose", "0", "18", "其他"), folder("mine", "0", "13", "我新建的日历")])]);
+            folder("inbox", "0", "2", "收件箱"), folder("personal", "0", "8", "個人日曆"), folder("shared", "personal", "18", "同事共享的日曆"),
+            folder("deny", "0", "13", "無許可權日曆"), folder("loose", "0", "18", "其他"), folder("mine", "0", "13", "我新建的日曆")])]);
         fn id(r: &Node) -> String { r.child(AIR, 0x1c).unwrap().child(AIR, 0x0f).unwrap().text(AIR, 0x12).to_string() }
         fn key(r: &Node) -> String { r.child(AIR, 0x1c).unwrap().child(AIR, 0x0f).unwrap().text(AIR, 0x0b).to_string() }
         fn page(r: &Node, extra: Vec<Node>) -> Node {
@@ -579,8 +579,8 @@ mod tests {
         let cfg = Config { provider: Provider::WeCom, username: "demo".into(), href: None, server: Some(base) };
         let result = super::super::fetch_month(&cfg, "pw", chrono::NaiveDate::from_ymd_opt(2026, 11, 1).unwrap()).unwrap();
         let synced: Vec<String> = worker.join().unwrap().iter().filter(|(c, _, _)| c == "Sync").map(|(_, _, r)| id(r)).collect();
-        assert!(!synced.iter().any(|f| f == "inbox" || f == "loose"), "邮件和不在日历下的文件夹不能同步：{synced:?}");
-        assert_eq!(result.events.len(), 3, "个人、共享、新建日历各一条；不支持的重复日程跳过，无权限日历不影响其他");
+        assert!(!synced.iter().any(|f| f == "inbox" || f == "loose"), "郵件和不在日曆下的資料夾不能同步：{synced:?}");
+        assert_eq!(result.events.len(), 3, "個人、共享、新建日曆各一條；不支援的重複日程跳過，無許可權日曆不影響其他");
     }
 
     #[test]
@@ -616,7 +616,7 @@ mod tests {
         assert_eq!(events[1].start, date("20261109T170000Z").unwrap().timestamp());
     }
     #[test]
-    #[ignore = "显式验证企业微信账号；仅输出数量，成功后可按环境变量保存连接"]
+    #[ignore = "顯式驗證企業微信帳號；僅輸出數量，成功後可按環境變數儲存連線"]
     fn live_wecom_connection() {
         let mut cfg = Config { provider: Provider::WeCom, username: std::env::var("DAOZAI_WECOM_USER").unwrap(), href: None, server: None };
         let password = std::env::var("DAOZAI_WECOM_PASSWORD").unwrap();

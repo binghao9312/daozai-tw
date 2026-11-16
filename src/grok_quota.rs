@@ -10,16 +10,16 @@ use std::{fs,io::Read,path::{Path,PathBuf},sync::{mpsc,Arc,atomic::{AtomicBool,O
 
 const BACKEND:&str="https://api2.cursor.sh";
 const CLIENT_ID:&str="KbZUR41cY7W6zRSdpSUJ7I7mLYBKOCmB";
-const LOGIN_ERROR:&str="Grok Bot 登录不可用，请使用浏览器重新连接";
+const LOGIN_ERROR:&str="Grok Bot 登入不可用，請使用瀏覽器重新連線";
 
 pub fn parse(v:&Value)->Result<Snapshot,String>{
-    if v["usesPooledEnterpriseAllowance"].as_bool()==Some(true){return Err("企业共享额度未提供个人百分比".into());}
-    if v["hasNonZeroIncludedLimit"].as_bool()==Some(false){return Err("此账号没有可显示的套餐额度".into());}
-    let used=super::number(&v["usagePercent"]).filter(|n|(0.0..=100.0).contains(n)).ok_or("服务未返回有效的额度百分比")?;
+    if v["usesPooledEnterpriseAllowance"].as_bool()==Some(true){return Err("企業共享額度未提供個人百分比".into());}
+    if v["hasNonZeroIncludedLimit"].as_bool()==Some(false){return Err("此帳號沒有可顯示的套餐額度".into());}
+    let used=super::number(&v["usagePercent"]).filter(|n|(0.0..=100.0).contains(n)).ok_or("服務未返回有效的額度百分比")?;
     let reset=super::reset(&v["nextResetTimestampUtc"]);
     let seconds=super::reset(&v["currentPeriodStart"]).zip(reset).and_then(|(start,end)|end.checked_sub(start)).filter(|n|*n>0);
     let plan=["grokPlanLabel","cursorPlanName"].iter().find_map(|key|v[key].as_str().filter(|s|!s.trim().is_empty())).unwrap_or_default().to_owned();
-    Ok(Snapshot{kiro:None,relay:None,credits:None,wallet:None,plan,at:chrono::Utc::now().timestamp(),windows:vec![Window{label:if v["isUnified"].as_bool()==Some(true){"共享周额度"}else{"本周"}.into(),seconds,remaining:(100.0-used) as f32,reset,amount:None}],extra:vec![]})
+    Ok(Snapshot{kiro:None,relay:None,credits:None,wallet:None,plan,at:chrono::Utc::now().timestamp(),windows:vec![Window{label:if v["isUnified"].as_bool()==Some(true){"共享周額度"}else{"本週"}.into(),seconds,remaining:(100.0-used) as f32,reset,amount:None}],extra:vec![]})
 }
 
 pub fn native_path()->Option<PathBuf>{std::env::var_os("APPDATA").map(|p|PathBuf::from(p).join("Grok Bot/sand-secrets.json")).filter(|p|p.is_file())}
@@ -32,13 +32,13 @@ fn accounts(raw:&[u8])->Result<(Option<String>,serde_json::Map<String,Value>),St
     Ok((value["active"].as_str().map(str::to_owned),entries))
 }
 pub fn profiles(path:&Path)->Result<Vec<Profile>,String>{
-    let raw=fs::read(path).map_err(|_|"未找到 Grok Bot 登录文件")?;let(active,entries)=accounts(&raw)?;
+    let raw=fs::read(path).map_err(|_|"未找到 Grok Bot 登入檔案")?;let(active,entries)=accounts(&raw)?;
     let mut slots:Vec<_>=entries.keys().cloned().collect();slots.sort_by_key(|slot|(Some(slot)!=active.as_ref(),slot.clone()));
     let key=native_key(path).ok();
     Ok(slots.into_iter().enumerate().map(|(i,slot)|{
         let label=key.as_ref().and_then(|key|entries[&slot]["cursor-account-profile"].as_str().and_then(|s|decrypt(key,s,&slot).ok()))
             .and_then(|s|serde_json::from_str::<Value>(&s).ok()).and_then(|p|p["email"].as_str().map(str::to_owned))
-            .map(|email|format!("Grok Bot · {email}")).unwrap_or_else(||format!("Grok Bot · 账号 {}",i+1));
+            .map(|email|format!("Grok Bot · {email}")).unwrap_or_else(||format!("Grok Bot · 帳號 {}",i+1));
         Profile{slot,label}
     }).collect())
 }
@@ -55,7 +55,7 @@ fn native_key(path:&Path)->Result<Vec<u8>,String>{
     super::native_auth::key(path).map_err(|_|LOGIN_ERROR.into())
 }
 #[cfg(not(windows))]
-fn native_key(_path:&Path)->Result<Vec<u8>,String>{Err("当前系统请使用浏览器连接 Grok Bot".into())}
+fn native_key(_path:&Path)->Result<Vec<u8>,String>{Err("當前系統請使用瀏覽器連線 Grok Bot".into())}
 
 struct Session {token:String,refresh:Option<String>}
 fn claims(token:&str)->Result<Value,String>{
@@ -74,23 +74,23 @@ fn session(value:&Value)->Result<Session,String>{
 fn native_session(account:&Account)->Result<Session,String>{
     let raw=fs::read(&account.source).map_err(|_|LOGIN_ERROR)?;let(active,entries)=accounts(&raw)?;
     let slot=account.slot.as_deref().or(active.as_deref()).ok_or(LOGIN_ERROR)?;
-    let entry=entries.get(slot).ok_or(LOGIN_ERROR)?;let key=native_key(&account.source).map_err(|_|"无法读取 Grok Bot 本机解密密钥，请使用浏览器连接")?;
-    let token=decrypt(&key,entry["cursor-access-token"].as_str().ok_or(LOGIN_ERROR)?,slot).map_err(|_|"无法解密 Grok Bot 本机登录，请使用浏览器连接")?;
-    if slot_of(&token)?!=slot{return Err("Grok Bot 账号已变化，请重新识别账号".into());}
+    let entry=entries.get(slot).ok_or(LOGIN_ERROR)?;let key=native_key(&account.source).map_err(|_|"無法讀取 Grok Bot 本機解密金鑰，請使用瀏覽器連線")?;
+    let token=decrypt(&key,entry["cursor-access-token"].as_str().ok_or(LOGIN_ERROR)?,slot).map_err(|_|"無法解密 Grok Bot 本機登入，請使用瀏覽器連線")?;
+    if slot_of(&token)?!=slot{return Err("Grok Bot 帳號已變化，請重新識別帳號".into());}
     Ok(Session{token,refresh:None})
 }
 #[cfg(windows)]
 fn credential(slot:&str)->Result<keyring::Entry,String>{
     if slot.len()!=64 || !slot.bytes().all(|b|b.is_ascii_hexdigit()){return Err(LOGIN_ERROR.into());}
-    keyring::Entry::new("Daozai.GrokBot",slot).map_err(|_|"无法打开 Windows 凭据管理器".into())
+    keyring::Entry::new("Daozai.GrokBot",slot).map_err(|_|"無法開啟 Windows 憑據管理器".into())
 }
 #[cfg(windows)]
 fn save_session(slot:&str,value:&Session)->Result<(),String>{
-    if slot_of(&value.token)?!=slot{return Err("登录账号不一致，请重新连接".into());}
-    credential(slot)?.set_password(&json!({"accessToken":value.token,"refreshToken":value.refresh}).to_string()).map_err(|_|"无法安全保存登录，请检查 Windows 凭据管理器".into())
+    if slot_of(&value.token)?!=slot{return Err("登入帳號不一致，請重新連線".into());}
+    credential(slot)?.set_password(&json!({"accessToken":value.token,"refreshToken":value.refresh}).to_string()).map_err(|_|"無法安全儲存登入，請檢查 Windows 憑據管理器".into())
 }
 #[cfg(not(windows))]
-fn save_session(_slot:&str,_value:&Session)->Result<(),String>{Err("当前系统暂不支持安全保存 Grok Bot 登录".into())}
+fn save_session(_slot:&str,_value:&Session)->Result<(),String>{Err("當前系統暫不支援安全儲存 Grok Bot 登入".into())}
 #[cfg(windows)]
 fn stored_session(slot:&str)->Result<Session,String>{
     let raw=credential(slot)?.get_password().map_err(|_|LOGIN_ERROR)?;
@@ -106,16 +106,16 @@ pub fn forget(account:&Account){
 }
 
 fn read_json(response:ureq::Response)->Result<Value,String>{
-    let mut body=Vec::new();response.into_reader().take(1024*1024+1).read_to_end(&mut body).map_err(|_|"读取 Grok Bot 响应失败")?;
-    if body.len()>1024*1024{return Err("Grok Bot 响应过大".into());}
-    serde_json::from_slice(&body).map_err(|_|"Grok Bot 未返回有效数据".into())
+    let mut body=Vec::new();response.into_reader().take(1024*1024+1).read_to_end(&mut body).map_err(|_|"讀取 Grok Bot 響應失敗")?;
+    if body.len()>1024*1024{return Err("Grok Bot 響應過大".into());}
+    serde_json::from_slice(&body).map_err(|_|"Grok Bot 未返回有效資料".into())
 }
 fn http_error(error:ureq::Error)->(String,u64){match error{
-    ureq::Error::Status(401,_)=>("Grok Bot 登录已失效（401），请重新连接".into(),0),
-    ureq::Error::Status(403,_)=>("Grok Bot 额度请求被拒绝（403），请检查账号权限或网络代理".into(),60),
-    ureq::Error::Status(429,response)=>("请求过于频繁，稍后自动重试".into(),response.header("Retry-After").and_then(|s|s.parse().ok()).unwrap_or(180).clamp(30,3600)),
-    ureq::Error::Status(code,_)=>(format!("Grok Bot 额度服务暂不可用（{code}）"),60),
-    _=>("无法连接 Grok Bot，请检查网络或代理".into(),30),
+    ureq::Error::Status(401,_)=>("Grok Bot 登入已失效（401），請重新連線".into(),0),
+    ureq::Error::Status(403,_)=>("Grok Bot 額度請求被拒絕（403），請檢查帳號許可權或網路代理".into(),60),
+    ureq::Error::Status(429,response)=>("請求過於頻繁，稍後自動重試".into(),response.header("Retry-After").and_then(|s|s.parse().ok()).unwrap_or(180).clamp(30,3600)),
+    ureq::Error::Status(code,_)=>(format!("Grok Bot 額度服務暫不可用（{code}）"),60),
+    _=>("無法連線 Grok Bot，請檢查網路或代理".into(),30),
 }}
 fn checksum(machine:&str,millis:i64)->String{
     let stamp=(millis/1_000_000) as u32;
@@ -140,7 +140,7 @@ fn renew(agent:&ureq::Agent,old:&Session)->Result<Session,String>{
 }
 fn renewed_session(old:&Session,value:&Value)->Result<Session,String>{
     let mut renewed=session(value)?;if renewed.refresh.is_none(){renewed.refresh=old.refresh.clone();}
-    if slot_of(&renewed.token)?!=slot_of(&old.token)?{return Err("登录账号不一致，请重新连接".into());}Ok(renewed)
+    if slot_of(&renewed.token)?!=slot_of(&old.token)?{return Err("登入帳號不一致，請重新連線".into());}Ok(renewed)
 }
 pub fn fetch(agent:&ureq::Agent,account:&Account)->Result<Snapshot,(String,u64)>{
     let own=account.source.as_os_str().is_empty();let slot=account.slot.as_deref().ok_or_else(||(LOGIN_ERROR.to_owned(),0))?;
@@ -154,7 +154,7 @@ pub fn fetch(agent:&ureq::Agent,account:&Account)->Result<Snapshot,(String,u64)>
         auth=renew(agent,&auth).map_err(|e|(e,0))?;save_session(slot,&auth).map_err(|e|(e,0))?;result=usage_request(agent,&url,&auth.token);
     }
     let value=read_json(result.map_err(http_error)?).map_err(|e|(e,60))?;
-    if !own && stamp!=fs::metadata(&account.source).and_then(|m|m.modified()).ok(){return Err(("Grok Bot 登录已更新，请刷新额度".into(),0));}
+    if !own && stamp!=fs::metadata(&account.source).and_then(|m|m.modified()).ok(){return Err(("Grok Bot 登入已更新，請重新整理額度".into(),0));}
     parse(&value).map_err(|e|(e,60))
 }
 
@@ -170,7 +170,7 @@ pub struct Login {rx:mpsc::Receiver<Result<Connected,String>>,cancel:Arc<AtomicB
 fn challenge(verifier:&str)->String{URL_SAFE_NO_PAD.encode(digest::digest(&digest::SHA256,verifier.as_bytes()).as_ref())}
 impl Login {
     pub fn start(alias:String)->Result<(Self,String),String>{
-        let mut seed=[0u8;48];SystemRandom::new().fill(&mut seed).map_err(|_|"无法创建安全登录，请重试")?;
+        let mut seed=[0u8;48];SystemRandom::new().fill(&mut seed).map_err(|_|"無法建立安全登入，請重試")?;
         let verifier=URL_SAFE_NO_PAD.encode(&seed[..32]);seed[38]=(seed[38]&15)|64;seed[40]=(seed[40]&63)|128;
         let hex:String=seed[32..].iter().map(|b|format!("{b:02x}")).collect();let id=format!("{}-{}-{}-{}-{}",&hex[..8],&hex[8..12],&hex[12..16],&hex[16..20],&hex[20..]);
         let url=format!("https://cursor.com/loginDeepControl?challenge={}&uuid={id}&mode=login&redirectTarget=sand&supportsSelectedTeamLogin=true",challenge(&verifier));
@@ -181,21 +181,21 @@ impl Login {
                 let result=agent.get(&format!("{BACKEND}/auth/poll?uuid={id}&verifier={verifier}")).set("Accept","application/json").set("Content-Type","application/json").call();
                 match result{
                     Ok(response)=>{let result=read_json(response).and_then(|v|session(&v)).and_then(|auth|{
-                        let slot=slot_of(&auth.token)?;if stopped.load(Ordering::Relaxed){return Err("登录已取消".into());}
+                        let slot=slot_of(&auth.token)?;if stopped.load(Ordering::Relaxed){return Err("登入已取消".into());}
                         save_session(&slot,&auth)?;let label=if alias.trim().is_empty(){claims(&auth.token).ok().and_then(|v|v["email"].as_str().map(|email|format!("Grok Bot · {email}"))).unwrap_or_default()}else{alias.clone()};
                         Ok(Connected{slot,label})
                     });let _=tx.send(result);return;},
                     Err(ureq::Error::Status(404,_))=>{},
-                    Err(ureq::Error::Status(401|403,_))=>{let _=tx.send(Err("登录未获授权，请重试".into()));return;},
+                    Err(ureq::Error::Status(401|403,_))=>{let _=tx.send(Err("登入未獲授權，請重試".into()));return;},
                     Err(_)=>{},
                 }
                 for _ in 0..delay{if stopped.load(Ordering::Relaxed){return;}std::thread::sleep(Duration::from_millis(100));}delay=(delay+5).min(50);
             }
-            if !stopped.load(Ordering::Relaxed){let _=tx.send(Err("登录等待超时，请重试".into()));}
+            if !stopped.load(Ordering::Relaxed){let _=tx.send(Err("登入等待超時，請重試".into()));}
         });
         Ok((Self{rx,cancel},url))
     }
-    pub fn poll(&self)->Option<Result<Connected,String>>{match self.rx.try_recv(){Ok(result)=>Some(result),Err(mpsc::TryRecvError::Disconnected)=>Some(Err("登录连接已结束，请重试".into())),Err(mpsc::TryRecvError::Empty)=>None}}
+    pub fn poll(&self)->Option<Result<Connected,String>>{match self.rx.try_recv(){Ok(result)=>Some(result),Err(mpsc::TryRecvError::Disconnected)=>Some(Err("登入連線已結束，請重試".into())),Err(mpsc::TryRecvError::Empty)=>None}}
 }
 impl Drop for Login {fn drop(&mut self){self.cancel.store(true,Ordering::Relaxed);}}
 
@@ -208,7 +208,7 @@ mod tests {
         let s=parse(&value).unwrap();assert!((s.windows[0].remaining-80.84922).abs()<0.001);assert_eq!(s.windows[0].seconds,Some(604800));assert_eq!(s.windows.len(),1);assert_eq!(s.plan,"Super");
         value["usagePercent"]=json!(0);assert_eq!(parse(&value).unwrap().windows[0].remaining,100.0);
         value["usagePercent"]=json!("100");assert_eq!(parse(&value).unwrap().windows[0].remaining,0.0);
-        value["isUnified"]=json!(true);assert_eq!(parse(&value).unwrap().windows[0].label,"共享周额度");
+        value["isUnified"]=json!(true);assert_eq!(parse(&value).unwrap().windows[0].label,"共享周額度");
     }
     #[test]
     fn missing_or_invalid_readings_are_never_an_unused_allowance(){
@@ -246,7 +246,7 @@ mod tests {
         let personal=token("synthetic-personal");let work=token("synthetic-work");let personal_slot=slot_of(&personal).unwrap();let work_slot=slot_of(&work).unwrap();
         let seal=|text:&str|{let aead=aead::LessSafeKey::new(aead::UnboundKey::new(&aead::AES_256_GCM,&key).unwrap());let nonce=[3u8;12];let mut sealed=text.as_bytes().to_vec();aead.seal_in_place_append_tag(aead::Nonce::assume_unique_for_key(nonce),aead::Aad::empty(),&mut sealed).unwrap();let mut blob=b"v10".to_vec();blob.extend_from_slice(&nonce);blob.extend_from_slice(&sealed);STANDARD.encode(blob)};
         let path=dir.join("sand-secrets.json");let raw=json!({"cursor-accounts":json!({"active":work_slot,"accounts":{&personal_slot:{"cursor-access-token":seal(&personal)},&work_slot:{"cursor-access-token":seal(&work)}}}).to_string()}).to_string();fs::write(&path,&raw).unwrap();
-        let account=Account{id:"synthetic".into(),provider:super::super::Provider::GrokBot,alias:"个人".into(),source:path.clone(),slot:Some(personal_slot),enabled:true,pinned:true};
+        let account=Account{id:"synthetic".into(),provider:super::super::Provider::GrokBot,alias:"個人".into(),source:path.clone(),slot:Some(personal_slot),enabled:true,pinned:true};
         assert_eq!(native_session(&account).unwrap().token,personal);assert_eq!(fs::read_to_string(&path).unwrap(),raw);
         fs::remove_file(path).unwrap();fs::remove_file(dir.join("Local State")).unwrap();fs::remove_dir(dir).unwrap();
     }
@@ -262,7 +262,7 @@ mod tests {
     fn forbidden_requests_are_not_reported_as_expired_credentials(){
         let response=ureq::Response::new(403,"Forbidden","private-response").unwrap();
         let(message,wait)=http_error(ureq::Error::Status(403,response));
-        assert!(message.contains("403"));assert!(!message.contains("重新连接"));assert!(!message.contains("private-response"));assert!(wait>0);
+        assert!(message.contains("403"));assert!(!message.contains("重新連線"));assert!(!message.contains("private-response"));assert!(wait>0);
     }
     #[test]
     fn renewal_keeps_the_same_account_and_preserves_or_rotates_its_refresh_token(){
@@ -280,7 +280,7 @@ mod tests {
         let subject=format!("synthetic-daozai-{}-{}",std::process::id(),chrono::Utc::now().timestamp_nanos_opt().unwrap());
         let token=format!("e30.{}.test",URL_SAFE_NO_PAD.encode(json!({"sub":subject}).to_string()));let slot=slot_of(&token).unwrap();let _cleanup=Cleanup(credential(&slot).unwrap());
         let auth=Session{token,refresh:Some("synthetic-refresh".into())};save_session(&slot,&auth).unwrap();let restored=stored_session(&slot).unwrap();assert_eq!(restored.token,auth.token);assert_eq!(restored.refresh,auth.refresh);
-        let account=Account{id:"synthetic".into(),provider:super::super::Provider::GrokBot,alias:"测试".into(),source:PathBuf::new(),slot:Some(slot.clone()),enabled:true,pinned:true};forget(&account);assert!(stored_session(&slot).is_err());
+        let account=Account{id:"synthetic".into(),provider:super::super::Provider::GrokBot,alias:"測試".into(),source:PathBuf::new(),slot:Some(slot.clone()),enabled:true,pinned:true};forget(&account);assert!(stored_session(&slot).is_err());
     }
     #[test]
     fn request_is_a_read_only_rpc_and_errors_never_echo_the_body(){

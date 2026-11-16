@@ -28,7 +28,7 @@ mod tests {
         let mut detached=spawn(&mut make()).unwrap();let piped=detached.stdin.is_some()||detached.stdout.is_some()||detached.stderr.is_some();
         let exited=detached.wait().unwrap();let actual:Vec<u32>=serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         std::fs::remove_file(path).unwrap();assert!(exited.success());
-        assert_eq!(inherited,[3,3,3],"对照进程应持有管道");
-        assert!(!piped,"分离启动不能保留父进程的标准流管道");assert_eq!(actual,[2,2,2],"子进程三条标准流应连接到空设备");
+        assert_eq!(inherited,[3,3,3],"對照程序應持有管道");
+        assert!(!piped,"分離啟動不能保留父程序的標準流管道");assert_eq!(actual,[2,2,2],"子程序三條標準流應連線到空裝置");
     }
 }

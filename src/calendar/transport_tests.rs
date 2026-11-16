@@ -4,14 +4,14 @@ use super::*;
 #[cfg(windows)]
 fn transport_failures_distinguish_certificate_and_network_errors() {
     for (code, expected) in [
-        (0x800b0109u32, "证书不受信任"),
-        (0x800b010au32, "证书不受信任"),
-        (0x80090325u32, "证书不受信任"),
-        (0x800b0101u32, "证书不在有效期内"),
-        (0x800b010fu32, "证书与服务器地址不匹配"),
-        (0x800b010cu32, "证书已被吊销"),
-        (10060, "连接超时"),
-        (10061, "服务器拒绝连接"),
+        (0x800b0109u32, "證書不受信任"),
+        (0x800b010au32, "證書不受信任"),
+        (0x80090325u32, "證書不受信任"),
+        (0x800b0101u32, "證書不在有效期內"),
+        (0x800b010fu32, "證書與伺服器地址不匹配"),
+        (0x800b010cu32, "證書已被吊銷"),
+        (10060, "連線超時"),
+        (10061, "伺服器拒絕連線"),
     ] {
         let error = std::io::Error::from_raw_os_error(code as i32);
         let failure = Failure::transport(&error);
@@ -23,9 +23,9 @@ fn transport_failures_distinguish_certificate_and_network_errors() {
 fn transport_failures_keep_typed_certificate_errors_and_hide_details() {
     use ureq::rustls::{CertificateError, Error};
     for (certificate, expected) in [
-        (CertificateError::UnknownIssuer, "证书不受信任"),
-        (CertificateError::Expired, "证书不在有效期内"),
-        (CertificateError::NotValidForName, "证书与服务器地址不匹配"),
+        (CertificateError::UnknownIssuer, "證書不受信任"),
+        (CertificateError::Expired, "證書不在有效期內"),
+        (CertificateError::NotValidForName, "證書與伺服器地址不匹配"),
     ] {
         let error = std::io::Error::new(std::io::ErrorKind::InvalidData, Error::InvalidCertificate(certificate));
         let failure = Failure::transport(&error);
@@ -106,7 +106,7 @@ mod tls {
         assert!(std::error::Error::source(&error).unwrap().is::<native_tls::Error>(), "{error}");
         let failure = Failure::transport(&error);
         assert_eq!(failure.kind, "certificate_untrusted", "{}", failure.message);
-        assert_eq!(worker.join().unwrap(), 0, "证书未被信任时不能发送 HTTP 请求");
+        assert_eq!(worker.join().unwrap(), 0, "證書未被信任時不能傳送 HTTP 請求");
     }
 
     #[test]

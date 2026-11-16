@@ -305,9 +305,9 @@ mod tests {
         assert_eq!(map_color(Color32::BLACK, &CREAM), Color32::from_rgb(255, 243, 228));
         let faint = map_color(Color32::from_white_alpha(40), &CREAM);
         assert_eq!(faint.a(), 40, "半透明高光保留透明度");
-        assert!(faint.r() <= 8, "半透明的白仍按白处理：{faint:?}");
+        assert!(faint.r() <= 8, "半透明的白仍按白處理：{faint:?}");
         let gray = map_color(Color32::from_rgb(142, 142, 153), &CREAM).to_srgba_unmultiplied();
-        assert!(gray[0] > 46 && gray[0] < 255, "灰阶落在纸色与墨色之间");
+        assert!(gray[0] > 46 && gray[0] < 255, "灰階落在紙色與墨色之間");
         assert_eq!(map_color(Color32::TRANSPARENT, &CREAM), Color32::TRANSPARENT);
         // 毛玻璃浅色：深色卡片带上通透感，文字仍不透明
         assert!(map_color(Color32::from_rgb(22, 22, 24), &GLASS_LIGHT).a() < 230);
@@ -317,28 +317,28 @@ mod tests {
     #[test]
     fn blue_accents_take_the_skin_color_and_other_hues_darken() {
         let blue = map_color(Color32::from_rgb(62, 172, 248), &CREAM);
-        assert_eq!(blue, Color32::from_rgb(240, 138, 36), "强调蓝换成奶油皮肤的橙色");
+        assert_eq!(blue, Color32::from_rgb(240, 138, 36), "強調藍換成奶油皮膚的橙色");
         let deep = map_color(Color32::from_rgb(15, 38, 64), &CREAM).to_srgba_unmultiplied();
-        assert!(deep[0] > 200, "深蓝底色变成浅橙底：{deep:?}");
+        assert!(deep[0] > 200, "深藍底色變成淺橙底：{deep:?}");
         let brand = map_color(Color32::from_rgb(40, 126, 255), &CREAM).to_srgba_unmultiplied();
-        assert!(brand[2] > brand[0], "用户选的品牌蓝不能被换成橙色：{brand:?}");
+        assert!(brand[2] > brand[0], "使用者選的品牌藍不能被換成橙色：{brand:?}");
         let red = map_color(Color32::from_rgb(242, 48, 70), &CREAM).to_srgba_unmultiplied();
-        assert!(red[0] > red[1] && red[0] > 150, "红色保留色相：{red:?}");
+        assert!(red[0] > red[1] && red[0] > 150, "紅色保留色相：{red:?}");
         let f = |c: [u8; 4]| [c[0] as f32 / 255.0, c[1] as f32 / 255.0, c[2] as f32 / 255.0];
         let paper = [255.0 / 255.0, 243.0 / 255.0, 228.0 / 255.0];
         for bright in [Color32::from_rgb(253, 104, 92), Color32::from_rgb(255, 196, 61), Color32::from_rgb(118, 196, 151), Color32::from_rgb(48, 209, 88)] {
             let m = map_color(bright, &CREAM).to_srgba_unmultiplied();
-            assert!(crate::glass::contrast(f(m), paper) >= 2.95, "浅亮彩色在浅底上要加深到可读：{bright:?} -> {m:?}");
+            assert!(crate::glass::contrast(f(m), paper) >= 2.95, "淺亮彩色在淺底上要加深到可讀：{bright:?} -> {m:?}");
         }
         let save = map_color(Color32::from_rgb(82, 162, 255), &CREAM);
-        assert_eq!(save, Color32::from_rgb(240, 138, 36), "界面按钮蓝跟随奶油主题色");
+        assert_eq!(save, Color32::from_rgb(240, 138, 36), "介面按鈕藍跟隨奶油主題色");
         let faded_red = map_color(Color32::from_rgb(253, 104, 92).gamma_multiply(0.6), &CREAM).to_srgba_unmultiplied();
         let fr = [faded_red[0] as f32 / 255.0, faded_red[1] as f32 / 255.0, faded_red[2] as f32 / 255.0];
         let seen = [paper[0] + (fr[0] - paper[0]) * faded_red[3] as f32 / 255.0, paper[1] + (fr[1] - paper[1]) * faded_red[3] as f32 / 255.0, paper[2] + (fr[2] - paper[2]) * faded_red[3] as f32 / 255.0];
-        assert!(crate::glass::contrast(seen, paper) >= 2.9, "半透明的彩色字也要可读：{faded_red:?}");
+        assert!(crate::glass::contrast(seen, paper) >= 2.9, "半透明的彩色字也要可讀：{faded_red:?}");
         // 深色彩色底块（选中态）变成浅色淡彩，墨色文字压在上面清晰可读
         let chip = map_color(Color32::from_rgb(30, 58, 110), &GLASS_LIGHT).to_srgba_unmultiplied();
-        assert!(chip[0] > 180 && chip[2] > chip[0], "深色选中底块变为浅淡蓝：{chip:?}");
+        assert!(chip[0] > 180 && chip[2] > chip[0], "深色選中底塊變為淺淡藍：{chip:?}");
         let ink = [22.0 / 255.0, 22.0 / 255.0, 26.0 / 255.0];
         assert!(crate::glass::contrast(f(chip), ink) >= 7.0);
     }
@@ -348,8 +348,8 @@ mod tests {
         assert_eq!(map_color(Color32::WHITE, &GLASS_DARK), Color32::WHITE);
         let gray = map_color(Color32::from_rgb(142, 142, 153), &GLASS_DARK).to_srgba_unmultiplied();
         assert!(gray[0] > 165, "灰色文字提亮：{gray:?}");
-        assert_eq!(map_color(Color32::from_rgb(62, 172, 248), &GLASS_DARK), Color32::from_rgb(62, 172, 248), "强调色不变");
-        assert!(map_color(Color32::from_rgb(22, 22, 24), &GLASS_DARK).a() < 160, "卡片底带通透感");
+        assert_eq!(map_color(Color32::from_rgb(62, 172, 248), &GLASS_DARK), Color32::from_rgb(62, 172, 248), "強調色不變");
+        assert!(map_color(Color32::from_rgb(22, 22, 24), &GLASS_DARK).a() < 160, "卡片底帶通透感");
     }
 
     #[test]
@@ -366,8 +366,8 @@ mod tests {
             let Shape::Text(t) = &shapes[0].shape else { panic!() };
             let color = t.galley.rows.iter().flat_map(|r| r.visuals.mesh.vertices.iter()).next().unwrap().color;
             assert_eq!(color.a(), 64, "淡出透明度要保留：{color:?}");
-            assert!(color.r() <= 13, "淡出的白字换成同样淡出的墨色：{color:?}");
-            assert!(t.override_text_color.is_none(), "不能用统一颜色覆盖整段文字");
+            assert!(color.r() <= 13, "淡出的白字換成同樣淡出的墨色：{color:?}");
+            assert!(t.override_text_color.is_none(), "不能用統一顏色覆蓋整段文字");
         });
     }
 
@@ -378,7 +378,7 @@ mod tests {
         let mut shape = Shape::image(id, egui::Rect::from_min_size(egui::Pos2::ZERO, egui::Vec2::splat(10.0)), egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)), Color32::WHITE);
         recolor(&mut shape, &CREAM);
         let tint = match &shape { Shape::Rect(r) => r.fill, Shape::Mesh(m) => m.vertices[0].color, other => panic!("{other:?}") };
-        assert_eq!(tint, Color32::from_rgb(46, 32, 22), "白色标识在浅底上变成墨色");
+        assert_eq!(tint, Color32::from_rgb(46, 32, 22), "白色標識在淺底上變成墨色");
     }
 
     #[test]
@@ -388,15 +388,15 @@ mod tests {
             let layer = egui::LayerId::background();
             let painter = ctx.layer_painter(layer);
             painter.rect_filled(egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(60.0, 24.0)), 12.0, Color32::from_rgb(82, 162, 255));
-            painter.text(egui::pos2(30.0, 12.0), egui::Align2::CENTER_CENTER, "保存", egui::FontId::proportional(12.0), Color32::WHITE);
+            painter.text(egui::pos2(30.0, 12.0), egui::Align2::CENTER_CENTER, "儲存", egui::FontId::proportional(12.0), Color32::WHITE);
             painter.text(egui::pos2(120.0, 12.0), egui::Align2::CENTER_CENTER, "取消", egui::FontId::proportional(12.0), Color32::WHITE);
             recolor_layer(ctx, layer, &[(0, 3)], &CREAM);
             let shapes: Vec<_> = ctx.graphics_mut(|g| g.entry(layer).all_entries().cloned().collect());
             let first = |s: &Shape| match s { Shape::Text(t) => t.galley.rows.iter().flat_map(|r| r.visuals.mesh.vertices.first()).next().unwrap().color, _ => panic!() };
-            assert_eq!(first(&shapes[1].shape), Color32::WHITE, "彩色按钮上的白字保持白色");
-            assert_eq!(first(&shapes[2].shape), Color32::from_rgb(46, 32, 22), "普通白字换成墨色");
+            assert_eq!(first(&shapes[1].shape), Color32::WHITE, "彩色按鈕上的白字保持白色");
+            assert_eq!(first(&shapes[2].shape), Color32::from_rgb(46, 32, 22), "普通白字換成墨色");
             let Shape::Rect(r) = &shapes[0].shape else { panic!() };
-            assert_eq!(r.fill, Color32::from_rgb(240, 138, 36), "按钮本身换成主题色");
+            assert_eq!(r.fill, Color32::from_rgb(240, 138, 36), "按鈕本身換成主題色");
         });
     }
 

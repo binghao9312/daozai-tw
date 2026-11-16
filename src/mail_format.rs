@@ -212,7 +212,7 @@ fn image_alt(tag: &str) -> Option<String> {
     let alt = ALT.get_or_init(|| regex::Regex::new(r#"(?is)\balt\s*=\s*["']([^"']*)["']"#).expect("alt"));
     let text = alt.captures(tag)?.get(1)?.as_str().trim().to_string();
     let lower = text.to_ascii_lowercase();
-    let noise = ["logo", "icon", "spacer", "pixel", "banner", "avatar", "image", "图片", "图标", "头像", "配图"];
+    let noise = ["logo", "icon", "spacer", "pixel", "banner", "avatar", "image", "圖片", "圖示", "頭像", "配圖"];
     if text.chars().count() < 2 || noise.iter().any(|word| lower == *word) {
         None
     } else {
@@ -325,7 +325,7 @@ fn from_html(html: &str) -> Vec<Line> {
     let s = strong.replace_all(&s, "**");
     let s = image.replace_all(&s, |caps: &regex::Captures| {
         let tag = caps.get(0).map(|m| m.as_str()).unwrap_or_default();
-        image_alt(tag).map(|alt| format!("[图片：{alt}]")).unwrap_or_default()
+        image_alt(tag).map(|alt| format!("[圖片：{alt}]")).unwrap_or_default()
     });
     let s = header_cell.replace_all(&s, |caps: &regex::Captures| {
         if caps.get(0).is_some_and(|m| m.as_str().starts_with("</")) { "** · " } else { "**" }
@@ -384,42 +384,42 @@ mod tests {
 
     #[test]
     fn nested_hidden_blocks_never_leak_into_the_body() {
-        let out=lines("<div style=\"display:none\"><span>预览</span><p>隐藏验证码 123456</p></div><p>正式正文</p>","");
+        let out=lines("<div style=\"display:none\"><span>預覽</span><p>隱藏驗證碼 123456</p></div><p>正式正文</p>","");
         assert_eq!(out.iter().map(|l|l.text.as_str()).collect::<Vec<_>>(),["正式正文"]);
     }
 
     #[test]
     fn plain_text_keeps_literal_asterisks_and_paragraphs() {
-        let out=lines("","保留 ** 原始字符\n\n第二段");
-        assert_eq!(out[0].text,"保留 ** 原始字符");
+        let out=lines("","保留 ** 原始字元\n\n第二段");
+        assert_eq!(out[0].text,"保留 ** 原始字元");
         assert_eq!(out[1].kind,Kind::Gap);
     }
 
     #[test]
     fn html_headings_lists_and_quotes_keep_their_kind() {
         let html = r#"<html><head><style>p{color:red}</style></head><body>
-            <h1>本周周报</h1><p>完成 <b>三件事</b>：</p>
-            <ul><li>修复登录</li><li>同步版本</li></ul>
-            <blockquote>注意：周五前提交</blockquote><hr><p>谢谢</p></body></html>"#;
+            <h1>本週週報</h1><p>完成 <b>三件事</b>：</p>
+            <ul><li>修復登入</li><li>同步版本</li></ul>
+            <blockquote>注意：週五前提交</blockquote><hr><p>謝謝</p></body></html>"#;
         let lines = lines(html, "");
         assert_eq!(lines[0].kind, Kind::Title);
-        assert_eq!(lines[0].text, "本周周报");
-        assert!(lines.iter().any(|l| l.kind == Kind::Bullet && l.text == "修复登录"));
-        let quote=lines.iter().find(|l| l.kind == Kind::Quote).expect("应有一行引用");
-        assert_eq!(quote.text, "注意：周五前提交");
+        assert_eq!(lines[0].text, "本週週報");
+        assert!(lines.iter().any(|l| l.kind == Kind::Bullet && l.text == "修復登入"));
+        let quote=lines.iter().find(|l| l.kind == Kind::Quote).expect("應有一行引用");
+        assert_eq!(quote.text, "注意：週五前提交");
         assert!(lines.iter().any(|l| l.kind == Kind::Divider));
-        assert!(!lines.iter().any(|l| l.text.contains("color:red")), "style 应被丢弃");
+        assert!(!lines.iter().any(|l| l.text.contains("color:red")), "style 應被丟棄");
     }
 
     #[test]
     fn entities_are_decoded() {
-        let lines = lines("<p>价格 &lt; 100 &amp; 包邮&nbsp;·&nbsp;限今天</p>", "");
-        assert_eq!(lines[0].text, "价格 < 100 & 包邮 · 限今天");
+        let lines = lines("<p>價格 &lt; 100 &amp; 包郵&nbsp;·&nbsp;限今天</p>", "");
+        assert_eq!(lines[0].text, "價格 < 100 & 包郵 · 限今天");
     }
 
     #[test]
     fn plain_text_marks_become_blocks() {
-        let text = "## 今日摘要\n第一段\n\n• 事项一\n• 事项二\n\n> 提醒：明天截止\n---\n最后一行";
+        let text = "## 今日摘要\n第一段\n\n• 事項一\n• 事項二\n\n> 提醒：明天截止\n---\n最後一行";
         let lines = lines("", text);
         assert_eq!(lines[0].kind, Kind::Heading);
         assert_eq!(lines[1].kind, Kind::Body);
@@ -427,21 +427,21 @@ mod tests {
         assert_eq!(lines[3].kind, Kind::Bullet);
         assert!(lines.iter().any(|l| l.kind == Kind::Quote && l.text.starts_with("提醒")));
         assert!(lines.iter().any(|l| l.kind == Kind::Divider));
-        assert_eq!(lines.last().unwrap().text, "最后一行");
+        assert_eq!(lines.last().unwrap().text, "最後一行");
     }
 
     #[test]
     fn real_newsletter_html_keeps_structure_and_bold() {
         let html = r#"<html><head><style>p{color:red}</style></head><body>
-            <h1>订单确认</h1>
-            <p>您好，<strong>订单已支付</strong>，明细如下：</p>
-            <table><tr><td>商品</td><td>金额</td></tr><tr><td>会员</td><td>¥99</td></tr></table>
-            <ul><li>发货时间：明天</li><li>发票：电子</li></ul>
-            <blockquote>如有疑问请联系客服</blockquote><hr><p>感谢支持</p></body></html>"#;
-        let out = lines(html, "订单确认 您好 订单已支付");
-        assert_eq!(out[0].kind, Kind::Title, "h1 应是大标题");
-        assert!(out.iter().any(|l| l.text.contains("**订单已支付**")), "strong 应保留粗体标记");
-        assert!(out.iter().any(|l| l.text == "商品 · 金额"), "表格单元格应分隔而不是粘连");
+            <h1>訂單確認</h1>
+            <p>您好，<strong>訂單已支付</strong>，明細如下：</p>
+            <table><tr><td>商品</td><td>金額</td></tr><tr><td>會員</td><td>¥99</td></tr></table>
+            <ul><li>發貨時間：明天</li><li>發票：電子</li></ul>
+            <blockquote>如有疑問請聯絡客服</blockquote><hr><p>感謝支援</p></body></html>"#;
+        let out = lines(html, "訂單確認 您好 訂單已支付");
+        assert_eq!(out[0].kind, Kind::Title, "h1 應是大標題");
+        assert!(out.iter().any(|l| l.text.contains("**訂單已支付**")), "strong 應保留粗體標記");
+        assert!(out.iter().any(|l| l.text == "商品 · 金額"), "表格單元格應分隔而不是粘連");
         assert_eq!(out.iter().filter(|l| l.kind == Kind::Bullet).count(), 2);
         assert!(out.iter().any(|l| l.kind == Kind::Quote));
         assert!(out.iter().any(|l| l.kind == Kind::Divider));
@@ -451,75 +451,75 @@ mod tests {
     #[test]
     fn preheader_and_conditional_comments_do_not_reach_the_body() {
         let html = r#"<html><body>
-            <div style="display:none;max-height:0;overflow:hidden">&#8203;&#8203; 这是一段只为收件箱预览存在的填充文字 &#8203;</div>
-            <!--[if mso]><table><tr><td><b>打开网页版</b></td></tr></table><![endif]-->
+            <div style="display:none;max-height:0;overflow:hidden">&#8203;&#8203; 這是一段只為收件箱預覽存在的填充文字 &#8203;</div>
+            <!--[if mso]><table><tr><td><b>開啟網頁版</b></td></tr></table><![endif]-->
             <p>真正的正文。</p></body></html>"#;
         let out = lines(html, "");
-        assert_eq!(out.len(), 1, "隐藏块与条件注释都不应变成正文：{out:?}");
+        assert_eq!(out.len(), 1, "隱藏塊與條件註釋都不應變成正文：{out:?}");
         assert_eq!(out[0].text, "真正的正文。");
     }
 
     #[test]
     fn ordered_list_numbers_survive_conversion() {
-        let out = lines("<ol><li>先备份</li><li>再升级</li><li>最后验证</li></ol>", "");
+        let out = lines("<ol><li>先備份</li><li>再升級</li><li>最後驗證</li></ol>", "");
         let numbered: Vec<_> = out.iter().filter(|l| l.kind == Kind::Numbered).map(|l| l.text.as_str()).collect();
-        assert_eq!(numbered, ["1. 先备份", "2. 再升级", "3. 最后验证"]);
+        assert_eq!(numbered, ["1. 先備份", "2. 再升級", "3. 最後驗證"]);
     }
 
     #[test]
     fn data_table_keeps_columns_and_bolds_its_header() {
         let html = r#"<table border="1" cellpadding="6" cellspacing="0">
-            <tr><th>项目</th><th>数值</th></tr><tr><td>未读</td><td>12</td></tr></table>"#;
+            <tr><th>專案</th><th>數值</th></tr><tr><td>未讀</td><td>12</td></tr></table>"#;
         let out = lines(html, "");
-        assert!(out.iter().any(|l| l.text.contains("**项目**")), "表头应加粗：{out:?}");
-        assert!(out.iter().any(|l| l.text.contains("未读 · 12")), "数据表格的列不能被拆散：{out:?}");
+        assert!(out.iter().any(|l| l.text.contains("**專案**")), "表頭應加粗：{out:?}");
+        assert!(out.iter().any(|l| l.text.contains("未讀 · 12")), "資料表格的列不能被拆散：{out:?}");
     }
 
     #[test]
     fn layout_table_is_flattened_instead_of_joined_by_dots() {
         let html = r#"<table role="presentation" cellpadding="0" cellspacing="0"><tr>
-            <td><img src="logo.png"></td><td>首页</td><td>关于我们</td></tr></table>"#;
+            <td><img src="logo.png"></td><td>首頁</td><td>關於我們</td></tr></table>"#;
         let out = lines(html, "");
-        assert!(!out.iter().any(|l| l.text.contains('·')), "布局表格不该串成一行：{out:?}");
-        assert!(out.iter().any(|l| l.text.contains("首页")));
+        assert!(!out.iter().any(|l| l.text.contains('·')), "佈局表格不該串成一行：{out:?}");
+        assert!(out.iter().any(|l| l.text.contains("首頁")));
     }
 
     #[test]
     fn zero_width_padding_is_cleaned() {
-        let out = lines("<p>验证码\u{200b}已\u{200b}发送</p>", "");
-        assert_eq!(out[0].text, "验证码已发送");
+        let out = lines("<p>驗證碼\u{200b}已\u{200b}傳送</p>", "");
+        assert_eq!(out[0].text, "驗證碼已傳送");
         let plain = lines("", "第一行\u{feff}\n\n第二行");
         assert_eq!(plain[0].text, "第一行");
     }
 
     #[test]
     fn images_keep_only_meaningful_alt_text() {
-        let html = r#"<p>订单截图如下：<img src="order.png" alt="订单截图"></p>
+        let html = r#"<p>訂單截圖如下：<img src="order.png" alt="訂單截圖"></p>
             <p><img src="logo.png" alt="logo"><img src="pixel.gif" alt=""></p>"#;
         let out = lines(html, "");
-        assert!(out.iter().any(|l| l.text == "订单截图如下：[图片：订单截图]"), "{out:?}");
-        assert!(!out.iter().any(|l| l.text.to_ascii_lowercase().contains("logo")), "装饰图不该留下噪音：{out:?}");
+        assert!(out.iter().any(|l| l.text == "訂單截圖如下：[圖片：訂單截圖]"), "{out:?}");
+        assert!(!out.iter().any(|l| l.text.to_ascii_lowercase().contains("logo")), "裝飾圖不該留下噪音：{out:?}");
     }
 
     #[test]
     fn image_only_html_falls_back_to_plain_text() {
         let html = r#"<html><body><img src="cid:a"><img src="cid:b"></body></html>"#;
-        let out = lines(html, "尊敬的客户，您的账单已生成。");
+        let out = lines(html, "尊敬的客戶，您的賬單已生成。");
         assert_eq!(out.len(), 1);
-        assert_eq!(out[0].text, "尊敬的客户，您的账单已生成。");
+        assert_eq!(out[0].text, "尊敬的客戶，您的賬單已生成。");
     }
 
     #[test]
     fn item_lines_uses_html_even_when_plain_text_exists() {
         let item = mail::Item {
-            account: "a@qq.com".into(), from: "团队".into(), subject: "周报".into(),
+            account: "a@qq.com".into(), from: "團隊".into(), subject: "週報".into(),
             time: "09:41".into(), code: None, received_unix: None,
-            summary: "本周周报 完成三件事".into(),
-            html: "<h2>本周周报</h2><ul><li>完成三件事</li></ul>".into(),
+            summary: "本週週報 完成三件事".into(),
+            html: "<h2>本週週報</h2><ul><li>完成三件事</li></ul>".into(),
             links: vec![], meeting: None, uid: 7,
         };
         let out = item_lines(&item);
-        assert_eq!(out[0].kind, Kind::Title, "不能退化成压平的 text/plain");
+        assert_eq!(out[0].kind, Kind::Title, "不能退化成壓平的 text/plain");
         assert!(out.iter().any(|l| l.kind == Kind::Bullet && l.text == "完成三件事"));
     }
 

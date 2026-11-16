@@ -153,7 +153,7 @@ impl Monitor {
                     let line=record(value);
                     let _=append(&directory,&line);
                     if value.abnormal(){let _=std::fs::write(directory.join("last-resource-anomaly.log"),&line);interval=Duration::from_secs(5);}
-                    if GUARD.observe(&value){let _=std::fs::write(directory.join("resource-guard.log"),format!("已自动暂停音乐信息、封面与歌词读取\n{line}"));}
+                    if GUARD.observe(&value){let _=std::fs::write(directory.join("resource-guard.log"),format!("已自動暫停音樂訊息、封面與歌詞讀取\n{line}"));}
                 }
                 if rx.recv_timeout(interval)!=Err(std::sync::mpsc::RecvTimeoutError::Timeout){break;}
             }
@@ -170,7 +170,7 @@ mod tests {
         static LANE:Lane=Lane::new("resource-test",2);
         let (tx,rx)=std::sync::mpsc::channel::<()>();let (tx2,rx2)=std::sync::mpsc::channel::<()>();
         let a=LANE.spawn(move||{let _=rx.recv();}).unwrap();let b=LANE.spawn(move||{let _=rx2.recv();}).unwrap();
-        for _ in 0..10_000 {assert!(LANE.spawn(||panic!("不得启动额外任务")).is_none());}
+        for _ in 0..10_000 {assert!(LANE.spawn(||panic!("不得啟動額外任務")).is_none());}
         assert_eq!(LANE.active(),2);drop((tx,tx2));a.join().unwrap();b.join().unwrap();
         assert_eq!(LANE.active(),0);LANE.spawn(||{}).unwrap().join().unwrap();
     }
@@ -198,12 +198,12 @@ mod tests {
         let guard=Guard::new();
         let normal=Snapshot{private_bytes:300*1024*1024,threads:30,handles:600,..Default::default()};
         let leaking=Snapshot{threads:9078,handles:58916,..normal};
-        assert!(!guard.observe(&leaking),"单次尖峰不熔断");
+        assert!(!guard.observe(&leaking),"單次尖峰不熔斷");
         assert!(!guard.observe(&normal));assert!(!guard.observe(&leaking));
-        assert!(guard.observe(&leaking),"连续两次严重超标才熔断");assert!(guard.tripped());
+        assert!(guard.observe(&leaking),"連續兩次嚴重超標才熔斷");assert!(guard.tripped());
         assert!(!guard.observe(&leaking),"只通知一次");
         for value in [Snapshot{private_bytes:2*1024*1024*1024,..normal},Snapshot{handles:20000,..normal},Snapshot{threads:500,..normal}] {assert!(value.severe());}
-        assert!(!normal.severe() && !Snapshot{private_bytes:900*1024*1024,threads:120,handles:4000,..normal}.severe(),"偏高但未失控时不打断用户");
+        assert!(!normal.severe() && !Snapshot{private_bytes:900*1024*1024,threads:120,handles:4000,..normal}.severe(),"偏高但未失控時不打斷使用者");
     }
     #[test]
     fn feature_logs_rotate_and_cap_each_line(){
@@ -225,6 +225,6 @@ mod tests {
             let before=snapshot().unwrap();for _ in 0..100{let sample=snapshot().unwrap();assert!(sample.threads>0 && sample.private_bytes>0);}
             snapshot().unwrap().handles.saturating_sub(before.handles)
         }).min().unwrap();
-        assert!(growth<=8,"采样 100 次后句柄增长 {growth} 个");
+        assert!(growth<=8,"取樣 100 次後控制代碼增長 {growth} 個");
     }
 }

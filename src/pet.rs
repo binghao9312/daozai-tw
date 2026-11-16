@@ -29,22 +29,22 @@ mod tests {
             pet.step(PetState::Music,frame as f64/60.0,1.0/60.0,[0.0;2],true);
             if let Some(expression)=pet.expressions.current(){seen.insert(expression as usize);}
         }
-        assert_eq!(seen.len(),12,"连续听歌应能轮换到十二组新表情");
+        assert_eq!(seen.len(),12,"連續聽歌應能輪換到十二組新表情");
     }
     #[test]
     fn listening_resumes_the_same_place_after_a_notice_or_pause(){
         let mut pet=Pet::default();
         for frame in 0..1080 {pet.step(PetState::Music,frame as f64/60.0,1.0/60.0,[0.0;2],true);}
-        let expression=pet.expressions.current().expect("演唱一段后应穿插新表情");
+        let expression=pet.expressions.current().expect("演唱一段後應穿插新表情");
         pet.step(PetState::Music,30.0,20.0,[0.0;2],false);
-        assert_eq!(pet.expressions.current(),Some(expression),"展开面板应暂停轮换");
+        assert_eq!(pet.expressions.current(),Some(expression),"展開面板應暫停輪換");
         for state in [PetState::Awake,PetState::Focused,PetState::Worried] {
             pet.step(state,31.0,1.0,[0.0;2],true);assert!(pet.expressions.current().is_none());
             pet.step(PetState::Music,42.0,0.0,[0.0;2],true);
-            assert_eq!(pet.expressions.current(),Some(expression),"恢复听歌应从暂停处继续");
+            assert_eq!(pet.expressions.current(),Some(expression),"恢復聽歌應從暫停處繼續");
         }
         pet.react(PetState::Satisfied);pet.step(PetState::Satisfied,43.0,0.1,[0.0;2],true);
-        assert_eq!(pet.expressions.current(),Some(crate::pet_expressions::Expression::Heart),"喝水反馈应保留优先级");
+        assert_eq!(pet.expressions.current(),Some(crate::pet_expressions::Expression::Heart),"喝水反饋應保留優先順序");
     }
     #[test]
     fn singing_keeps_each_expression_for_fifteen_seconds_after_the_transition() {
@@ -53,10 +53,10 @@ mod tests {
         let pose=pet.music_pose();
         for frame in 1..960 {
             pet.step(PetState::Music,frame as f64/60.0,1.0/60.0,[0.0;2],true);
-            assert_eq!(pet.music_pose(),pose,"一秒过渡和十五秒停留期间不能频繁换表情");
+            assert_eq!(pet.music_pose(),pose,"一秒過渡和十五秒停留期間不能頻繁換表情");
         }
         pet.step(PetState::Music,16.1,0.2,[0.0;2],true);
-        assert_eq!(pet.expressions.current(),Some(Expression::Wink),"完整演唱一段后再穿插新表情");
+        assert_eq!(pet.expressions.current(),Some(Expression::Wink),"完整演唱一段後再穿插新表情");
         pet.step(PetState::Music,19.4,3.3,[0.0;2],true);
         assert_ne!(pet.music_pose(),pose);
     }
@@ -75,11 +75,11 @@ mod tests {
         let age=pet.age;
         let music_age=pet.music_age;
         pet.step(PetState::Music,100.0,20.0,[0.0;2],false);
-        assert_eq!(pet.age,age,"展开面板时不应跳过演唱表情");
+        assert_eq!(pet.age,age,"展開面板時不應跳過演唱表情");
         assert_eq!(pet.music_age,music_age);
         pet.step(PetState::Awake,101.0,0.1,[0.0;2],true);
         pet.step(PetState::Music,102.0,0.1,[0.0;2],true);
-        assert!((pet.music_age-music_age-0.1).abs()<0.001,"恢复听歌后继续轮换");
+        assert!((pet.music_age-music_age-0.1).abs()<0.001,"恢復聽歌后繼續輪換");
     }
     #[test]
     fn microphone_moves_gently_while_the_head_keeps_facing_the_mouth() {
@@ -88,31 +88,31 @@ mod tests {
             let (head,angle)=microphone_pose(frame as f32/60.0);
             let tip=[head[0]+7.0*angle.cos(),head[1]+7.0*angle.sin()];
             let distance=|p:[f32;2]|((p[0]+0.8).powi(2)+(p[1]-20.7).powi(2)).sqrt();
-            assert!(distance(head)<distance(tip),"麦头应在嘴边，麦柄朝外");
+            assert!(distance(head)<distance(tip),"麥頭應在嘴邊，麥柄朝外");
             assert!(head[0]-2.6>1.4 && head[1]-2.6>17.0,"不能遮住嘴或眼睛");
-            assert!(tip[0]+1.0<16.0 && tip[1]+1.0<28.0,"摆动不能超出常驻槽位");
+            assert!(tip[0]+1.0<16.0 && tip[1]+1.0<28.0,"擺動不能超出常駐槽位");
             heights.push(head[1]);angles.push(angle);
         }
         let range=|values:Vec<f32>|values.iter().copied().fold(f32::NEG_INFINITY,f32::max)-values.iter().copied().fold(f32::INFINITY,f32::min);
-        assert!((0.6..1.1).contains(&range(heights)),"麦头应有细微起伏");
-        assert!((0.10..0.18).contains(&range(angles)),"麦柄应有轻微转动");
+        assert!((0.6..1.1).contains(&range(heights)),"麥頭應有細微起伏");
+        assert!((0.10..0.18).contains(&range(angles)),"麥柄應有輕微轉動");
     }
     #[test]
-    #[ignore="按需导出听歌状态的实际界面动图"]
+    #[ignore="按需匯出聽歌狀態的實際介面動圖"]
     fn listening_expression_gallery(){
         use eframe::egui::{self,Pos2,Rect,Vec2};
         use crate::app::{App,Env,Options,WIN_W,WIN_H};
-        let dest=std::path::PathBuf::from(std::env::var_os("DAOZAI_LISTENING_PREVIEW").expect("需指定预览目录"));
+        let dest=std::path::PathBuf::from(std::env::var_os("DAOZAI_LISTENING_PREVIEW").expect("需指定預覽目錄"));
         std::fs::create_dir_all(&dest).unwrap();
         std::env::set_var("DAOZAI_DATA_DIR",std::env::temp_dir().join(format!("daozai-listening-{}",std::process::id())));
         let ctx=egui::Context::default();let mut app=App::new(&ctx,Options{fetch_lyrics:false,pet_idle:1e9});
         app.settings.pet=true;app.settings.minimal=false;app.settings.island_lyrics=false;
         let mut scenes=Vec::new();let mut start=0.0;
         for (index,expression) in MUSIC_EXPRESSIONS.into_iter().enumerate() {
-            if [0,2].contains(&index) {scenes.push((format!("演唱动作 {}",index+1),start));}
+            if [0,2].contains(&index) {scenes.push((format!("演唱動作 {}",index+1),start));}
             if [0,1,3,4,5,11].contains(&index) {
-                let name=match expression {Expression::Wink=>"调皮眨眼",Expression::Delighted=>"偷偷开心",Expression::Blush=>"害羞脸红",
-                    Expression::Heart=>"悄悄比心",Expression::Scan=>"慢慢巡视",_=>"左右张望"};
+                let name=match expression {Expression::Wink=>"調皮眨眼",Expression::Delighted=>"偷偷開心",Expression::Blush=>"害羞臉紅",
+                    Expression::Heart=>"悄悄比心",Expression::Scan=>"慢慢巡視",_=>"左右張望"};
                 scenes.push((name.to_owned(),start+MUSIC_PERIOD));
             }
             start+=MUSIC_PERIOD+expression.duration();
@@ -122,8 +122,8 @@ mod tests {
             app.pet.music_age=*at;
             for frame in 0..32 {
                 let t=sequence as f64/10.0;sequence+=1;
-                let env=Env{t,clock:"09:41:00".into(),today:"2026-11-07".into(),date:"11月7日 周六".into(),idle_seconds:Some(0.0),
-                    media:crate::smtc::NowPlaying{title:"晚风与星光".into(),artist:"示例歌手".into(),playing:true,duration:240.0,..Default::default()},..Default::default()};
+                let env=Env{t,clock:"09:41:00".into(),today:"2026-11-07".into(),date:"11月7日 週六".into(),idle_seconds:Some(0.0),
+                    media:crate::smtc::NowPlaying{title:"晚風與星光".into(),artist:"示例歌手".into(),playing:true,duration:240.0,..Default::default()},..Default::default()};
                 let input=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(WIN_W,WIN_H))),time:Some(t),
                     viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(2.0),..Default::default()})).collect(),..Default::default()};
                 let output=ctx.run(input,|ctx|{egui::CentralPanel::default().frame(egui::Frame::NONE).show(ctx,|ui|{app.frame(ui,ui.max_rect(),&env);});});

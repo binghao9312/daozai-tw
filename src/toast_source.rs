@@ -44,10 +44,10 @@ mod tests {
         let found=[sender_in(&path,10,100),sender_in(&path,11,101),sender_in(&path,10,101),sender_in(&path,12,102)];
         let after=std::fs::read(&path).unwrap();std::fs::remove_file(&path).unwrap();
         assert_eq!(found,[Some("QQ".into()),Some("OtherApp".into()),None,None]);assert_eq!(before,after);
-        assert_eq!(sender_in(&path,10,100),None);assert!(!path.exists(),"只读查询不能新建数据库");
+        assert_eq!(sender_in(&path,10,100),None);assert!(!path.exists(),"只讀查詢不能新建資料庫");
     }
     #[test]
-    #[ignore="需要本机通知中心留有指定测试通知"]
+    #[ignore="需要本機通知中心留有指定測試通知"]
     fn qq_notification_local_identity(){
         let id=std::env::var("DAOZAI_QQ_TEST_ID").unwrap().parse().unwrap();
         use windows::UI::Notifications::{Management::UserNotificationListener,NotificationKinds};

@@ -204,7 +204,7 @@ fn build_fonts()->FontDefinitions {
 pub fn app_icon()->std::sync::Arc<eframe::egui::IconData>{
     static ICON:std::sync::OnceLock<std::sync::Arc<eframe::egui::IconData>>=std::sync::OnceLock::new();
     ICON.get_or_init(||{
-        let image=image::load_from_memory(include_bytes!("../assets/daozai-logo.png")).expect("岛仔图标资源应有效").thumbnail(128,128).to_rgba8();
+        let image=image::load_from_memory(include_bytes!("../assets/daozai-logo.png")).expect("島仔圖示資源應有效").thumbnail(128,128).to_rgba8();
         std::sync::Arc::new(eframe::egui::IconData{width:image.width(),height:image.height(),rgba:image.into_raw()})
     }).clone()
 }
@@ -220,7 +220,7 @@ mod tests {
             for weight in [super::W::Regular,super::W::Semibold,super::W::Bold]{
                 let font=super::font(14.0,weight);
                 for ch in "눈, 코, 입 향기로운 숨을 담은 너의 코 사랑해 眼鼻嘴 TAEYANG ㄱㄴㅏ".chars().filter(|c|!c.is_whitespace()){
-                    assert!(ctx.fonts(|f|f.has_glyph(&font,ch)),"缺少字形：{ch}，字体：{font:?}");
+                    assert!(ctx.fonts(|f|f.has_glyph(&font,ch)),"缺少字形：{ch}，字型：{font:?}");
                 }
             }
         });
@@ -234,7 +234,7 @@ mod tests {
         let mapped=super::MappedFont::open(&path).unwrap();
         assert_eq!(&mapped.bytes[..],b"readonly font fixture");
         assert_eq!(std::fs::read(&path).unwrap(),b"readonly font fixture");
-        assert!(std::fs::OpenOptions::new().write(true).open(&path).is_err(),"映射存活期间不能允许原地改写字体");
+        assert!(std::fs::OpenOptions::new().write(true).open(&path).is_err(),"對映存活期間不能允許原地改寫字型");
         drop(mapped);std::fs::remove_file(path).unwrap();
     }
 
@@ -248,15 +248,15 @@ mod tests {
         let fonts=super::shared_fonts();let font=&fonts.font_data["cjk0"];
         let mut name=[0u16;1024];
         let count=unsafe{K32GetMappedFileNameW(windows::Win32::System::Threading::GetCurrentProcess().0,font.font.as_ptr().cast(),name.as_mut_ptr(),name.len()as u32)};
-        assert!(count>0,"中文字体仍占用完整的私有堆副本，没有复用系统字体文件页");
+        assert!(count>0,"中文字型仍佔用完整的私有堆副本，沒有複用系統字型檔案頁");
         let name=String::from_utf16_lossy(&name[..count as usize]).to_lowercase();
-        assert!([".ttc",".ttf",".otf"].iter().any(|suffix|name.ends_with(suffix)),"映射必须来自实际字体文件");
+        assert!([".ttc",".ttf",".otf"].iter().any(|suffix|name.ends_with(suffix)),"對映必須來自實際字型檔案");
     }
 
     #[test]
     fn font_data_is_shared_across_contexts_without_owned_byte_copies(){
         let fonts=super::shared_fonts();
-        assert!(fonts.font_data.values().all(|font|matches!(font.font,std::borrow::Cow::Borrowed(_))),"字体不能在每个排版上下文中产生完整副本");
+        assert!(fonts.font_data.values().all(|font|matches!(font.font,std::borrow::Cow::Borrowed(_))),"字型不能在每個排版上下文中產生完整副本");
         let cloned=fonts.clone();
         for (name,font) in &fonts.font_data {assert!(std::sync::Arc::ptr_eq(font,&cloned.font_data[name]));}
     }

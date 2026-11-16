@@ -99,9 +99,9 @@ impl Snapshot {
         if self.audio_endpoint == old.audio_endpoint && self.volume != old.volume {
             if let Some((v, mute)) = self.volume {
                 out.push((
-                    "系统音量".into(),
+                    "系統音量".into(),
                     if mute {
-                        "已静音".into()
+                        "已靜音".into()
                     } else {
                         format!("音量 {v}%")
                     },
@@ -110,16 +110,16 @@ impl Snapshot {
         }
         if self.caps != old.caps {
             out.push((
-                "大写锁定".into(),
-                if self.caps { "已开启" } else { "已关闭" }.into(),
+                "大寫鎖定".into(),
+                if self.caps { "已開啟" } else { "已關閉" }.into(),
             ));
         }
         if self.network != old.network || self.network && self.network_kind != old.network_kind {
             let kind=if self.network {self.network_kind}else{old.network_kind};
-            let status=if self.network {"网络已连接"}else{"网络已断开"};
+            let status=if self.network {"網路已連線"}else{"網路已斷開"};
             out.push((
-                "网络连接".into(),
-                match kind {NetworkKind::Wifi=>format!("Wi-Fi · {status}"),NetworkKind::Ethernet=>format!("以太网 · {status}"),NetworkKind::Other=>status.into()},
+                "網路連線".into(),
+                match kind {NetworkKind::Wifi=>format!("Wi-Fi · {status}"),NetworkKind::Ethernet=>format!("乙太網 · {status}"),NetworkKind::Other=>status.into()},
             ));
         }
         out
@@ -332,7 +332,7 @@ mod fullscreen_follow_tests {
     #[test]
     fn switching_to_another_app_or_leaving_fullscreen_shows_the_island() {
         let other_app = Foreground { hwnd: 300, pid: 9, root_owner: 300, app_window: true };
-        assert!(!keeps_fullscreen(MAX, true, Some(other_app)), "切到别的程序时照常显示");
+        assert!(!keeps_fullscreen(MAX, true, Some(other_app)), "切到別的程式時照常顯示");
         // 同一程序新开的普通窗口（如浏览器的第二个窗口）也照常显示
         let second_window = Foreground { hwnd: 301, pid: 7, root_owner: 301, app_window: true };
         assert!(!keeps_fullscreen(MAX, true, Some(second_window)));
@@ -477,12 +477,12 @@ impl NotificationBaseline {
                 if let Some(old)=self.previous.as_ref().and_then(|items|items.get(&id)).filter(|old|old.created==created && old.client==client){return (*old,None);}
                 let version=ToastVersion{created,client,body:ToastBody::Unavailable};
                 // 已确认是新通知时仍给通用提醒；恢复正文后只补指纹，不重复弹出。
-                let message=self.changed(id,version).then(||if tracked{"有新消息".into()}else{"收到新通知".into()});
+                let message=self.changed(id,version).then(||if tracked{"有新訊息".into()}else{"收到新通知".into()});
                 return (version,message);
             }
         };
         let version=ToastVersion::new(created,client,tracked.then_some(body.as_str()));
-        let message=self.changed(id,version).then(||if tracked && body.trim().is_empty(){"有新消息".into()}else{body});
+        let message=self.changed(id,version).then(||if tracked && body.trim().is_empty(){"有新訊息".into()}else{body});
         (version,message)
     }
 }
@@ -491,11 +491,11 @@ fn channel_status(client:crate::messenger::Messenger)->String{
     use windows::UI::Notifications::{NotificationSetting,ToastNotificationManager};
     let name=client.name();
     match ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(client.adapter().notification_id)).and_then(|notifier|notifier.Setting()){
-        Ok(NotificationSetting::Enabled)=>format!("{name} 系统通知通道可用"),
-        Ok(NotificationSetting::DisabledForApplication)=>format!("{name} 系统通知已关闭，请在 Windows 通知设置中开启后重新连接"),
-        Ok(NotificationSetting::DisabledForUser)=>"Windows 系统通知已关闭，请开启后重新连接".into(),
-        Ok(NotificationSetting::DisabledByGroupPolicy)=>"系统策略禁止通知".into(),
-        _=>format!("{name} 系统通知通道未就绪，请检查安装和通知设置后重新连接"),
+        Ok(NotificationSetting::Enabled)=>format!("{name} 系統通知通道可用"),
+        Ok(NotificationSetting::DisabledForApplication)=>format!("{name} 系統通知已關閉，請在 Windows 通知設定中開啟後重新連線"),
+        Ok(NotificationSetting::DisabledForUser)=>"Windows 系統通知已關閉，請開啟後重新連線".into(),
+        Ok(NotificationSetting::DisabledByGroupPolicy)=>"系統策略禁止通知".into(),
+        _=>format!("{name} 系統通知通道未就緒，請檢查安裝和通知設定後重新連線"),
     }
 }
 
@@ -526,7 +526,7 @@ fn connect_inner(ctx:eframe::egui::Context,filter:crate::messenger::Notification
             let _apartment=Apartment;
             if request.get()? != UserNotificationListenerAccessStatus::Allowed {
                 send(Incoming::Revoked);
-                send(Incoming::Status("Windows 未授予通知读取权限，可在系统设置中调整。".into()));
+                send(Incoming::Status("Windows 未授予通知讀取許可權，可在系統設定中調整。".into()));
                 return Ok(());
             }
             let listener = UserNotificationListener::Current()?;
@@ -543,9 +543,9 @@ fn connect_inner(ctx:eframe::egui::Context,filter:crate::messenger::Notification
                     Ok(Some((items,count)))
                 }){
                     Ok(Some(items))=>items,
-                    Ok(None)=>{send(Incoming::Revoked);send(Incoming::Status("通知权限已被关闭".into()));return Ok(());}
+                    Ok(None)=>{send(Incoming::Revoked);send(Incoming::Status("通知許可權已被關閉".into()));return Ok(());}
                     Err(error)=>{
-                        let status=format!("Windows 通知暂时读取失败：{} · 将自动重试",error.code());
+                        let status=format!("Windows 通知暫時讀取失敗：{} · 將自動重試",error.code());
                         if status!=last_status{send(Incoming::Status(status.clone()));last_status=status;}
                         if stopped.recv_timeout(std::time::Duration::from_secs(2))!=Err(mpsc::RecvTimeoutError::Timeout){return Ok(());}
                         continue;
@@ -573,7 +573,7 @@ fn connect_inner(ctx:eframe::egui::Context,filter:crate::messenger::Notification
                     if let Some(body)=body{
                         let target=client.filter(|client|client.adapter().capture==crate::messenger::Capture::SystemToast).map(|client|(client,accounts.target(client,number,created)))
                             .and_then(|(client,target)|{
-                                if target.is_none(){crate::messenger::windows::trace(format!("通知 {id}·创建 {created} 未能绑定 {} 账号",client.name()));}
+                                if target.is_none(){crate::messenger::windows::trace(format!("通知 {id}·建立 {created} 未能繫結 {} 帳號",client.name()));}
                                 target
                             });
                         if !body.trim().is_empty(){messages.push((created,app,id,body,target));}
@@ -585,7 +585,7 @@ fn connect_inner(ctx:eframe::egui::Context,filter:crate::messenger::Notification
                 for (_,app,id,body,target) in messages {
                     if !send(Incoming::Message(app,id,body,target)){return Ok(());}
                 }
-                let status=match filter{crate::messenger::NotificationFilter::Only(client)=>format!("仅监听 {} · {channels}",client.name()),crate::messenger::NotificationFilter::All=>format!("正在监听 Windows 通知 · 当前可见 {count} 条\n{channels}")};
+                let status=match filter{crate::messenger::NotificationFilter::Only(client)=>format!("僅監聽 {} · {channels}",client.name()),crate::messenger::NotificationFilter::All=>format!("正在監聽 Windows 通知 · 當前可見 {count} 條\n{channels}")};
                 if status!=last_status {
                     if !send(Incoming::Status(status.clone())){return Ok(());}
                     last_status=status;
@@ -594,14 +594,14 @@ fn connect_inner(ctx:eframe::egui::Context,filter:crate::messenger::Notification
             }
         };
         if let Err(e) = run() {
-            send(Incoming::Status(format!("Windows 暂不允许读取通知：{}。请检查通知访问权限与应用身份。",e.code())));
+            send(Incoming::Status(format!("Windows 暫不允許讀取通知：{}。請檢查通知訪問許可權與應用身份。",e.code())));
         }
     }).map_err(|_|windows::core::Error::from_win32())?;
     Ok(Notifications{incoming:rx,stop,taskbar_mask})
 }
 
 pub fn pick_files() -> Result<Vec<std::path::PathBuf>> {
-    pick_files_for("添加文件到置物架",true)
+    pick_files_for("新增檔案到置物架",true)
 }
 
 pub fn pick_files_for(title:&str,multiple:bool) -> Result<Vec<std::path::PathBuf>> {
@@ -672,12 +672,12 @@ mod tests {
     #[test]
     fn notifications_skip_history_but_detect_reused_ids_and_updated_content(){
         let mut baseline=NotificationBaseline{primed:true,..Default::default()};
-        let first=ToastVersion::new(10,Some(crate::messenger::Messenger::Qq),Some("第一条"));
+        let first=ToastVersion::new(10,Some(crate::messenger::Messenger::Qq),Some("第一條"));
         assert!(!baseline.changed(1,first));
         baseline.previous=Some(HashMap::from([(1,first),(2,ToastVersion::new(10,None,None))]));
         assert!(!baseline.changed(1,first));
-        assert!(baseline.changed(1,ToastVersion::new(10,Some(crate::messenger::Messenger::Qq),Some("第二条"))));
-        assert!(baseline.changed(1,ToastVersion::new(11,Some(crate::messenger::Messenger::Qq),Some("第一条"))));
+        assert!(baseline.changed(1,ToastVersion::new(10,Some(crate::messenger::Messenger::Qq),Some("第二條"))));
+        assert!(baseline.changed(1,ToastVersion::new(11,Some(crate::messenger::Messenger::Qq),Some("第一條"))));
         assert!(baseline.unchanged_other(2,10).is_some());
         assert!(baseline.unchanged_other(1,10).is_none());
         assert!(baseline.unchanged_other(2,11).is_none());
@@ -686,17 +686,17 @@ mod tests {
     #[test]
     fn notifications_arriving_during_connection_are_not_treated_as_old_history(){
         let baseline=NotificationBaseline{previous:None,started:100,primed:false};
-        let (_,message)=baseline.observe(1,101,Some(crate::messenger::Messenger::Qq),true,Ok("连接期间的新消息".into()));
-        assert!(message.is_some(),"连接期间才到达的新通知不能混入启动历史而漏报");
+        let (_,message)=baseline.observe(1,101,Some(crate::messenger::Messenger::Qq),true,Ok("連線期間的新訊息".into()));
+        assert!(message.is_some(),"連線期間才到達的新通知不能混入啟動歷史而漏報");
     }
     #[test]
     fn notifications_read_failures_do_not_replay_an_unchanged_qq_message(){
         let client=Some(crate::messenger::Messenger::Qq);
-        let original=ToastVersion::new(10,client,Some("同一条消息"));
+        let original=ToastVersion::new(10,client,Some("同一條訊息"));
         let baseline=NotificationBaseline{previous:Some(HashMap::from([(1,original)])),..Default::default()};
         let (version,message)=baseline.observe(1,10,client,true,Err(windows::core::Error::from_win32()));
-        assert!(message.is_none(),"临时读取失败不能变成空正文更新而重复提醒");
-        assert!(version==original,"读取失败时保留上一轮指纹");
+        assert!(message.is_none(),"臨時讀取失敗不能變成空正文更新而重複提醒");
+        assert!(version==original,"讀取失敗時保留上一輪指紋");
     }
     #[test]
     fn notifications_unreadable_new_toasts_remind_once_and_historical_toasts_stay_silent(){
@@ -704,37 +704,37 @@ mod tests {
         for (created,expected) in [(90,false),(110,true)]{
             let mut baseline=NotificationBaseline{previous:None,started:100,primed:false};
             let (version,message)=baseline.observe(1,created,client,true,Err(windows::core::Error::from_win32()));
-            assert_eq!(message.is_some(),expected,"历史与连接期间的新通知必须区分");
+            assert_eq!(message.is_some(),expected,"歷史與連線期間的新通知必須區分");
             baseline.previous=Some(HashMap::from([(1,version)]));
-            let (version,message)=baseline.observe(1,created,client,true,Ok("恢复后的正文".into()));
-            assert!(message.is_none(),"正文恢复不能重弹同一条通知");
+            let (version,message)=baseline.observe(1,created,client,true,Ok("恢復後的正文".into()));
+            assert!(message.is_none(),"正文恢復不能重彈同一條通知");
             baseline.previous=Some(HashMap::from([(1,version)]));
-            assert!(baseline.observe(1,created,client,true,Ok("下一条消息".into())).1.is_some());
+            assert!(baseline.observe(1,created,client,true,Ok("下一條訊息".into())).1.is_some());
         }
     }
     #[test]
     fn notifications_office_channel_switch_does_not_replay_but_later_body_updates_remind(){
         for client in crate::messenger::Messenger::OFFICE{
             let mut baseline=NotificationBaseline{previous:Some(HashMap::from([(1,ToastVersion::new(10,Some(client),None))])),started:0,primed:true};
-            assert!(baseline.unchanged_other(1,10).is_none(),"办公软件的捕获通道会切换，不能永久跳过");
-            let (version,message)=baseline.observe(1,10,Some(client),true,Ok("切换前的旧消息".into()));
+            assert!(baseline.unchanged_other(1,10).is_none(),"辦公軟體的捕獲通道會切換，不能永久跳過");
+            let (version,message)=baseline.observe(1,10,Some(client),true,Ok("切換前的舊訊息".into()));
             assert!(message.is_none());baseline.previous=Some(HashMap::from([(1,version)]));
-            assert!(baseline.observe(1,10,Some(client),true,Ok("切换后的新消息".into())).1.is_some());
+            assert!(baseline.observe(1,10,Some(client),true,Ok("切換後的新訊息".into())).1.is_some());
         }
     }
     #[test]
     fn notifications_partial_snapshots_do_not_replay_old_items_or_drop_new_items(){
         let client=Some(crate::messenger::Messenger::Qq);
-        let old=ToastVersion::new(90,client,Some("启动前的旧通知"));let fresh=ToastVersion::new(110,client,Some("连接后的新通知"));
+        let old=ToastVersion::new(90,client,Some("啟動前的舊通知"));let fresh=ToastVersion::new(110,client,Some("連線後的新通知"));
         let mut baseline=NotificationBaseline{previous:None,started:100,primed:false};
         assert!(baseline.changed(2,fresh));baseline.finish(HashMap::from([(2,fresh)]),false);
-        assert!(!baseline.changed(1,old),"首次只读到部分条目时，补读到的启动历史不能重放");
+        assert!(!baseline.changed(1,old),"首次只讀到部分條目時，補讀到的啟動歷史不能重放");
         assert!(!baseline.changed(2,fresh));baseline.finish(HashMap::from([(1,old),(2,fresh)]),true);
         baseline.finish(HashMap::from([(2,fresh)]),false);
-        assert!(!baseline.changed(1,old),"临时漏读条目不能被当成移除后重新新增");
-        let next=ToastVersion::new(120,client,Some("下一条"));assert!(baseline.changed(3,next));
+        assert!(!baseline.changed(1,old),"臨時漏讀條目不能被當成移除後重新新增");
+        let next=ToastVersion::new(120,client,Some("下一條"));assert!(baseline.changed(3,next));
         baseline.finish(HashMap::new(),true);
-        assert!(baseline.previous.as_ref().unwrap().is_empty(),"成功读完整空列表后应清理历史，不能永久保留");
+        assert!(baseline.previous.as_ref().unwrap().is_empty(),"成功讀完整空列表後應清理歷史，不能永久保留");
     }
     #[test]
     fn notifications_disconnect_signals_stop_without_waiting_for_new_messages(){
@@ -745,10 +745,10 @@ mod tests {
     #[test]
     fn browser_minimal_recognizes_browsers_without_matching_electron_apps(){
         for name in ["chrome.exe","MSEDGE.EXE","firefox.exe","brave.exe","zen.exe","QQBrowser.exe","quark.exe","Quark.exe","QUARK.EXE"] {
-            assert!(is_browser_process(name),"应识别浏览器 {name}");
+            assert!(is_browser_process(name),"應識別瀏覽器 {name}");
         }
         for name in ["Codex.exe","Code.exe","msedgewebview2.exe","explorer.exe","chrome-helper.exe","quark_proxy.exe","quark_pwa_launcher.exe","quark_host_client.exe","quark_swap_util.exe","QuarkUpdaterSetup.exe",""] {
-            assert!(!is_browser_process(name),"不能将 {name} 当作浏览器");
+            assert!(!is_browser_process(name),"不能將 {name} 當作瀏覽器");
         }
     }
     #[test]
@@ -770,38 +770,38 @@ mod tests {
         let maximized=RECT{left:-8,top:-8,right:1928,bottom:1048};
         assert!(browser_overlaps_island(maximized,left,Dock::Left) && browser_overlaps_island(maximized,right,Dock::Right));
         let left_half=RECT{left:0,top:0,right:960,bottom:1040};
-        assert!(browser_overlaps_island(left_half,left,Dock::Left) && !browser_overlaps_island(left_half,right,Dock::Right),"贴左半屏只遮住左侧");
+        assert!(browser_overlaps_island(left_half,left,Dock::Left) && !browser_overlaps_island(left_half,right,Dock::Right),"貼左半屏只遮住左側");
         let floating=RECT{left:300,top:100,right:1600,bottom:900};
-        assert!(!browser_overlaps_island(floating,left,Dock::Left) && !browser_overlaps_island(floating,right,Dock::Right),"没碰到边缘的窗口不避让");
+        assert!(!browser_overlaps_island(floating,left,Dock::Left) && !browser_overlaps_island(floating,right,Dock::Right),"沒碰到邊緣的視窗不避讓");
         let top_strip=RECT{left:0,top:0,right:1920,bottom:300};
-        assert!(!browser_overlaps_island(top_strip,left,Dock::Left),"没盖到岛所在的那一段边缘");
+        assert!(!browser_overlaps_island(top_strip,left,Dock::Left),"沒蓋到島所在的那一段邊緣");
     }
     #[test]
     fn network_connection_uses_connected_wording() {
         let old=Snapshot{volume:None,audio_endpoint:None,caps:false,network:false,network_kind:NetworkKind::Other};
         let mut connected=old.clone();connected.network=true;
-        assert_eq!(connected.changes(&old),vec![("网络连接".into(),"网络已连接".into())]);
+        assert_eq!(connected.changes(&old),vec![("網路連線".into(),"網路已連線".into())]);
     }
     #[test]
     fn network_switches_transport_and_keeps_the_disconnected_type() {
         let wifi=Snapshot{volume:None,audio_endpoint:None,caps:false,network:true,network_kind:NetworkKind::Wifi};
         let mut cable=wifi.clone();cable.network_kind=NetworkKind::Ethernet;
-        assert_eq!(cable.changes(&wifi),vec![("网络连接".into(),"以太网 · 网络已连接".into())]);
+        assert_eq!(cable.changes(&wifi),vec![("網路連線".into(),"乙太網 · 網路已連線".into())]);
         let mut off=cable.clone();off.network=false;off.network_kind=NetworkKind::Other;
-        assert_eq!(off.changes(&cable),vec![("网络连接".into(),"以太网 · 网络已断开".into())]);
-        assert_eq!(wifi.changes(&off),vec![("网络连接".into(),"Wi-Fi · 网络已连接".into())]);
+        assert_eq!(off.changes(&cable),vec![("網路連線".into(),"乙太網 · 網路已斷開".into())]);
+        assert_eq!(wifi.changes(&off),vec![("網路連線".into(),"Wi-Fi · 網路已連線".into())]);
     }
     #[test]
     fn switching_audio_endpoints_is_not_a_volume_adjustment() {
         let old=Snapshot{volume:Some((20,false)),audio_endpoint:Some("speakers".into()),caps:false,network:true,network_kind:NetworkKind::Other};
         let mut new=old.clone();
         new.audio_endpoint=Some("headphones".into());new.volume=Some((80,false));new.caps=true;
-        assert_eq!(new.changes(&old),vec![("大写锁定".into(),"已开启".into())]);
+        assert_eq!(new.changes(&old),vec![("大寫鎖定".into(),"已開啟".into())]);
         let mut adjusted=new.clone();adjusted.volume=Some((60,false));
-        assert_eq!(adjusted.changes(&new),vec![("系统音量".into(),"音量 60%".into())]);
+        assert_eq!(adjusted.changes(&new),vec![("系統音量".into(),"音量 60%".into())]);
         adjusted.volume=Some((60,true));
-        assert_eq!(adjusted.changes(&new),vec![("系统音量".into(),"已静音".into())]);
-        assert!(!old.changes(&new).iter().any(|(title,_)|title=="系统音量"));
+        assert_eq!(adjusted.changes(&new),vec![("系統音量".into(),"已靜音".into())]);
+        assert!(!old.changes(&new).iter().any(|(title,_)|title=="系統音量"));
     }
 
     #[test]
@@ -862,7 +862,7 @@ pub(crate) fn avoidance_windows()->std::result::Result<Vec<crate::avoidance::Can
         BOOL(1)
     }
     let mut items:Vec<crate::avoidance::Candidate>=Vec::new();
-    unsafe{EnumWindows(Some(visit),LPARAM(&mut items as *mut _ as isize))}.map_err(|_|"无法读取应用列表，请刷新重试".to_string())?;
+    unsafe{EnumWindows(Some(visit),LPARAM(&mut items as *mut _ as isize))}.map_err(|_|"無法讀取應用列表，請重新整理重試".to_string())?;
     items.sort_by_key(|a|a.name.to_lowercase());
     Ok(items)
 }
@@ -890,7 +890,7 @@ mod avoidance_tests {
     #[test]
     fn avoidance_respects_master_browser_switch_and_custom_app_identity() {
         let mut settings=crate::model::Settings::default();
-        settings.avoid_apps=vec![(r"D:\Apps\Editor.exe".into(),"编辑器".into())];
+        settings.avoid_apps=vec![(r"D:\Apps\Editor.exe".into(),"編輯器".into())];
         assert!(!avoidance_matches(r"D:\Apps\Editor.exe",&settings));
         settings.browser_minimal=true;
         assert!(avoidance_matches(r"D:\Quark\quark.exe",&settings));

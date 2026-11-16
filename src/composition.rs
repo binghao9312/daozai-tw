@@ -222,7 +222,7 @@ mod tests {
 
     #[test]
     fn regression_rejected_host_backdrop_is_not_reported_as_working_blur() {
-        assert!(enable_host_backdrop(HWND::default()).is_err(),"DWM 拒绝宿主背景画刷时必须启用透明回退，不能把纯色底板当成模糊成功");
+        assert!(enable_host_backdrop(HWND::default()).is_err(),"DWM 拒絕宿主背景畫刷時必須啟用透明回退，不能把純色底板當成模糊成功");
     }
 
     #[test]
@@ -233,9 +233,9 @@ mod tests {
         match Backdrop::new() {
             Ok(backdrop)=>{
                 assert!(supported);
-                assert!(!unsafe{IsWindowVisible(backdrop.hwnd)}.as_bool(),"模糊块准备好之前不能显示矩形底板");
+                assert!(!unsafe{IsWindowVisible(backdrop.hwnd)}.as_bool(),"模糊塊準備好之前不能顯示矩形底板");
             }
-            Err(error)=>assert!(!supported,"支持宿主背景画刷时不应初始化失败：{error}"),
+            Err(error)=>assert!(!supported,"支援宿主背景畫刷時不應初始化失敗：{error}"),
         }
     }
 
@@ -247,13 +247,13 @@ mod tests {
             let mut applied = None;
             assert!(clip_to_pieces(hwnd, &[BlurPiece { x: 230.0, y: 0.0, w: 180.0, h: 34.0, radius: 12.0 }], &mut applied));
             let region = CreateRectRgn(0, 0, 0, 0);
-            assert_ne!(GetWindowRgn(hwnd, region).0, 0, "底板必须带窗口区域");
-            assert!(PtInRegion(region, 320, 17).as_bool(), "岛体下方仍要显示模糊");
-            assert!(!PtInRegion(region, 800, 150).as_bool(), "画布右侧空白处必须让给下层程序");
-            assert!(!PtInRegion(region, 320, 200).as_bool(), "岛下方空白处必须让给下层程序");
+            assert_ne!(GetWindowRgn(hwnd, region).0, 0, "底板必須帶視窗區域");
+            assert!(PtInRegion(region, 320, 17).as_bool(), "島體下方仍要顯示模糊");
+            assert!(!PtInRegion(region, 800, 150).as_bool(), "畫布右側空白處必須讓給下層程式");
+            assert!(!PtInRegion(region, 320, 200).as_bool(), "島下方空白處必須讓給下層程式");
             assert!(clip_to_pieces(hwnd, &[], &mut applied));
             GetWindowRgn(hwnd, region);
-            assert!(!PtInRegion(region, 320, 17).as_bool(), "没有模糊块时不能占任何区域");
+            assert!(!PtInRegion(region, 320, 17).as_bool(), "沒有模糊塊時不能佔任何區域");
             let _ = DeleteObject(region);
             let _ = DestroyWindow(hwnd);
         }
@@ -269,9 +269,9 @@ mod tests {
             let w = 180.0 + i as f32 * 0.5;
             if clip_to_pieces(hwnd, &[BlurPiece { x: 320.0 - w / 2.0, y: 0.0, w, h: 34.0, radius: 12.0 }], &mut applied) { resets += 1; }
         }
-        assert!(resets <= 10, "60 帧细微变化重设了 {resets} 次窗口区域");
+        assert!(resets <= 10, "60 幀細微變化重設了 {resets} 次視窗區域");
         let rects = applied.unwrap();
-        assert!(rects.iter().all(|r| r.0 % CLIP_GRID == 0 && r.2 % CLIP_GRID == 0), "区域应按网格取整");
+        assert!(rects.iter().all(|r| r.0 % CLIP_GRID == 0 && r.2 % CLIP_GRID == 0), "區域應按網格取整");
         unsafe { let _ = DestroyWindow(hwnd); }
     }
 }

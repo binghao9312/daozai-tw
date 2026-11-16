@@ -4,8 +4,8 @@ use serde_json::{json,Value};
 use std::{fs,io::ErrorKind,net::{Ipv4Addr,SocketAddr,TcpStream},sync::atomic::{AtomicBool,Ordering},time::{Duration,Instant}};
 use tungstenite::{client::client_with_config,handshake::HandshakeError,protocol::WebSocketConfig,Error,Message,WebSocket};
 
-const ERROR:&str="Chrome 授权未完成或连接已断开，请重新连接";
-const CANCEL:&str="已取消 Gemini 连接";
+const ERROR:&str="Chrome 授權未完成或連線已斷開，請重新連線";
+const CANCEL:&str="已取消 Gemini 連線";
 const MAX:usize=1024*1024;
 const EMAIL_SCRIPT:&str=r#"(()=>{if(location.origin!=='https://gemini.google.com'||!/^\/(?:u\/\d+\/)?usage\/?$/.test(location.pathname))return '';const a=document.querySelector('a[href^="https://accounts.google.com/SignOutOptions"][aria-label]')||document.querySelector('a[aria-label*="@"]');return(a?.getAttribute('aria-label')||'').match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0]||''})()"#;
 
@@ -25,7 +25,7 @@ fn check(cancel:&AtomicBool,deadline:Instant,timeout:&str)->Result<(),String>{
 struct Socket {socket:WebSocket<TcpStream>,next:u32}
 impl Socket {
     fn open(endpoint:&Endpoint,cancel:&AtomicBool,timeout:Duration)->Result<Self,String>{
-        let deadline=Instant::now()+timeout;check(cancel,deadline,"等待 Chrome 授权超时，请重新连接")?;
+        let deadline=Instant::now()+timeout;check(cancel,deadline,"等待 Chrome 授權超時，請重新連線")?;
         let stream=TcpStream::connect_timeout(&SocketAddr::from((Ipv4Addr::LOCALHOST,endpoint.port)),Duration::from_secs(2)).map_err(|_|ERROR)?;
         stream.set_nonblocking(true).map_err(|_|ERROR)?;
         let config=WebSocketConfig::default().max_message_size(Some(MAX)).max_frame_size(Some(MAX));
@@ -34,7 +34,7 @@ impl Socket {
             Ok((socket,_))=>return Ok(Self{socket,next:0}),
             Err(HandshakeError::Failure(_))=>return Err(ERROR.into()),
             Err(HandshakeError::Interrupted(pending))=>{
-                check(cancel,deadline,"等待 Chrome 授权超时，请重新连接")?;
+                check(cancel,deadline,"等待 Chrome 授權超時，請重新連線")?;
                 std::thread::sleep(Duration::from_millis(20));handshake=pending.handshake();
             }
         }}
@@ -87,30 +87,30 @@ fn cookie_header(value:&Value)->Result<String,String>{
 pub(super) fn login(address:&str,cancel:&AtomicBool)->Result<Session,String>{
     let target=if address.trim().is_empty(){None}else{Some(email(address)?)};
     let path=std::env::var_os("LOCALAPPDATA").map(std::path::PathBuf::from).ok_or(ERROR)?.join("Google/Chrome/User Data/DevToolsActivePort");
-    let endpoint=fs::read_to_string(path).ok().and_then(|raw|Endpoint::parse(&raw)).ok_or("请先打开 Chrome，并在 chrome://inspect/#remote-debugging 开启原生连接")?;
+    let endpoint=fs::read_to_string(path).ok().and_then(|raw|Endpoint::parse(&raw)).ok_or("請先開啟 Chrome，並在 chrome://inspect/#remote-debugging 開啟原生連線")?;
     login_at(&endpoint,target,cancel)
 }
 fn login_at(endpoint:&Endpoint,target:Option<String>,cancel:&AtomicBool)->Result<Session,String>{
     let mut socket=Socket::open(endpoint,cancel,Duration::from_secs(300))?;
     let result=socket.call("Target.getTargets",json!({}),None,cancel)?;
     let pages=result["targetInfos"].as_array().ok_or(ERROR)?.iter().filter(|t|t["type"]=="page"&&gemini_page(t["url"].as_str().unwrap_or_default())).collect::<Vec<_>>();
-    if pages.is_empty(){return Err("请先在 Chrome 打开 gemini.google.com/usage 并登录".into());}
-    if pages.len()>1&&target.is_none(){return Err("有多个 Gemini 用量页，请填写要连接的 Google 邮箱".into());}
+    if pages.is_empty(){return Err("請先在 Chrome 開啟 gemini.google.com/usage 並登入".into());}
+    if pages.len()>1&&target.is_none(){return Err("有多個 Gemini 用量頁，請填寫要連線的 Google 信箱".into());}
     for page in pages{
         let result=socket.call("Target.attachToTarget",json!({"targetId":page["targetId"],"flatten":true}),None,cancel)?;
         let session=result["sessionId"].as_str().ok_or(ERROR)?;
         let current=socket.identity(session,cancel)?;
         let Some(current)=current.filter(|email|target.as_ref().is_none_or(|wanted|wanted==email)) else{
-            if target.is_none(){return Err("请先在 Chrome 的 Gemini 用量页完成 Google 登录".into());}
+            if target.is_none(){return Err("請先在 Chrome 的 Gemini 用量頁完成 Google 登入".into());}
             socket.call("Target.detachFromTarget",json!({"sessionId":session}),None,cancel)?;
             continue;
         };
         let result=socket.call("Network.getCookies",json!({"urls":["https://gemini.google.com/"]}),Some(session),cancel)?;
         let header=cookie_header(&result)?;
-        if socket.identity(session,cancel)?.as_ref()!=Some(&current){return Err("Google 账号在连接期间发生切换，请重新连接".into());}
+        if socket.identity(session,cancel)?.as_ref()!=Some(&current){return Err("Google 帳號在連線期間發生切換，請重新連線".into());}
         return Ok(Session{email:current,cookie:header});
     }
-    Err("未找到此 Google 账号的 Gemini 用量页，请在 Chrome 切回原账号".into())
+    Err("未找到此 Google 帳號的 Gemini 用量頁，請在 Chrome 切回原帳號".into())
 }
 
 #[cfg(test)]
@@ -145,7 +145,7 @@ mod tests {
             let request:Value=serde_json::from_str(ws.read().unwrap().to_text().unwrap()).unwrap();assert_eq!(request["method"],"Runtime.evaluate");assert_eq!(request["sessionId"],"page-1");
             ws.send(Message::text(json!({"method":"Runtime.consoleAPICalled"}).to_string())).unwrap();
             ws.send(Message::text(json!({"id":request["id"],"sessionId":"page-1","result":{"text":"x".repeat(20000)}}).to_string())).unwrap();
-            assert!(matches!(ws.read().unwrap(),Message::Close(_)),"只能断开连接，不能关闭用户浏览器");
+            assert!(matches!(ws.read().unwrap(),Message::Close(_)),"只能斷開連線，不能關閉使用者瀏覽器");
         });
         let cancel=AtomicBool::new(false);let mut socket=Socket::open(&ep,&cancel,Duration::from_secs(2)).unwrap();
         let result=socket.call("Runtime.evaluate",json!({}),Some("page-1"),&cancel).unwrap();assert_eq!(result["text"].as_str().unwrap().len(),20000);drop(socket);task.join().unwrap();
@@ -164,7 +164,7 @@ mod tests {
                     "Target.detachFromTarget"=>{assert_eq!(req["params"]["sessionId"],"empty");detached=true;json!({})},
                     "Runtime.evaluate"=>json!({"result":{"value":if req["sessionId"]=="ready"{"me@example.com"}else{""}}}),
                     "Network.getCookies"=>{assert!(detached);assert_eq!(req["sessionId"],"ready");json!({"cookies":[{"domain":".google.com","name":"SID","value":"fixture"}]})},
-                    _=>panic!("意外的浏览器命令"),
+                    _=>panic!("意外的瀏覽器命令"),
                 };
                 let mut reply=json!({"id":req["id"],"result":result});if let Some(s)=req.get("sessionId"){reply["sessionId"]=s.clone();}
                 ws.send(Message::text(reply.to_string())).unwrap();

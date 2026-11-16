@@ -59,7 +59,7 @@ fn run_with(compat_first:bool,options:eframe::NativeOptions,mut launch:impl FnMu
         };
         daozai::renderer::set_compat_active(false);
         return launch(opengl(options)).map_err(|fallback|eframe::Error::AppCreation(format!(
-            "兼容图形后端无法启动：{error}\nOpenGL 也无法启动：{fallback}\n请安装电脑厂商提供的显卡驱动后重试。"
+            "相容圖形後端無法啟動：{error}\nOpenGL 也無法啟動：{fallback}\n請安裝電腦廠商提供的顯示卡驅動後重試。"
         ).into()));
     }
     let options=opengl(options);
@@ -71,7 +71,7 @@ fn run_with(compat_first:bool,options:eframe::NativeOptions,mut launch:impl FnMu
     };
     daozai::renderer::set_compat_active(true);
     launch_compatible(fallback_options,&mut launch).map_err(|fallback|eframe::Error::AppCreation(format!(
-        "OpenGL 初始化失败：{error}\n兼容图形后端也无法启动：{fallback}\n请安装电脑厂商提供的显卡驱动后重试。"
+        "OpenGL 初始化失敗：{error}\n相容圖形後端也無法啟動：{fallback}\n請安裝電腦廠商提供的顯示卡驅動後重試。"
     ).into()))
 }
 
@@ -89,7 +89,7 @@ mod tests {
                 return Err(eframe::Error::OpenGL("egui_glow requires OpenGL 2.0+.".to_owned().into()));
             }
             assert_eq!(options.renderer,eframe::Renderer::Wgpu);
-            let eframe::egui_wgpu::WgpuSetup::CreateNew(setup)=options.wgpu_options.wgpu_setup else{panic!("应创建兼容图形设备")};
+            let eframe::egui_wgpu::WgpuSetup::CreateNew(setup)=options.wgpu_options.wgpu_setup else{panic!("應建立相容圖形裝置")};
             assert!(!setup.instance_descriptor.backends.contains(eframe::wgpu::Backends::GL));
             Ok(())
         });
@@ -100,28 +100,28 @@ mod tests {
     fn compatible_rendering_prefers_direct3d_12_then_vulkan(){
         let mut backends=Vec::new();
         let result=launch_compatible(eframe::NativeOptions::default(),&mut |options|{
-            let eframe::egui_wgpu::WgpuSetup::CreateNew(setup)=options.wgpu_options.wgpu_setup else{panic!("应创建兼容图形设备")};
+            let eframe::egui_wgpu::WgpuSetup::CreateNew(setup)=options.wgpu_options.wgpu_setup else{panic!("應建立相容圖形裝置")};
             backends.push(setup.instance_descriptor.backends);
-            if backends.len()==1 {Err(eframe::Error::Wgpu(eframe::egui_wgpu::WgpuError::NoSuitableAdapterFound("测试".into())))} else {Ok(())}
+            if backends.len()==1 {Err(eframe::Error::Wgpu(eframe::egui_wgpu::WgpuError::NoSuitableAdapterFound("測試".into())))} else {Ok(())}
         });
         assert!(result.is_ok());
-        assert_eq!(backends,[eframe::wgpu::Backends::DX12,eframe::wgpu::Backends::VULKAN],"先 Direct3D 12，失败再 Vulkan");
+        assert_eq!(backends,[eframe::wgpu::Backends::DX12,eframe::wgpu::Backends::VULKAN],"先 Direct3D 12，失敗再 Vulkan");
     }
 
     #[test]
     fn compatible_rendering_uses_small_gpu_memory_blocks(){
         let base=eframe::wgpu::DeviceDescriptor{label:Some("egui wgpu device"),required_limits:eframe::wgpu::Limits{max_texture_dimension_2d:8192,..Default::default()},..Default::default()};
         let descriptor=small_memory_blocks(base);
-        assert!(matches!(descriptor.memory_hints,eframe::wgpu::MemoryHints::MemoryUsage),"核显上默认分块会让进程多占约 300MB");
-        assert_eq!(descriptor.required_limits.max_texture_dimension_2d,8192,"保留 egui 的其他设备要求");
-        assert_eq!(descriptor.required_limits.max_non_sampler_bindings,MAX_BINDINGS,"默认 100 万项的描述符表会多占约 61MB");
+        assert!(matches!(descriptor.memory_hints,eframe::wgpu::MemoryHints::MemoryUsage),"核顯上預設分塊會讓程序多佔約 300MB");
+        assert_eq!(descriptor.required_limits.max_texture_dimension_2d,8192,"保留 egui 的其他裝置要求");
+        assert_eq!(descriptor.required_limits.max_non_sampler_bindings,MAX_BINDINGS,"預設 100 萬項的描述符表會多佔約 61MB");
     }
 
     #[test]
     fn application_errors_do_not_restart_the_application(){
         let mut attempts=0;
         assert!(run_with(false,eframe::NativeOptions::default(),|_|{
-            attempts+=1;Err(eframe::Error::AppCreation("应用初始化失败".into()))
+            attempts+=1;Err(eframe::Error::AppCreation("應用初始化失敗".into()))
         }).is_err());
         assert_eq!(attempts,1);
     }
@@ -135,7 +135,7 @@ mod tests {
         assert_eq!(attempts,1);
     }
 
-    fn no_adapter()->eframe::Error { eframe::Error::Wgpu(eframe::egui_wgpu::WgpuError::NoSuitableAdapterFound("测试".into())) }
+    fn no_adapter()->eframe::Error { eframe::Error::Wgpu(eframe::egui_wgpu::WgpuError::NoSuitableAdapterFound("測試".into())) }
 
     #[test]
     fn requested_compat_without_any_adapter_falls_back_to_opengl(){
@@ -145,7 +145,7 @@ mod tests {
             if options.renderer==eframe::Renderer::Wgpu {Err(no_adapter())} else {Ok(())}
         });
         assert!(result.is_ok());
-        assert_eq!(renderers,[eframe::Renderer::Wgpu,eframe::Renderer::Wgpu,eframe::Renderer::Glow],"DX12、Vulkan 都没有设备时退回 OpenGL");
+        assert_eq!(renderers,[eframe::Renderer::Wgpu,eframe::Renderer::Wgpu,eframe::Renderer::Glow],"DX12、Vulkan 都沒有裝置時退回 OpenGL");
     }
 
     #[test]
@@ -158,7 +158,7 @@ mod tests {
     #[test]
     fn requested_compat_app_errors_do_not_try_opengl(){
         let mut attempts=0;
-        assert!(run_with(true,eframe::NativeOptions::default(),|_|{attempts+=1;Err(eframe::Error::AppCreation("应用初始化失败".into()))}).is_err());
+        assert!(run_with(true,eframe::NativeOptions::default(),|_|{attempts+=1;Err(eframe::Error::AppCreation("應用初始化失敗".into()))}).is_err());
         assert_eq!(attempts,1);
     }
 
@@ -167,7 +167,7 @@ mod tests {
         let error=run_with(true,eframe::NativeOptions::default(),|options|{
             if options.renderer==eframe::Renderer::Wgpu {Err(no_adapter())} else {Err(eframe::Error::OpenGL("OpenGL 2.0".to_owned().into()))}
         }).unwrap_err().to_string();
-        assert!(error.contains("测试") && error.contains("OpenGL 2.0"),"{error}");
+        assert!(error.contains("測試") && error.contains("OpenGL 2.0"),"{error}");
     }
 
     #[test]
@@ -176,9 +176,9 @@ mod tests {
         let error=run_with(false,eframe::NativeOptions::default(),|_|{
             attempts+=1;
             if attempts==1{Err(eframe::Error::OpenGL("OpenGL 2.0".to_owned().into()))}
-            else{Err(eframe::Error::AppCreation("没有可用的图形设备".into()))}
+            else{Err(eframe::Error::AppCreation("沒有可用的圖形裝置".into()))}
         }).unwrap_err().to_string();
-        assert!(error.contains("OpenGL 2.0") && error.contains("没有可用的图形设备"));
+        assert!(error.contains("OpenGL 2.0") && error.contains("沒有可用的圖形裝置"));
         assert_eq!(attempts,2);
     }
 }

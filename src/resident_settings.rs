@@ -11,9 +11,9 @@ impl crate::app::App {
         let default=if self.settings.show_battery {DEFAULT_ORDER.to_vec()}else{vec![QUOTA,PET,CLOCK,WEATHER,BATTERY,MUSIC,FOCUS]};
         let mut order=if valid_order(&self.settings.resident_order){self.settings.resident_order.clone()}else{default.clone()};
         ui.horizontal(|ui|{
-            ui.label(RichText::new("拖动岛上的图标").color(ui.visuals().text_color()));
+            ui.label(RichText::new("拖動島上的圖示").color(ui.visuals().text_color()));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center),|ui|{
-                if ui.small_button("恢复默认").clicked(){self.settings.resident_order.clear();order=default;}
+                if ui.small_button("恢復預設").clicked(){self.settings.resident_order.clear();order=default;}
             });
         });
         ui.add_space(12.0);
@@ -49,7 +49,7 @@ impl crate::app::App {
         let pointer=ui.ctx().pointer_interact_pos();
         let dragged=egui::DragAndDrop::payload::<usize>(ui.ctx());
         let mut movement=None;
-        let label=|slot|match slot{CLOCK=>"时间",BATTERY=>"电量",WEATHER=>"天气",QUOTA=>"AI 额度",MUSIC=>"音乐",FOCUS=>"专注",_=>"吉祥物"};
+        let label=|slot|match slot{CLOCK=>"時間",BATTERY=>"電量",WEATHER=>"天氣",QUOTA=>"AI 額度",MUSIC=>"音樂",FOCUS=>"專注",_=>"吉祥物"};
         for (index,&slot) in order.iter().enumerate(){
             let x=cx+layout.x[slot].unwrap();
             let width=match slot{CLOCK=>layout.widths[CLOCK],BATTERY=>20.0,WEATHER=>layout.widths[WEATHER],PET=>32.0,MUSIC=>14.0,FOCUS=>crate::focus_bar::WIDTH,_=>{
@@ -93,8 +93,8 @@ impl crate::app::App {
         if let Some((slot,index))=movement{
             if let Some(from)=order.iter().position(|value|*value==slot){order.remove(from);order.insert(index,slot);self.settings.resident_order=order;}
         }
-        ui.painter().text(Pos2::new(stage.center().x,stage.bottom()-22.0),egui::Align2::CENTER_CENTER,"按住图标左右拖动",theme::font(11.0,W::Regular),Color32::from_gray(160));
+        ui.painter().text(Pos2::new(stage.center().x,stage.bottom()-22.0),egui::Align2::CENTER_CENTER,"按住圖示左右拖動",theme::font(11.0,W::Regular),Color32::from_gray(160));
         ui.add_space(8.0);
-        ui.label(RichText::new("灰色图标为暂未显示的组件；位置会保留。").size(11.0).color(ui.visuals().weak_text_color()));
+        ui.label(RichText::new("灰色圖示為暫未顯示的元件；位置會保留。").size(11.0).color(ui.visuals().weak_text_color()));
     }
 }

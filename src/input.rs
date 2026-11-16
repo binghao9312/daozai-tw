@@ -9,8 +9,8 @@ pub struct State {
 }
 impl State {
     fn label(self)->&'static str {
-        if self.native==Some(false){return "英语";}
-        match self.layout&0x3ff {4=>"中文",9=>"英语",17=>"日语",18=>"韩语",_=>"已切换"}
+        if self.native==Some(false){return "英語";}
+        match self.layout&0x3ff {4=>"中文",9=>"英語",17=>"日語",18=>"韓語",_=>"已切換"}
     }
     #[cfg(windows)]
     pub fn read()->Option<Self>{Self::read_details(true)}
@@ -163,7 +163,7 @@ mod tests {
     #[test]
     fn shift_changes_between_chinese_and_english_without_changing_the_input_method(){
         let mut monitor=Monitor::new(Some(chinese(Some(true))));
-        assert_eq!(monitor.observe(Some(chinese(Some(false))),true),Some("英语"));
+        assert_eq!(monitor.observe(Some(chinese(Some(false))),true),Some("英語"));
         assert_eq!(monitor.observe(Some(chinese(Some(true))),true),Some("中文"));
         assert_eq!(monitor.observe(Some(chinese(Some(true))),true),None);
     }
@@ -186,13 +186,13 @@ mod tests {
         assert_eq!(monitor.observe(None,true),None);
         assert_eq!(monitor.observe(Some(State::default()),true),None);
         assert_eq!(monitor.observe(Some(chinese(None)),true),None);
-        assert_eq!(monitor.observe(Some(chinese(Some(false))),true),Some("英语"));
+        assert_eq!(monitor.observe(Some(chinese(Some(false))),true),Some("英語"));
         for _ in 0..5{assert_eq!(monitor.observe(Some(chinese(Some(false))),true),None);}
     }
     #[test]
     fn switching_to_an_english_keyboard_reports_english(){
         let mut monitor=Monitor::new(Some(chinese(Some(true))));
-        assert_eq!(monitor.observe(Some(State{context:(1,11),layout:0x04090409,profile:None,native:None}),true),Some("英语"));
+        assert_eq!(monitor.observe(Some(State{context:(1,11),layout:0x04090409,profile:None,native:None}),true),Some("英語"));
     }
     #[test]
     fn temporary_profile_read_failures_do_not_hide_the_next_profile_switch(){
@@ -204,9 +204,9 @@ mod tests {
     fn changing_app_windows_synchronizes_their_modes_without_notifying(){
         let mut monitor=Monitor::new(Some(chinese(Some(true))));
         let english_window=State{context:(2,22),native:Some(false),..chinese(Some(true))};
-        assert_eq!(monitor.observe(Some(english_window),false),None,"切换窗口不应弹出英文切换提示");
+        assert_eq!(monitor.observe(Some(english_window),false),None,"切換視窗不應彈出英文切換提示");
         for _ in 0..8{assert_eq!(monitor.observe(Some(english_window),false),None);}
-        assert_eq!(monitor.observe(Some(chinese(Some(true))),false),None,"切回中文窗口也应安静同步");
+        assert_eq!(monitor.observe(Some(chinese(Some(true))),false),None,"切回中文視窗也應安靜同步");
     }
     #[test]
     fn delayed_input_mode_restoration_after_activation_is_silent(){
@@ -215,10 +215,10 @@ mod tests {
         assert_eq!(monitor.observe(Some(window),false),None);
         assert_eq!(monitor.observe(Some(window),false),None);
         let restored=State{native:Some(false),profile:Some((3,4)),..window};
-        assert_eq!(monitor.observe(Some(restored),false),None,"窗口激活后异步恢复的输入状态不应弹提示");
+        assert_eq!(monitor.observe(Some(restored),false),None,"視窗啟用後非同步恢復的輸入狀態不應彈提示");
         for _ in 0..8{assert_eq!(monitor.observe(Some(restored),false),None);}
-        assert_eq!(monitor.observe(Some(State{native:Some(true),..restored}),true),Some("中文"),"窗口稳定后仍应识别 Shift 切换");
-        assert_eq!(monitor.observe(Some(State{native:Some(true),profile:Some((5,6)),..restored}),true),Some("中文"),"仍应识别 Ctrl+Shift 切换输入法");
+        assert_eq!(monitor.observe(Some(State{native:Some(true),..restored}),true),Some("中文"),"視窗穩定後仍應識別 Shift 切換");
+        assert_eq!(monitor.observe(Some(State{native:Some(true),profile:Some((5,6)),..restored}),true),Some("中文"),"仍應識別 Ctrl+Shift 切換輸入法");
     }
     #[test]
     fn changing_focused_controls_does_not_reuse_another_controls_mode(){
@@ -229,7 +229,7 @@ mod tests {
     fn opening_a_video_without_keys_does_not_report_an_automatic_mode_reset(){
         let mut monitor=Monitor::new(Some(chinese(Some(true))));
         for _ in 0..20{assert_eq!(monitor.observe(Some(chinese(Some(true))),false),None);}
-        assert_eq!(monitor.observe(Some(chinese(Some(false))),false),None,"没有切换按键时，同一窗口内的自动输入状态变化也应静默");
+        assert_eq!(monitor.observe(Some(chinese(Some(false))),false),None,"沒有切換按鍵時，同一視窗內的自動輸入狀態變化也應靜默");
         assert_eq!(monitor.observe(Some(chinese(Some(true))),false),None);
     }
     #[test]
@@ -244,12 +244,12 @@ mod tests {
         let now=Instant::now();let context=(1,11);
         let mut keys=SwitchKeys::default();let mut monitor=Monitor::new(Some(chinese(Some(true))));
         keys.key(0xa0,true,context,now);
-        assert_eq!(monitor.observe(Some(chinese(Some(true))),keys.allows(context,now)),None,"只按按键、输入状态未变时不提示");
+        assert_eq!(monitor.observe(Some(chinese(Some(true))),keys.allows(context,now)),None,"只按按鍵、輸入狀態未變時不提示");
         keys.key(0xa0,false,context,now);
-        assert_eq!(monitor.observe(Some(chinese(Some(false))),keys.allows(context,now)),Some("英语"));
+        assert_eq!(monitor.observe(Some(chinese(Some(false))),keys.allows(context,now)),Some("英語"));
         keys.clear();
         keys.key(0xa0,false,context,now);
-        assert_eq!(monitor.observe(Some(chinese(Some(true))),keys.allows(context,now)),None,"一个切换动作只能用于一次提示");
+        assert_eq!(monitor.observe(Some(chinese(Some(true))),keys.allows(context,now)),None,"一個切換動作只能用於一次提示");
     }
     #[test]
     fn input_shortcuts_are_detected_in_both_modifier_orders(){
@@ -257,7 +257,7 @@ mod tests {
         for (first,second) in [(0xa2,0xa0),(0xa0,0xa2),(0xa4,0xa0),(0x5b,0x20)]{
             let mut keys=SwitchKeys::default();
             keys.key(first,true,context,now);keys.key(second,true,context,now);
-            assert!(keys.allows(context,now),"应捕获输入法切换组合键");
+            assert!(keys.allows(context,now),"應捕獲輸入法切換組合鍵");
         }
     }
     #[test]
@@ -266,12 +266,12 @@ mod tests {
         for first in [0xa0,0xa4,0xa2]{
             let mut keys=SwitchKeys::default();
             keys.key(first,true,context,now);keys.key(0x41,true,context,now);keys.key(0x41,false,context,now);keys.key(first,false,context,now);
-            assert!(!keys.allows(context,now),"普通组合键不能触发输入切换提示");
+            assert!(!keys.allows(context,now),"普通組合鍵不能觸發輸入切換提示");
         }
         let mut keys=SwitchKeys::default();
         keys.key(0xa2,true,context,now);keys.key(0xa0,true,context,now);keys.key(0x4e,true,context,now);
         keys.key(0xa0,false,context,now);keys.key(0xa2,false,context,now);
-        assert!(!keys.allows(context,now),"Ctrl+Shift+字母也不能视为输入法切换");
+        assert!(!keys.allows(context,now),"Ctrl+Shift+字母也不能視為輸入法切換");
     }
     #[test]
     fn expired_or_different_window_shortcuts_do_not_authorize_automatic_changes(){
@@ -281,18 +281,18 @@ mod tests {
         keys.key(0xa0,true,context,now);keys.key(0xa0,false,context,now);
         assert!(!keys.allows((2,22),now));assert!(!keys.allows(context,now));
         keys.key(0xa0,true,context,now);keys.key(0xa0,false,(2,22),now);
-        assert!(!keys.allows((2,22),now),"切换窗口后释放旧窗口按键不能重新触发提示");
+        assert!(!keys.allows((2,22),now),"切換視窗後釋放舊視窗按鍵不能重新觸發提示");
     }
     #[cfg(windows)]
     #[test]
     fn input_shortcut_listener_can_install_and_remove(){
-        let listener=Shortcuts::start().expect("应能注册输入切换按键监听");
+        let listener=Shortcuts::start().expect("應能註冊輸入切換按鍵監聽");
         assert!(!listener.allows((1,11)));
         drop(listener);
     }
     #[cfg(windows)]
     #[test]
-    #[ignore="按需核对前台输入法的实际状态，不发送按键或修改输入法设置"]
+    #[ignore="按需核對前臺輸入法的實際狀態，不傳送按鍵或修改輸入法設定"]
     fn live_input_state_probe(){
         for _ in 0..12{
             let start=std::time::Instant::now();

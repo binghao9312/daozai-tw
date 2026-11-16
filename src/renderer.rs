@@ -36,7 +36,7 @@ pub fn apply_pending_fallback() -> Option<String> {
     if settings.render_compat { return None; }
     let when = chrono::Local::now().format("%m-%d %H:%M");
     settings.render_compat = true;
-    settings.render_compat_reason = format!("{when} 显卡的 OpenGL 驱动（{module}）崩溃，已自动切换");
+    settings.render_compat_reason = format!("{when} 顯示卡的 OpenGL 驅動（{module}）崩潰，已自動切換");
     settings.save();
     Some(settings.render_compat_reason)
 }
@@ -61,13 +61,13 @@ mod tests {
         let _g = crate::ui_tests::ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let dir = std::env::temp_dir().join(format!("daozai-renderer-{}", std::process::id()));
         std::env::set_var("DAOZAI_DATA_DIR", &dir);
-        assert!(apply_pending_fallback().is_none(), "没有标记时不改动设置");
+        assert!(apply_pending_fallback().is_none(), "沒有標記時不改動設定");
         request_fallback("igxelpicd64.dll");
-        let reason = apply_pending_fallback().expect("有标记时打开兼容渲染");
+        let reason = apply_pending_fallback().expect("有標記時開啟相容渲染");
         assert!(reason.contains("igxelpicd64.dll"));
         let settings = crate::model::Settings::load();
         assert!(settings.render_compat && settings.render_compat_reason == reason);
-        assert!(apply_pending_fallback().is_none() && !marker().exists(), "标记只生效一次");
+        assert!(apply_pending_fallback().is_none() && !marker().exists(), "標記只生效一次");
         std::env::remove_var("DAOZAI_DATA_DIR");
         let _ = std::fs::remove_dir_all(dir);
     }

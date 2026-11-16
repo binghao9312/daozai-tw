@@ -61,7 +61,7 @@ impl App {
         }
 
         if !has {
-            c.text(121.0,47.0,"暂无音乐",14.0,W::Bold,theme::WHITE,H::Left);
+            c.text(121.0,47.0,"暫無音樂",14.0,W::Bold,theme::WHITE,H::Left);
         } else {
             let text_x=if with_lyrics {99.0}else{121.0};
             let text_width=if with_lyrics {123.0}else{220.0};
@@ -127,7 +127,7 @@ impl App {
             (response,c.scaled(x,y,1.0-0.1*pressed))
         };
         let (lyrics_button,lyrics_card)=btn(74.0,26.0,"m-lyr");
-        lyrics_card.text(74.0,y+5.0,"词",14.0,W::Semibold,if !has {ic}else if self.show_lyrics {theme::WHITE}else{theme::GRAY},H::Center);
+        lyrics_card.text(74.0,y+5.0,"詞",14.0,W::Semibold,if !has {ic}else if self.show_lyrics {theme::WHITE}else{theme::GRAY},H::Center);
         let (previous,previous_card)=btn(162.0,30.0,"m-prev");
         paint::skip(&previous_card,162.0,y,-1.0,ic);
         let (play,play_card)=btn(210.5,30.0,"m-play");
@@ -137,7 +137,7 @@ impl App {
         let (volume_button,volume_card)=btn(367.0,26.0,"m-volume");
         let (volume,muted)=self.music_volume_ui.unwrap_or((0,false));
         paint::speaker(&volume_card,367.0,y,muted,if self.music_volume_ui.is_some(){ic}else{theme::GRAY});
-        let hint=if self.music_volume_ui.is_some(){format!("音乐应用音量 {volume}%{} · 点击展开 · 滚轮调节",if muted{"（已静音）"}else{""})}else{"暂无可调节的音乐音频会话".into()};
+        let hint=if self.music_volume_ui.is_some(){format!("音樂應用音量 {volume}%{} · 點選展開 · 滾輪調節",if muted{"（已靜音）"}else{""})}else{"暫無可調節的音樂音訊會話".into()};
         let volume_button=volume_button.on_hover_text(hint);
         if c.live && has && self.music_volume_ui.is_some() {
             if volume_button.clicked(){self.music_volume_open=!self.music_volume_open;}
@@ -153,7 +153,7 @@ impl App {
             if play.clicked() {cmds.push(Cmd::Media(Transport::Toggle));}
             if next.clicked() {self.music_restart_at=Some(self.t);self.music_seek_ui=None;cmds.push(Cmd::Media(Transport::Next));}
         }
-        if lyrics_button.on_hover_text(if self.show_lyrics {"隐藏歌词"}else{"显示歌词"}).clicked() {
+        if lyrics_button.on_hover_text(if self.show_lyrics {"隱藏歌詞"}else{"顯示歌詞"}).clicked() {
             if !has {self.say("先放一首歌吧");}
             else {
                 self.show_lyrics=!self.show_lyrics;
@@ -164,8 +164,8 @@ impl App {
         // 岛上歌词是横向的，只在顶部停靠时提供。
         if has && !self.side() {
             let (button,button_card)=capsule(c,279.0,108.0,68.0,20.0,"m-island-lyrics",if self.settings.island_lyrics {Color32::from_gray(39)}else{Color32::from_gray(22)},Color32::from_gray(47));
-            button_card.text(313.0,122.0,"岛上歌词",10.0,W::Semibold,if self.settings.island_lyrics {theme::WHITE}else{theme::GRAY},H::Center);
-            if button.on_hover_text(if self.settings.island_lyrics {"关闭收起时的歌词"}else{"收起时显示当前歌词"}).clicked() {
+            button_card.text(313.0,122.0,"島上歌詞",10.0,W::Semibold,if self.settings.island_lyrics {theme::WHITE}else{theme::GRAY},H::Center);
+            if button.on_hover_text(if self.settings.island_lyrics {"關閉收起時的歌詞"}else{"收起時顯示當前歌詞"}).clicked() {
                 self.settings.island_lyrics=!self.settings.island_lyrics;
                 self.settings.save();
             }
@@ -208,7 +208,7 @@ impl App {
             let delta=ctx.input(|i|i.raw_scroll_delta.y);
             if delta.abs()>0.5{command=Some(Transport::SetVolume((volume as f32+delta/120.0*4.0).round().clamp(0.0,100.0) as u32));}
         }
-        let mute=popup.hit(353.0,82.0,28.0,20.0,"m-volume-mute").on_hover_text(if muted{"恢复音乐音量"}else{"静音音乐，保留当前音量"});
+        let mute=popup.hit(353.0,82.0,28.0,20.0,"m-volume-mute").on_hover_text(if muted{"恢復音樂音量"}else{"靜音音樂，保留當前音量"});
         let (hover,press)=popup.hover_t(&mute);
         if popup.live && mute.clicked(){command=Some(Transport::SetMute(!muted));}
         if let Some(command)=command {self.change_music_volume(command,cmds);}
@@ -220,7 +220,7 @@ impl App {
         if volume>0 {popup.fill(364.5,head,5.0,(75.0-head).max(2.5),2.5,ink);}
         popup.circle(367.0,head,if track.dragged(){5.5}else{4.5},ink);
         popup.fill(353.0,82.0,28.0,20.0,6.0,paint::mix(theme::BTN,theme::BTN_HOVER,if muted{1.0}else{hover}));
-        popup.scaled(367.0,92.0,1.0-0.06*press).centered_text(367.0,92.0,if muted{"恢复"}else{"静音"},9.5,W::Semibold,theme::WHITE,H::Center);
+        popup.scaled(367.0,92.0,1.0-0.06*press).centered_text(367.0,92.0,if muted{"恢復"}else{"靜音"},9.5,W::Semibold,theme::WHITE,H::Center);
     }
 
     fn draw_music_lyrics(&mut self,c:&Card) {
@@ -249,22 +249,22 @@ impl App {
                 let y=64.0+distance*29.0-galley.size().y/(2.0*c.s);
                 row.painter.galley(row.pos(246.0,y),galley,ink);
             }
-            if !lyrics.synced {col.text(246.0,39.0,"文本歌词",8.0,W::Regular,theme::GRAY,H::Left);}
+            if !lyrics.synced {col.text(246.0,39.0,"文字歌詞",8.0,W::Regular,theme::GRAY,H::Left);}
         } else {
-            let status=if self.ly.loading {"正在查找歌词…"}else if let Some(error)=&self.ly.error {error.label()}else{"暂无歌词"};
+            let status=if self.ly.loading {"正在查詢歌詞…"}else if let Some(error)=&self.ly.error {error.label()}else{"暫無歌詞"};
             let galley=col.painter.layout(status.into(),col.font(10.0,W::Regular),theme::GRAY,130.0*c.s);
             col.painter.galley(col.pos(246.0,61.0-galley.size().y/(2.0*c.s)),galley,theme::GRAY);
             if self.ly.error.is_some() {
-                col.text(246.0,87.0,"点击重试",9.0,W::Regular,theme::GRAY,H::Left);
-                if c.hit(243.0,28.0,136.0,74.0,"lyrics-retry").on_hover_text("重新查询当前歌曲的歌词").clicked(){self.ly.key.clear();self.ly.manual_retry=true;}
+                col.text(246.0,87.0,"點選重試",9.0,W::Regular,theme::GRAY,H::Left);
+                if c.hit(243.0,28.0,136.0,74.0,"lyrics-retry").on_hover_text("重新查詢當前歌曲的歌詞").clicked(){self.ly.key.clear();self.ly.manual_retry=true;}
             }
         }
     }
 
     // ================= 专注（番茄钟） =================
     pub(crate) fn page_focus(&mut self, c: &Card, _env: &Env) {
-        if c.hit(90.0,8.0,42.0,21.0,"focus-settings").on_hover_text("专注设置").clicked(){self.open_settings_category(2);}
-        c.text(111.0,23.0,"设置",10.5,W::Regular,theme::GRAY,H::Center);
+        if c.hit(90.0,8.0,42.0,21.0,"focus-settings").on_hover_text("專注設定").clicked(){self.open_settings_category(2);}
+        c.text(111.0,23.0,"設定",10.5,W::Regular,theme::GRAY,H::Center);
         let (rx, ry, rr) = (79.0, 74.0, 32.0);
         let frac = self.ring_shown.pos.clamp(0.0, 1.0);
         let run = c.ui.ctx().animate_bool_with_time(egui::Id::new("pomo-run"), self.pomo.running, 0.3);
@@ -313,7 +313,7 @@ impl App {
             self.reset_spin.target += TAU;
         }
 
-        for (phase,label,x,width,id) in [(Phase::Focus,"专注",148.0,88.0,"f-focus"),(Phase::Rest,"休息",292.0,88.0,"f-rest")] {
+        for (phase,label,x,width,id) in [(Phase::Focus,"專注",148.0,88.0,"f-focus"),(Phase::Rest,"休息",292.0,88.0,"f-rest")] {
             let selected=self.pomo.phase==phase;
             let accent=if phase==Phase::Focus{theme::RED_TOP}else{theme::SOFT_GREEN};
             let background=if selected{mix(theme::BTN,accent,0.22)}else{theme::BTN};
@@ -323,7 +323,7 @@ impl App {
         }
         let (b2, c2) = capsule(c, 246.0, 94.0, 36.0, 25.0, "f-start", theme::RED, Color32::from_rgb(255, 82, 98));
         paint::play_pause(&c2, 264.0, 106.5, 11.0, run, theme::WHITE);
-        let b2=b2.on_hover_text(if self.pomo.running{"暂停计时"}else{"开始计时"});
+        let b2=b2.on_hover_text(if self.pomo.running{"暫停計時"}else{"開始計時"});
         if b2.clicked() {
             if self.pomo.remaining <= 0.0 {
                 self.pomo.remaining = self.phase_secs(self.pomo.phase);
@@ -360,8 +360,8 @@ impl App {
         let sit = self.sit_mode;
         let sw = c.hit(160.0, 35.0, 38.0, 22.0, "w-remind")
             .on_hover_text(match (sit, if sit { self.settings.sit_remind } else { self.water.remind }) {
-                (false, true) => "关闭喝水提醒", (false, false) => "打开喝水提醒",
-                (true, true) => "关闭久坐提醒", (true, false) => "打开久坐提醒",
+                (false, true) => "關閉喝水提醒", (false, false) => "開啟喝水提醒",
+                (true, true) => "關閉久坐提醒", (true, false) => "開啟久坐提醒",
             });
         let (sh, _) = c.hover_t(&sw);
         let on = lerp(self.remind_t.pos, self.sit_t.pos, sv);
@@ -377,18 +377,18 @@ impl App {
                 self.settings.sit_remind = !self.settings.sit_remind;
                 self.settings.save();
                 self.confirm_health_reminder(crate::extras::HealthReminder::Sit);
-                self.say(if self.settings.sit_remind { "久坐提醒已打开" } else { "久坐提醒已关闭" });
+                self.say(if self.settings.sit_remind { "久坐提醒已開啟" } else { "久坐提醒已關閉" });
             } else {
                 self.water.remind = !self.water.remind;
                 self.water.save();
                 self.confirm_health_reminder(crate::extras::HealthReminder::Water);
-                self.say(if self.water.remind { "喝水提醒已打开" } else { "喝水提醒已关闭" });
+                self.say(if self.water.remind { "喝水提醒已開啟" } else { "喝水提醒已關閉" });
             }
         }
 
         let (s, sc) = capsule(c, 111.0, 98.0, 66.0, 25.0, "w-set", theme::BTN, theme::BTN_HOVER);
         paint::sliders(&sc, 126.0, 110.5, theme::WHITE);
-        sc.text(149.0, 114.0, "设置", size::BODY, W::Regular, theme::WHITE, H::Center);
+        sc.text(149.0, 114.0, "設定", size::BODY, W::Regular, theme::WHITE, H::Center);
         if s.clicked() { self.open_settings_category(1); }
         c.fill(208.0, 36.0, 1.0, 86.0, 0.5, Color32::from_rgb(30, 30, 33));
 
@@ -448,9 +448,9 @@ impl App {
         x += c.text(x, 77.0, "今天 · ", size::SMALL, W::Regular, theme::GRAY, H::Left);
         x += c.text(x, 77.0, &format!("{pct:.0}%"), size::SMALL, W::Bold, theme::BLUE, H::Left);
         if pending {
-            c.text(x,77.0," · 待确认",size::SMALL,W::Regular,theme::BLUE,H::Left);
+            c.text(x,77.0," · 待確認",size::SMALL,W::Regular,theme::BLUE,H::Left);
         } else if self.water.percent()>=100.0 {
-            c.text(x,77.0," · 已达标",size::SMALL,W::Regular,theme::GRAY,H::Left);
+            c.text(x,77.0," · 已達標",size::SMALL,W::Regular,theme::GRAY,H::Left);
         } else if self.water.remind && self.lunch_now(env) {
             c.text(x, 77.0, " · 午休中", size::SMALL, W::Regular, theme::GRAY, H::Left);
         } else if self.water.remind && self.water_hours(env.hour() as u32) {
@@ -467,12 +467,12 @@ impl App {
         dc.text(65.0, 114.0, "喝一口", size::BODY, W::Semibold, Color32::from_rgb(220, 236, 255), H::Left);
         if d.clicked() { self.drink_water(); }
         if self.last_drink.is_some() {
-            c.text(191.0,114.0,"撤销",10.5,W::Regular,theme::GRAY,H::Center);
-            if c.hit(177.0,98.0,28.0,25.0,"water-undo").on_hover_text("撤销最近一次饮水记录").clicked() {
+            c.text(191.0,114.0,"撤銷",10.5,W::Regular,theme::GRAY,H::Center);
+            if c.hit(177.0,98.0,28.0,25.0,"water-undo").on_hover_text("撤銷最近一次飲水記錄").clicked() {
                 if let Some((ml,hour))=self.last_drink.take() {
                     self.water.drunk_ml=self.water.drunk_ml.saturating_sub(ml);
                     self.water.hours[hour]=self.water.hours[hour].saturating_sub(ml);
-                    self.water.save(); self.say("已撤销这次记录");
+                    self.water.save(); self.say("已撤銷這次記錄");
                 }
             }
         }
@@ -524,25 +524,25 @@ impl App {
         let fill = theme::SIT_GREEN;
 
         if pending {
-            c.text(44.0, 59.0, "待活动", 24.0, W::Bold, fill, H::Left);
+            c.text(44.0, 59.0, "待活動", 24.0, W::Bold, fill, H::Left);
         } else if counting {
             let ww = c.text(44.0, 61.0, &left.to_string(), size::HERO, W::Bold, theme::WHITE, H::Left);
-            c.text(44.0 + ww + 5.0, 60.0, "分钟后提醒", 11.0, W::Semibold, theme::GRAY, H::Left);
+            c.text(44.0 + ww + 5.0, 60.0, "分鐘後提醒", 11.0, W::Semibold, theme::GRAY, H::Left);
         } else {
-            c.text(44.0,59.0,if on{"等待提醒"}else{"已关闭"},24.0,W::Bold,theme::GRAY,H::Left);
+            c.text(44.0,59.0,if on{"等待提醒"}else{"已關閉"},24.0,W::Bold,theme::GRAY,H::Left);
         }
 
         // 已坐 25 分钟 · 10:45 提醒
-        let tail = if pending { "确认提醒或起身后重新计时".to_string() }
-            else if !on { "久坐提醒已关闭".to_string() }
+        let tail = if pending { "確認提醒或起身後重新計時".to_string() }
+            else if !on { "久坐提醒已關閉".to_string() }
             else if lunch { "午休中不提醒".to_string() }
             else if !in_hours { format!("{:02}:00–{:02}:00 外不提醒", self.settings.water_start, self.settings.water_end) }
-            else if !counting && focusing { "专注结束后再提醒".to_string() }
+            else if !counting && focusing { "專注結束後再提醒".to_string() }
             else { format!("{} 提醒", Self::clock_after(env, self.sit_due() - self.t)) };
         let mut x = 44.0;
         if !pending && counting {
             x += c.text(x, 77.0, "已坐 ", size::SMALL, W::Regular, theme::GRAY, H::Left);
-            x += c.text(x, 77.0, &format!("{sat} 分钟"), size::SMALL, W::Bold, fill, H::Left);
+            x += c.text(x, 77.0, &format!("{sat} 分鐘"), size::SMALL, W::Bold, fill, H::Left);
             x += c.text(x,77.0," · ",size::SMALL,W::Regular,theme::GRAY,H::Left);
         }
         c.text(x, 77.0, &tail, size::SMALL, W::Regular, theme::GRAY, H::Left);
@@ -554,13 +554,13 @@ impl App {
         let (b, bc) = capsule(c, 43.0, 98.0, 62.0, 25.0, "sit-stand", Color32::from_rgb(24, 84, 52), Color32::from_rgb(30, 104, 64));
         paint::chair(&bc, 55.5, 110.5, 0.36, Color32::from_rgb(150, 230, 180));
         bc.text(64.0, 114.0, "起身了", size::BODY, W::Semibold, Color32::from_rgb(220, 244, 228), H::Left);
-        if b.on_hover_text("确认已起身，重新计时").clicked() { self.stood_up(); }
+        if b.on_hover_text("確認已起身，重新計時").clicked() { self.stood_up(); }
 
         // 右侧：与喝水同一个环，环心是椅子。
         Self::progress_ring(c, 292.0, 78.0, 33.0, 6.0, frac, Color32::from_rgb(16, 48, 32), if on { fill } else { Color32::from_gray(90) });
-        let (label, ink) = if !on { ("已关", theme::GRAY) }
-            else if pending { ("动一动", fill) }
-            else { ("坐着", Color32::from_gray(217)) };
+        let (label, ink) = if !on { ("已關", theme::GRAY) }
+            else if pending { ("動一動", fill) }
+            else { ("坐著", Color32::from_gray(217)) };
         paint::chair(c, 292.0, 76.0, 0.75, if !on { theme::GRAY } else if pending { fill } else { theme::WHITE });
         c.text(292.0, 101.0, label, 10.5, W::Semibold, ink, H::Center);
     }
@@ -624,7 +624,7 @@ impl App {
     /// 标题旁的「文件 | 剪贴板」分栏，返回分栏右边缘。
     /// 页面标题处的「置物架 | 剪贴板」分栏，返回分栏右边缘。
     fn shelf_tabs(&mut self, c: &Card, x: f32) -> f32 {
-        let labels = ["置物架", "剪贴板"];
+        let labels = ["置物架", "剪貼簿"];
         let font = 12.0;
         let widths: Vec<f32> = labels.iter().map(|l| c.text_w(l, font, W::Bold) + 14.0).collect();
         let total = widths.iter().sum::<f32>() + 4.0;
@@ -660,22 +660,22 @@ impl App {
             self.page_clipboard(c, env, cmds);
             return;
         }
-        c.text(344.0,23.0,"添加",size::SMALL,W::Regular,theme::GRAY,H::Right);
-        if c.hit(311.0,8.0,38.0,22.0,"shelf-add").on_hover_text("从电脑选择文件").clicked(){cmds.push(Cmd::AddFiles);}
-        if n>5 {c.text(209.5,121.0,&format!("{}–{} / {n} · 滚轮查看",self.shelf_first+1,(self.shelf_first+5).min(n)),10.5,W::Regular,theme::DIM,H::Center);}
+        c.text(344.0,23.0,"新增",size::SMALL,W::Regular,theme::GRAY,H::Right);
+        if c.hit(311.0,8.0,38.0,22.0,"shelf-add").on_hover_text("從電腦選擇檔案").clicked(){cmds.push(Cmd::AddFiles);}
+        if n>5 {c.text(209.5,121.0,&format!("{}–{} / {n} · 滾輪檢視",self.shelf_first+1,(self.shelf_first+5).min(n)),10.5,W::Regular,theme::DIM,H::Center);}
 
         if n > 0 {
             // 「添加」左边的「清空」：第一次点变红，3 秒内再点才真正清空。
             // 「确认」与「清空」同宽，不会挤到顶栏时间。
             let confirming = self.confirm_clear.is_some();
-            let label = if confirming { "确认" } else { "清空" };
+            let label = if confirming { "確認" } else { "清空" };
             let lw = c.text_w("清空", size::SMALL, W::Regular) + 16.0;
             let base = if confirming { Color32::from_rgb(120, 28, 36) } else { theme::BTN };
             let hover = if confirming { Color32::from_rgb(150, 34, 44) } else { theme::BTN_HOVER };
             // 放在右下角：顶栏中间是日期时间，宽度随 12 小时制等设置变化。
             let (x, y) = (377.0 - lw, 109.0);
             let (r, bc) = capsule(&c.faded(1.0 - drag), x, y, lw, 17.0, "shelf-clear", base, hover);
-            let r = if confirming { r.on_hover_text("再点一次清空置物架（文件本身不动）") } else { r.on_hover_text("清空置物架") };
+            let r = if confirming { r.on_hover_text("再點一次清空置物架（檔案本身不動）") } else { r.on_hover_text("清空置物架") };
             bc.text(x + lw / 2.0, y + 12.0, label, size::SMALL, W::Regular, theme::WHITE, H::Center);
             if r.clicked() {
                 if confirming {
@@ -685,7 +685,7 @@ impl App {
                     self.shelf_x.clear();
                     self.shelf_first = 0;
                     self.confirm_clear = None;
-                    self.say("置物架已清空（文件本身没动）");
+                    self.say("置物架已清空（檔案本身沒動）");
                 } else {
                     self.confirm_clear = Some(self.t);
                 }
@@ -699,8 +699,8 @@ impl App {
                 let ec = body.faded(a);
                 ec.dashed(42.0, 32.0, 335.0, 91.0, 12.0, 1.2, Color32::from_gray(70), 0.0);
                 paint::tray(&ec, 209.5, 60.0, 28.0, 0.0, Color32::from_gray(200), Color32::from_gray(80));
-                ec.text(209.5, 93.0, "把文件拖到这儿", 12.0, W::Semibold, theme::WHITE, H::Center);
-                ec.text(209.5, 108.0, "只记位置，不复制文件 · 点一下打开", size::TINY, W::Regular, theme::GRAY, H::Center);
+                ec.text(209.5, 93.0, "把檔案拖到這兒", 12.0, W::Semibold, theme::WHITE, H::Center);
+                ec.text(209.5, 108.0, "只記位置，不復制檔案 · 點一下開啟", size::TINY, W::Regular, theme::GRAY, H::Center);
             }
         } else {
             self.shelf_row(&body, cmds);
@@ -762,16 +762,16 @@ impl App {
             remove_card.circle(x+23.5,39.0,7.5,Color32::from_rgb(55,40,46));
             paint::close(&remove_card,x+23.5,39.0,2.4,theme::WHITE);
             let mut delete=remove.clicked();
-            if show_hint {remove.on_hover_text("从置物架移除，保留原文件");}
+            if show_hint {remove.on_hover_text("從置物架移除，保留原檔案");}
             r.context_menu(|ui|{
-                if ui.button("打开").clicked(){if p.exists(){cmds.push(Cmd::Open(p.clone()));}ui.close_menu();}
-                if ui.button("在文件夹中显示").clicked(){cmds.push(Cmd::Reveal(p.clone()));ui.close_menu();}
-                if ui.button("复制完整路径").clicked(){cmds.push(Cmd::Copy(p.display().to_string()));ui.close_menu();}
-                if ui.button("从置物架移除").clicked(){delete=true;ui.close_menu();}
+                if ui.button("開啟").clicked(){if p.exists(){cmds.push(Cmd::Open(p.clone()));}ui.close_menu();}
+                if ui.button("在資料夾中顯示").clicked(){cmds.push(Cmd::Reveal(p.clone()));ui.close_menu();}
+                if ui.button("複製完整路徑").clicked(){cmds.push(Cmd::Copy(p.display().to_string()));ui.close_menu();}
+                if ui.button("從置物架移除").clicked(){delete=true;ui.close_menu();}
                 self.shelf_menu_rect=Some(egui::Frame::menu(ui.style()).widget_rect(ui.min_rect()));
             });
             if delete { self.shelf.remove(p); self.icons.remove(p); self.shelf_x.remove(p); self.shelf_born.remove(p); self.shelf_first=self.shelf_first.min(self.shelf.items.len().saturating_sub(5)); }
-            else if r.clicked() { if p.exists(){cmds.push(Cmd::Open(p.clone()));} else {self.say("文件已移动或删除，可从置物架移除");} }
+            else if r.clicked() { if p.exists(){cmds.push(Cmd::Open(p.clone()));} else {self.say("檔案已移動或刪除，可從置物架移除");} }
         }
     }
 
@@ -779,10 +779,10 @@ impl App {
     fn page_clipboard(&mut self, c: &Card, _env: &Env, _cmds: &mut Vec<Cmd>) {
         if !self.settings.clipboard_history {
             c.dashed(42.0, 32.0, 335.0, 91.0, 12.0, 1.2, Color32::from_gray(70), 0.0);
-            c.text(209.5, 66.0, "剪贴板记录已关闭", 12.0, W::Semibold, theme::WHITE, H::Center);
-            c.text(209.5, 82.0, "开启后，最近复制的文字会出现在这里", size::TINY, W::Regular, theme::GRAY, H::Center);
+            c.text(209.5, 66.0, "剪貼簿記錄已關閉", 12.0, W::Semibold, theme::WHITE, H::Center);
+            c.text(209.5, 82.0, "開啟後，最近複製的文字會出現在這裡", size::TINY, W::Regular, theme::GRAY, H::Center);
             let (r, bc) = capsule(c, 179.5, 92.0, 60.0, 20.0, "clip-enable", theme::BTN, theme::BTN_HOVER);
-            bc.centered_text(209.5, 102.0, "开启", size::SMALL, W::Semibold, theme::WHITE, H::Center);
+            bc.centered_text(209.5, 102.0, "開啟", size::SMALL, W::Semibold, theme::WHITE, H::Center);
             if r.clicked() { self.settings.clipboard_history = true; self.clipboard.set_enabled(true); self.settings.save(); }
             return;
         }
@@ -795,20 +795,20 @@ impl App {
         if recent > 0 {
             let confirming = self.clip_confirm_clear.is_some_and(|at| self.t - at < 3.0);
             if !confirming { self.clip_confirm_clear = None; }
-            let label = if confirming { "确认" } else { "清空" };
+            let label = if confirming { "確認" } else { "清空" };
             let lw = c.text_w("清空", size::SMALL, W::Regular) + 16.0;
             let base = if confirming { Color32::from_rgb(120, 28, 36) } else { theme::BTN };
             let hover = if confirming { Color32::from_rgb(150, 34, 44) } else { theme::BTN_HOVER };
             let x = 351.0 - lw;
             let (r, bc) = capsule(c, x, 11.5, lw, 17.0, "clip-clear", base, hover);
             bc.text(x + lw / 2.0, 23.5, label, size::SMALL, W::Regular, theme::WHITE, H::Center);
-            let r = r.on_hover_text(if confirming { "再点一次清空未固定的记录" } else { "清空未固定的记录" });
+            let r = r.on_hover_text(if confirming { "再點一次清空未固定的記錄" } else { "清空未固定的記錄" });
             if r.clicked() {
                 if confirming {
                     self.clipboard.lock().clear_recent();
                     self.clip_first = 0;
                     self.clip_confirm_clear = None;
-                    self.say("剪贴板记录已清空（固定的保留）");
+                    self.say("剪貼簿記錄已清空（固定的保留）");
                 } else {
                     self.clip_confirm_clear = Some(self.t);
                 }
@@ -818,8 +818,8 @@ impl App {
         if n == 0 {
             c.dashed(42.0, 32.0, 335.0, 91.0, 12.0, 1.2, Color32::from_gray(70), 0.0);
             paint::clipboard_glyph(c, 209.5, 58.0, 22.0, Color32::from_gray(200), Color32::from_gray(80));
-            c.text(209.5, 93.0, "复制的文字会出现在这里", 12.0, W::Semibold, theme::WHITE, H::Center);
-            c.text(209.5, 108.0, "记录保存在本机，重新打开仍可查看", size::TINY, W::Regular, theme::GRAY, H::Center);
+            c.text(209.5, 93.0, "複製的文字會出現在這裡", 12.0, W::Semibold, theme::WHITE, H::Center);
+            c.text(209.5, 108.0, "記錄儲存在本機，重新開啟仍可檢視", size::TINY, W::Regular, theme::GRAY, H::Center);
             return;
         }
 
@@ -849,10 +849,10 @@ impl App {
             c.text(68.0, y + 3.8, &text, size::BODY, W::Regular, Color32::from_gray(235), H::Left);
             c.text(318.0, y + 3.5, &clip.at, size::TINY, W::Regular, theme::DIM, H::Right);
             let tip: String = clip.text.chars().take(400).collect();
-            let r = r.on_hover_text(format!("{tip}{}\n点击复制", if clip.text.chars().count() > 400 { "…" } else { "" }));
-            let pin = c.hit(323.0, y - 9.0, 18.0, 18.0, ("clip-pin", index)).on_hover_text(if clip.pinned { "取消固定" } else { "固定（清空时保留）" });
+            let r = r.on_hover_text(format!("{tip}{}\n點選複製", if clip.text.chars().count() > 400 { "…" } else { "" }));
+            let pin = c.hit(323.0, y - 9.0, 18.0, 18.0, ("clip-pin", index)).on_hover_text(if clip.pinned { "取消固定" } else { "固定（清空時保留）" });
             paint::pin(c, 332.0, y, 9.0, if clip.pinned || pin.hovered() { theme::BLUE } else { theme::GRAY });
-            let delete = c.hit(345.0, y - 9.0, 17.0, 18.0, ("clip-delete", index)).on_hover_text("删除这条记录");
+            let delete = c.hit(345.0, y - 9.0, 17.0, 18.0, ("clip-delete", index)).on_hover_text("刪除這條記錄");
             paint::close(c, 353.5, y, 2.4, theme::GRAY);
             if delete.clicked() { action = Some((index, 2)); }
             else if pin.clicked() { action = Some((index, 1)); }
@@ -861,12 +861,12 @@ impl App {
         match action {
             Some((index, 0)) => {
                 #[cfg(windows)]
-                self.say(if crate::clipboard::copy_history(&items[index].text) { "已复制" } else { "复制失败，请重试" });
+                self.say(if crate::clipboard::copy_history(&items[index].text) { "已複製" } else { "複製失敗，請重試" });
                 #[cfg(not(windows))]
                 _cmds.push(Cmd::Copy(items[index].text.clone()));
             }
             Some((index, 1)) => {
-                if !self.clipboard.lock().toggle_pin(index) { self.say(format!("最多固定 {} 条", crate::clipboard::MAX_PINNED)); }
+                if !self.clipboard.lock().toggle_pin(index) { self.say(format!("最多固定 {} 條", crate::clipboard::MAX_PINNED)); }
             }
             Some((index, _)) => { self.clipboard.lock().remove(index); }
             None => {}
@@ -897,7 +897,7 @@ impl App {
         c.dashed(x, y, w, h, 12.0, 1.4, Color32::from_white_alpha(230), self.t as f32 * 14.0);
         let bob = ((self.t * 5.0).sin() as f32 * 0.5 + 0.5) * 3.0;
         paint::tray(c, 209.5, 64.0, 30.0, bob, theme::WHITE, Color32::from_gray(90));
-        c.text(209.5, 98.0, "松手放进置物架", 12.0, W::Semibold, theme::WHITE, H::Center);
+        c.text(209.5, 98.0, "鬆手放進置物架", 12.0, W::Semibold, theme::WHITE, H::Center);
     }
 
     // ================= 待办 =================
@@ -914,7 +914,7 @@ impl App {
 
         let (add, ac) = capsule(c, 41.0, 96.0, 74.0, 26.0, "t-add", theme::BTN, theme::BTN_HOVER);
         paint::plus(&ac, 56.0, 109.0, 6.2, theme::WHITE, Color32::BLACK);
-        ac.text(67.0, 112.5, "加一个", size::BODY, W::Regular, theme::WHITE, H::Left);
+        ac.text(67.0, 112.5, "加一個", size::BODY, W::Regular, theme::WHITE, H::Left);
         let can_edit = !self.todos.items.is_empty() && !self.adding && self.editing.is_none();
         let ec = if can_edit { c.clone() } else { c.faded(0.45) };
         let (edit, edc) = capsule(&ec, 121.0, 96.0, 68.0, 26.0, "t-edit", theme::BTN, if can_edit { theme::BTN_HOVER } else { theme::BTN });
@@ -925,7 +925,7 @@ impl App {
         let editing = self.adding || self.editing.is_some();
         if count == 0 && !editing {
             paint::checklist(c, 286.5, 64.0, 32.0, Color32::from_gray(150), Color32::from_rgb(52, 54, 58));
-            c.text(286.5, 99.0, "今天还没有安排", size::SMALL, W::Regular, theme::GRAY, H::Center);
+            c.text(286.5, 99.0, "今天還沒有安排", size::SMALL, W::Regular, theme::GRAY, H::Center);
         } else {
             let mut row = 0;
             let row_y = |r: usize| 46.0 + r as f32 * 22.0;
@@ -988,9 +988,9 @@ impl App {
                     if r.clicked(){self.todo_choosing=false;self.editing=Some(i);self.adding=false;self.buf=item.text.clone();self.todo_input_focused=false;break;}
                     row+=1;shown+=1;continue;
                 }
-                let delete=c.hit(353.0,y-9.0,17.0,18.0,("todo-delete",i)).on_hover_text("删除待办").clicked();
+                let delete=c.hit(353.0,y-9.0,17.0,18.0,("todo-delete",i)).on_hover_text("刪除待辦").clicked();
                 paint::close(c,361.5,y,2.4,theme::GRAY);
-                let reminder=c.hit(333.0,y-9.0,18.0,18.0,("todo-reminder",i)).on_hover_text(item.reminder_text().map(|due|format!("提醒：{due} · 点击修改")).unwrap_or_else(||"设置提醒与每周重复（可选）".into()));
+                let reminder=c.hit(333.0,y-9.0,18.0,18.0,("todo-reminder",i)).on_hover_text(item.reminder_text().map(|due|format!("提醒：{due} · 點選修改")).unwrap_or_else(||"設定提醒與每週重複（可選）".into()));
                 let reminder_clicked=reminder.clicked();
                 let ink=if item.due.is_some()||reminder.hovered(){theme::BLUE}else{theme::GRAY};
                 c.ring(342.0,y,4.7,1.1,ink);
@@ -998,7 +998,7 @@ impl App {
                 if reminder_clicked {self.open_task_reminder(i);}
                 let mut edit_this=false;
                 r.context_menu(|ui|{
-                    if ui.button("编辑与提醒…").clicked(){edit_this=true;ui.close_menu();}
+                    if ui.button("編輯與提醒…").clicked(){edit_this=true;ui.close_menu();}
                     if ui.button("取消提醒").clicked(){self.todos.items[i].due=None;self.todos.save();ui.close_menu();}
                 });
                 if edit_this {self.open_task_dialog(i);}
@@ -1008,7 +1008,7 @@ impl App {
                     self.todos.save();self.todo_first=self.todo_first.min(self.todos.items.len().saturating_sub(3));break;
                 }
                 if r.clicked() && !edit_this && !reminder_clicked && !today_item {
-                    self.say(format!("{}的待办，今天不用做", crate::model::repeat_label(item.repeat)));
+                    self.say(format!("{}的待辦，今天不用做", crate::model::repeat_label(item.repeat)));
                 } else if r.clicked() && !r.double_clicked() && !edit_this && !reminder_clicked {
                     let now = self.todos.items[i].done_for(&env.today);
                     self.todos.items[i].toggle(&env.today);
@@ -1023,9 +1023,9 @@ impl App {
             }
             let rest = count.saturating_sub(shown + self.editing.map(|_|1).unwrap_or(0));
             if self.todo_choosing{
-                c.text(370.0,120.0,if rest>0{"点选修改 · 滚轮查看"}else{"点击要修改的事项"},size::TINY,W::Regular,theme::GRAY,H::Right);
+                c.text(370.0,120.0,if rest>0{"點選修改 · 滾輪檢視"}else{"點選要修改的事項"},size::TINY,W::Regular,theme::GRAY,H::Right);
             }else if rest > 0 {
-                c.text(370.0, 120.0, &format!("共 {count} 项 · 滚轮查看"), size::TINY, W::Regular, theme::DIM, H::Right);
+                c.text(370.0, 120.0, &format!("共 {count} 項 · 滾輪檢視"), size::TINY, W::Regular, theme::DIM, H::Right);
             }
         }
 
@@ -1060,11 +1060,11 @@ impl App {
     }
     pub(crate) fn page_mail(&mut self, c: &Card, _env: &Env, cmds: &mut Vec<Cmd>) {
         if self.mail.accounts.is_empty() {
-            c.text(42.0, 60.0, "还没有邮箱", 13.0, W::Bold, theme::WHITE, H::Left);
-            let hint = c.fit("在设置 → 邮箱里添加；授权码只存进系统凭据管理器", 10.5, W::Regular, 344.0);
+            c.text(42.0, 60.0, "還沒有信箱", 13.0, W::Bold, theme::WHITE, H::Left);
+            let hint = c.fit("在設定 → 信箱裡新增；授權碼只存進系統憑據管理器", 10.5, W::Regular, 344.0);
             c.text(42.0, 77.0, &hint, 10.5, W::Regular, theme::GRAY, H::Left);
             let (go, gc) = capsule(c, 42.0, 88.0, 84.0, 26.0, "mail-setup", theme::BTN, theme::BTN_HOVER);
-            gc.text(58.0, 105.0, "去添加", size::BODY, W::Regular, theme::WHITE, H::Left);
+            gc.text(58.0, 105.0, "去新增", size::BODY, W::Regular, theme::WHITE, H::Left);
             if go.clicked() {
                 self.open_mail_settings();
             }
@@ -1092,15 +1092,15 @@ impl App {
             let hidden=self.mail_code_hidden(raw);
             let item=self.display_mail(raw);
             let value=item.code.as_deref().unwrap_or("••••••");
-            c.text(46.0,51.0,"验证码",10.5,W::Regular,theme::GRAY,H::Left);
+            c.text(46.0,51.0,"驗證碼",10.5,W::Regular,theme::GRAY,H::Left);
             c.text(166.0,51.0,&c.fit(&item.from,10.5,W::Semibold,78.0),10.5,W::Semibold,theme::WHITE,H::Right);
             let code_size=23.0*(120.0/c.text_w(value,23.0,W::Bold)).min(1.0);
             c.text(46.0,75.0,value,code_size,W::Bold,theme::GREEN,H::Left);
             c.text(46.0,91.0,&c.fit(&item.subject,10.5,W::Regular,120.0),10.5,W::Regular,Color32::from_gray(190),H::Left);
-            c.text(46.0,108.0,if hidden{"已隐藏 · 点击查看"}else{"点击复制"},10.5,W::Regular,theme::DIM,H::Left);
+            c.text(46.0,108.0,if hidden{"已隱藏 · 點選檢視"}else{"點選複製"},10.5,W::Regular,theme::DIM,H::Left);
             c.text(166.0,108.0,item.time.rsplit(' ').next().unwrap_or(&item.time),10.0,W::Regular,theme::GRAY,H::Right);
-            c.hit(42.0,38.0,128.0,16.0,"mail-code-source").on_hover_text(format!("来自：{}\n{}\n收件邮箱：{}\n{}",item.from,item.subject,item.account,item.time));
-            if c.hit(40.0,56.0,132.0,38.0,("mail-code",item.uid)).on_hover_text(format!("复制 {} 的验证码",item.from)).clicked(){if hidden{self.reveal_mail_code(raw);}else{cmds.push(Cmd::Copy(value.to_string()));self.code_copied(value);}}
+            c.hit(42.0,38.0,128.0,16.0,"mail-code-source").on_hover_text(format!("來自：{}\n{}\n收件信箱：{}\n{}",item.from,item.subject,item.account,item.time));
+            if c.hit(40.0,56.0,132.0,38.0,("mail-code",item.uid)).on_hover_text(format!("複製 {} 的驗證碼",item.from)).clicked(){if hidden{self.reveal_mail_code(raw);}else{cmds.push(Cmd::Copy(value.to_string()));self.code_copied(value);}}
         }
         use crate::mail_manage::{Action,Folder};
         let folder=self.mail.manage.folder();let trash=folder==Folder::Trash;
@@ -1109,22 +1109,22 @@ impl App {
         let all_count=self.mail.recent.len();
         let unread=self.mail.recent.iter().filter(|m|self.mail_seen(m,Folder::Inbox)==Some(false)).count();
         if trash{
-            c.text(list_x+6.0,47.0,&format!("{} {}",if self.settings.mail_sync_operations{"回收站"}else{"本机回收站"},self.mail.manage.trash.len()),10.5,W::Semibold,theme::WHITE,H::Left);
-            c.text(375.0,47.0,"返回邮件",10.0,W::Regular,theme::BLUE,H::Right);
+            c.text(list_x+6.0,47.0,&format!("{} {}",if self.settings.mail_sync_operations{"回收站"}else{"本機回收站"},self.mail.manage.trash.len()),10.5,W::Semibold,theme::WHITE,H::Left);
+            c.text(375.0,47.0,"返回郵件",10.0,W::Regular,theme::BLUE,H::Right);
             if c.hit(322.0,33.0,56.0,19.0,"mail-trash-back").clicked(){self.mail_toggle_trash();return;}
         }else{
             for (x,width,label,selected,id) in [
                 (list_x,52.0,format!("全部 {all_count}"),!self.mail.manage.unread_only,"mail-all"),
-                (list_x+56.0,52.0,format!("未读 {unread}"),self.mail.manage.unread_only,"mail-unread"),
+                (list_x+56.0,52.0,format!("未讀 {unread}"),self.mail.manage.unread_only,"mail-unread"),
             ]{
                 if selected{c.fill(x,33.0,width,19.0,6.0,theme::BTN);}
                 c.text(x+width/2.0,47.0,&label,10.0,W::Semibold,if selected{theme::WHITE}else{theme::GRAY},H::Center);
-                if c.hit(x,33.0,width,19.0,id).on_hover_text("当前加载的最近邮件").clicked(){self.mail.manage.unread_only=id=="mail-unread";}
+                if c.hit(x,33.0,width,19.0,id).on_hover_text("當前載入的最近郵件").clicked(){self.mail.manage.unread_only=id=="mail-unread";}
             }
-            c.text(307.0,46.0,if self.settings.mail_sync_operations{"同步"}else{"仅本机"},8.0,W::Regular,theme::DIM,H::Center);
+            c.text(307.0,46.0,if self.settings.mail_sync_operations{"同步"}else{"僅本機"},8.0,W::Regular,theme::DIM,H::Center);
             let ready=self.mail.manage.pending.is_empty()&&self.mail.accounts.iter().any(|a|a.enabled&&self.mail.manage.data.contains_key(&(crate::mail::key(a),Folder::Inbox))&&self.mail.manage.identities.get(&crate::mail::key(a))==Some(a));
-            c.text(375.0,47.0,"全部已读",10.0,W::Regular,if ready{theme::BLUE}else{theme::DIM},H::Right);
-            if c.hit(325.0,33.0,53.0,19.0,"mail-read-all").on_hover_text(if self.settings.mail_sync_operations{"将已连接邮箱的未读邮件全部标为已读"}else{"仅将岛仔当前加载的邮件标为已读，不更改邮箱"}).clicked()&&ready{
+            c.text(375.0,47.0,"全部已讀",10.0,W::Regular,if ready{theme::BLUE}else{theme::DIM},H::Right);
+            if c.hit(325.0,33.0,53.0,19.0,"mail-read-all").on_hover_text(if self.settings.mail_sync_operations{"將已連線信箱的未讀郵件全部標為已讀"}else{"僅將島仔當前載入的郵件標為已讀，不更改信箱"}).clicked()&&ready{
                 self.mail_manage_request(None,Folder::Inbox,Action::ReadAll);
             }
         }
@@ -1135,11 +1135,11 @@ impl App {
         }
         if !self.mail.manage.message.is_empty(){
             c.text(42.0,134.0,&c.fit(&self.mail.manage.message,8.0,W::Regular,125.0),8.0,W::Regular,theme::GRAY,H::Left);
-            if c.hit(40.0,123.0,130.0,16.0,"mail-manage-status").on_hover_text(format!("{}\n点击刷新邮件状态",self.mail.manage.message)).clicked(){self.mail_manage_request(None,folder,Action::Load);}
+            if c.hit(40.0,123.0,130.0,16.0,"mail-manage-status").on_hover_text(format!("{}\n點選重新整理郵件狀態",self.mail.manage.message)).clicked(){self.mail_manage_request(None,folder,Action::Load);}
         }
         let indices:Vec<_>=self.mail_rows().iter().enumerate().filter(|(_,m)|trash||!self.mail.manage.unread_only||self.mail_seen(m,folder)==Some(false)).map(|(i,_)|i).collect();
         if indices.is_empty(){
-            let message=if !self.mail.manage.pending.is_empty(){"正在同步邮件…"}else if trash{"回收站为空"}else if self.mail.manage.unread_only{"没有未读邮件"}else{"还没有收到邮件"};
+            let message=if !self.mail.manage.pending.is_empty(){"正在同步郵件…"}else if trash{"回收站為空"}else if self.mail.manage.unread_only{"沒有未讀郵件"}else{"還沒有收到郵件"};
             c.text(list_x+6.0,80.0,message,11.0,W::Regular,theme::GRAY,H::Left);return;
         }
         let mut content=egui::Ui::new(c.ui.ctx().clone(),egui::Id::new(("mail-list",c.live)),
@@ -1164,7 +1164,7 @@ impl App {
                     row.text(12.0,14.0,&row.fit(&item.from,11.0,W::Semibold,57.0),11.0,W::Semibold,ink,H::Left);
                     let subject_w=(row_w-128.0-if hidden{32.0}else{0.0}).max(10.0);
                     let width=row.text(76.0,14.0,&row.fit(&item.subject,10.5,W::Regular,subject_w),10.5,W::Regular,if seen==Some(true){theme::GRAY}else{Color32::from_gray(210)},H::Left);
-                    if hidden{row.fill(80.0+width,5.0,29.0,12.0,3.0,theme::BTN);row.text(94.5+width,14.0,"已隐藏",8.0,W::Regular,theme::GRAY,H::Center);}
+                    if hidden{row.fill(80.0+width,5.0,29.0,12.0,3.0,theme::BTN);row.text(94.5+width,14.0,"已隱藏",8.0,W::Regular,theme::GRAY,H::Center);}
                 }else{
                     row.text(12.0,12.0,&row.fit(&item.from,11.0,W::Semibold,row_w-65.0),11.0,W::Semibold,ink,H::Left);
                     row.text(12.0,27.0,&row.fit(&item.subject,10.0,W::Regular,row_w-20.0),10.0,W::Regular,theme::GRAY,H::Left);
@@ -1172,18 +1172,18 @@ impl App {
                 let cy=if compact{10.0}else{8.0};let mut acted=false;
                 if actions{
                     if trash{
-                        row.text(row_w-5.0,cy+4.0,"恢复",10.0,W::Regular,if ready{theme::BLUE}else{theme::DIM},H::Right);
+                        row.text(row_w-5.0,cy+4.0,"恢復",10.0,W::Regular,if ready{theme::BLUE}else{theme::DIM},H::Right);
                         if row.hit(row_w-39.0,0.0,36.0,20.0,("mail-restore",item.uid,item.account.as_str())).clicked()&&ready{self.mail_manage_request(Some(&item.account),folder,Action::Move{uid:item.uid});acted=true;}
                     }else{
                         row.ring(row_w-35.0,cy,4.7,1.1,theme::GRAY);paint::check(&row,row_w-35.0,cy,6.0,if seen==Some(true){1.0}else{0.0},1.1,theme::GRAY);
-                        if row.hit(row_w-45.0,0.0,20.0,20.0,("mail-seen",item.uid,item.account.as_str())).on_hover_text(if seen==Some(true){"标为未读"}else{"标为已读"}).clicked(){self.mail_manage_request(Some(&item.account),folder,Action::Read{uid:item.uid,seen:seen!=Some(true)});acted=true;}
-                        let remove=row.hit(row_w-24.0,0.0,21.0,20.0,("mail-delete",item.uid,item.account.as_str())).on_hover_text(if self.settings.mail_sync_operations{"移到邮箱回收站"}else{"移到本机回收站，不更改邮箱"});
+                        if row.hit(row_w-45.0,0.0,20.0,20.0,("mail-seen",item.uid,item.account.as_str())).on_hover_text(if seen==Some(true){"標為未讀"}else{"標為已讀"}).clicked(){self.mail_manage_request(Some(&item.account),folder,Action::Read{uid:item.uid,seen:seen!=Some(true)});acted=true;}
+                        let remove=row.hit(row_w-24.0,0.0,21.0,20.0,("mail-delete",item.uid,item.account.as_str())).on_hover_text(if self.settings.mail_sync_operations{"移到信箱回收站"}else{"移到本機回收站，不更改信箱"});
                         crate::mail_manage_ui::trash_icon(&row,row_w-14.0,cy,if remove.hovered(){theme::RED}else{theme::GRAY});
                         if remove.clicked(){self.mail_manage_request(Some(&item.account),folder,Action::Move{uid:item.uid});acted=true;}
                     }
                 }else{row.text(row_w-6.0,cy+4.0,item.time.rsplit(' ').next().unwrap_or(&item.time),10.0,W::Regular,theme::GRAY,H::Right);}
                 row.seg((6.0,row_h-0.5),(row_w-6.0,row_h-0.5),0.5,Color32::from_gray(40));
-                hit.clone().on_hover_text(format!("{}\n{}\n收件邮箱：{}\n{}",item.from,item.subject,item.account,item.time));
+                hit.clone().on_hover_text(format!("{}\n{}\n收件信箱：{}\n{}",item.from,item.subject,item.account,item.time));
                 if hit.clicked()&&!acted{self.mail_open(&raw);}
             }
         });
@@ -1204,26 +1204,26 @@ impl App {
         }
         let folder=self.mail.manage.folder();let ready=self.mail_ready(&item.account,folder);
         let seen=self.mail_seen(raw,folder)==Some(true);
-        let status=if folder==crate::mail_manage::Folder::Trash{"恢复"}else if seen{"标为未读"}else{"标为已读"};
+        let status=if folder==crate::mail_manage::Folder::Trash{"恢復"}else if seen{"標為未讀"}else{"標為已讀"};
         c.text(215.0,50.0,status,9.0,W::Regular,if ready{theme::BLUE}else{theme::DIM},H::Right);
         if c.hit(166.0,39.0,50.0,18.0,("mail-detail-seen",item.uid)).clicked()&&ready{
             let action=if folder==crate::mail_manage::Folder::Trash{crate::mail_manage::Action::Move{uid:item.uid}}else{crate::mail_manage::Action::Read{uid:item.uid,seen:!seen}};
             self.mail_manage_request(Some(&item.account),folder,action);
         }
         if folder==crate::mail_manage::Folder::Inbox{
-            c.text(252.0,50.0,"删除",9.0,W::Regular,if ready{theme::RED}else{theme::DIM},H::Right);
-            if c.hit(220.0,39.0,35.0,18.0,("mail-detail-delete",item.uid)).on_hover_text(if self.settings.mail_sync_operations{"移到邮箱回收站"}else{"移到本机回收站，不更改邮箱"}).clicked()&&ready{self.mail_manage_request(Some(&item.account),folder,crate::mail_manage::Action::Move{uid:item.uid});}
+            c.text(252.0,50.0,"刪除",9.0,W::Regular,if ready{theme::RED}else{theme::DIM},H::Right);
+            if c.hit(220.0,39.0,35.0,18.0,("mail-detail-delete",item.uid)).on_hover_text(if self.settings.mail_sync_operations{"移到信箱回收站"}else{"移到本機回收站，不更改信箱"}).clicked()&&ready{self.mail_manage_request(Some(&item.account),folder,crate::mail_manage::Action::Move{uid:item.uid});}
         }
         let from = c.fit(&item.from, 11.5, W::Semibold, 112.0);
         c.text(46.0, 50.0, &from, 11.5, W::Semibold, theme::WHITE, H::Left);
-        let read=c.hit(266.0,42.0,60.0,14.0,("mail-read",&item.account,item.uid)).on_hover_text("在独立窗口阅读完整正文");
-        c.text(324.0,50.0,"阅读全文",10.5,W::Regular,if read.hovered(){theme::BLUE}else{theme::GRAY},H::Right);
+        let read=c.hit(266.0,42.0,60.0,14.0,("mail-read",&item.account,item.uid)).on_hover_text("在獨立視窗閱讀完整正文");
+        c.text(324.0,50.0,"閱讀全文",10.5,W::Regular,if read.hovered(){theme::BLUE}else{theme::GRAY},H::Right);
         if read.clicked(){self.mail_open_reader(raw);}
         let subject = c.fit(&item.subject, 13.5, W::Semibold, 328.0);
         c.text(46.0, 73.0, &subject, 13.5, W::Semibold, theme::WHITE, H::Left);
         c.hit(46.0,58.0,328.0,20.0,("mail-subject",&item.account,item.uid)).on_hover_text(&item.subject);
         c.text(374.0, 92.0, &item.time, 10.0, W::Regular, Color32::from_gray(170), H::Right);
-        let account=format!("收件邮箱：{}",item.account);
+        let account=format!("收件信箱：{}",item.account);
         c.text(46.0,92.0,&c.fit(&account,10.0,W::Regular,230.0),10.0,W::Regular,Color32::from_gray(175),H::Left);
         c.hit(46.0,80.0,230.0,16.0,("mail-account",&item.account,item.uid)).on_hover_text(&account);
 
@@ -1240,7 +1240,7 @@ impl App {
             if !body.is_empty() {
                 crate::mail_reader::body_ui(ui,body.as_ref(),11.5*c.s);
             }else if item.links.is_empty(){
-                ui.label(egui::RichText::new("（这封邮件没有正文）").font(c.font(12.0,W::Regular)).color(theme::DIM));
+                ui.label(egui::RichText::new("（這封郵件沒有正文）").font(c.font(12.0,W::Regular)).color(theme::DIM));
             }
             for link in &item.links {
                 let text=format!("{} ↗",c.fit(&link.label,12.0,W::Regular,295.0));
@@ -1258,19 +1258,19 @@ impl App {
         c.seg((46.0,199.0),(374.0,199.0),0.6,Color32::from_gray(48));
         let y = 214.0;
         if hidden {
-            c.text(46.0,y,"验证码已隐藏（不代表失效）",11.0,W::Regular,theme::GRAY,H::Left);
-            c.text(374.0,y,"查看 15 秒",10.5,W::Regular,theme::BLUE,H::Right);
+            c.text(46.0,y,"驗證碼已隱藏（不代表失效）",11.0,W::Regular,theme::GRAY,H::Left);
+            c.text(374.0,y,"檢視 15 秒",10.5,W::Regular,theme::BLUE,H::Right);
             if c.hit(290.0,y-14.0,86.0,24.0,("mail-reveal",item.uid)).clicked(){self.reveal_mail_code(raw);}
         } else if let Some(m) = &item.meeting {
             let ignored=self.mail_event_ignored(m);
             c.text(46.0,y,&format!("{} · {}",if ignored{"已忽略"}else{"日程"},m.at),10.5,W::Regular,if ignored{theme::DIM}else{theme::GREEN},H::Left);
-            let label=if ignored{"恢复日程"}else{"忽略日程"};
+            let label=if ignored{"恢復日程"}else{"忽略日程"};
             c.text(374.0,y,label,10.5,W::Regular,theme::GRAY,H::Right);
             if c.hit(316.0,y-14.0,60.0,24.0,("mail-ignore-event",item.uid)).on_hover_text(&m.title).clicked(){self.toggle_mail_event(m);}
         } else if let Some(code) = &item.code {
-            let label = format!("验证码 {code}");
+            let label = format!("驗證碼 {code}");
             let w = c.text(46.0, y, &label, 13.0, W::Semibold, theme::GREEN, H::Left);
-            c.text(46.0 + w + 6.0, y, "点击复制", 10.5, W::Regular, theme::DIM, H::Left);
+            c.text(46.0 + w + 6.0, y, "點選複製", 10.5, W::Regular, theme::DIM, H::Left);
             let hit = c.hit(42.0, y - 14.0, w + 60.0, 24.0, ("mail-detail-code", item.uid));
             if hit.clicked() {
                 cmds.push(Cmd::Copy(code.clone()));

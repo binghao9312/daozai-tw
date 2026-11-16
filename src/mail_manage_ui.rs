@@ -61,16 +61,16 @@ impl App{
     }
     fn save_local_mail(&self)->Result<(),String>{
         let path=crate::model::config_dir().join("mail-local-state.json");
-        let raw=serde_json::to_vec(&self.mail.manage.local).map_err(|_|"无法保存本机邮件状态")?;
-        std::fs::create_dir_all(path.parent().unwrap()).and_then(|_|crate::model::atomic_write(&path,&raw)).map_err(|_|"本机邮件状态保存失败，请检查数据目录权限".into())
+        let raw=serde_json::to_vec(&self.mail.manage.local).map_err(|_|"無法儲存本機郵件狀態")?;
+        std::fs::create_dir_all(path.parent().unwrap()).and_then(|_|crate::model::atomic_write(&path,&raw)).map_err(|_|"本機郵件狀態儲存失敗，請檢查資料目錄許可權".into())
     }
     fn mail_local_action(&mut self,account:Option<&str>,folder:Folder,action:Action){
         let candidates:Vec<Item>=if action==Action::ReadAll{self.mail.recent.iter().filter(|m|account.is_none_or(|a|m.account.eq_ignore_ascii_case(a))).cloned().collect()}
             else{let uid=match action{Action::Read{uid,..}|Action::Move{uid}=>uid,_=>return};let rows=if folder==Folder::Inbox{&self.mail.recent}else{&self.mail.manage.trash};rows.iter().filter(|m|m.uid==uid&&account.is_some_and(|a|m.account.eq_ignore_ascii_case(a))).cloned().collect()};
-        if candidates.is_empty(){self.mail.manage.message="没有可整理的邮件，请刷新列表".into();return;}
+        if candidates.is_empty(){self.mail.manage.message="沒有可整理的郵件，請重新整理列表".into();return;}
         let before=self.mail.manage.local.clone();
         for item in &candidates{
-            let Some(k)=self.mail_local_key(item)else{self.mail.manage.local=before;self.mail.manage.message="请等待邮件状态同步完成".into();return;};
+            let Some(k)=self.mail_local_key(item)else{self.mail.manage.local=before;self.mail.manage.message="請等待郵件狀態同步完成".into();return;};
             let seen=self.mail_seen(item,folder);
             let flags=self.mail.manage.local.entry(k).or_default();
             match action{Action::Read{seen,..}=>flags.seen=Some(seen),Action::ReadAll=>flags.seen=Some(true),Action::Move{..}=>{flags.removed=folder==Folder::Inbox;if flags.seen.is_none(){flags.seen=seen;}},Action::Load=>{}}
@@ -83,8 +83,8 @@ impl App{
                 else{self.mail.manage.trash.retain(|m|!same(m));self.mail.recent.retain(|m|!same(m));self.mail.recent.insert(0,item);}
             }
             self.mail.open_uid=None;self.mail.reading=None;
-            self.mail.manage.message=if folder==Folder::Inbox{"已移到本机回收站"}else{"已恢复本机记录"}.into();
-        }else{self.mail.manage.message="已更新本机状态".into();}
+            self.mail.manage.message=if folder==Folder::Inbox{"已移到本機回收站"}else{"已恢復本機記錄"}.into();
+        }else{self.mail.manage.message="已更新本機狀態".into();}
     }
     pub(crate) fn mail_rows(&self)->&[Item]{if self.mail.manage.trash_open{&self.mail.manage.trash}else{&self.mail.recent}}
     pub(crate) fn mail_manage_request(&mut self,account:Option<&str>,folder:Folder,action:Action){
@@ -95,9 +95,9 @@ impl App{
         if action==Action::ReadAll{accounts.retain(|a|self.mail.manage.data.contains_key(&(crate::mail::key(a),folder))&&self.mail.manage.identities.get(&crate::mail::key(a))==Some(a));}
         if accounts.is_empty(){return;}
         if action!=Action::Load && accounts.iter().any(|a|!self.mail.manage.data.contains_key(&(crate::mail::key(a),folder))||self.mail.manage.identities.get(&crate::mail::key(a))!=Some(a)){
-            self.mail.manage.message="请等待邮件状态同步完成".into();return;
+            self.mail.manage.message="請等待郵件狀態同步完成".into();return;
         }
-        self.mail.manage.errors.clear();self.mail.manage.message=if action==Action::Load{"读取邮件状态…"}else{"同步中…"}.into();
+        self.mail.manage.errors.clear();self.mail.manage.message=if action==Action::Load{"讀取郵件狀態…"}else{"同步中…"}.into();
         for account in accounts{
             let email=crate::mail::key(&account);
             let validity=self.mail.manage.data.get(&(email.clone(),folder)).filter(|_|self.mail.manage.identities.get(&email)==Some(&account)).map(|s|s.validity);
@@ -176,12 +176,12 @@ impl App{
             m.account.eq_ignore_ascii_case(&email) && (self.mail.manage.reader_identity.as_ref().is_none_or(|(a,v)|a!=&request.account||*v!=snapshot.validity)
                 || !snapshot.entries.iter().any(|(uid,_)|*uid==m.uid))) {self.mail.reading=None;self.mail.manage.reader_identity=None;}
         if matches!(request.action,Action::Move{..}){
-            self.mail.manage.message=if request.folder==Folder::Inbox{"已移至回收站"}else{"已恢复到收件箱"}.into();
+            self.mail.manage.message=if request.folder==Folder::Inbox{"已移至回收站"}else{"已恢復到收件箱"}.into();
             if self.mail.manage.folder()!=request.folder{self.mail.manage.next_refresh=0.0;}
             if let Action::Move{uid}=request.action{
                 if self.mail.reading.as_ref().is_some_and(|m|m.uid==uid&&m.account.eq_ignore_ascii_case(&email))&&self.mail.manage.reader_trash==(request.folder==Folder::Trash){self.mail.reading=None;}
             }
-        }else if request.action==Action::ReadAll{self.mail.manage.message="已将邮箱未读邮件标为已读".into();}
+        }else if request.action==Action::ReadAll{self.mail.manage.message="已將信箱未讀郵件標為已讀".into();}
         else{self.mail.manage.message=String::new();}
         self.mail.privacy.retain(self.mail.recent.iter().chain(&self.mail.manage.trash).chain(&self.mail.reading));
         self.mail.manage.identities.insert(email.clone(),request.account);
@@ -205,15 +205,15 @@ impl App{
         app.mail_manage_request(None,Folder::Inbox,Action::Load);
         assert!(app.mail.manage.pending.contains("test@example.com"));
         let request=match app.pending.pop().unwrap(){Cmd::MailManage(r)=>r,_=>panic!()};
-        app.mail_managed(Completed{request,result:Err("服务器拒绝操作".into())});
-        assert!(app.mail.manage.pending.is_empty());assert!(app.mail.manage.message.contains("服务器拒绝"));
+        app.mail_managed(Completed{request,result:Err("伺服器拒絕操作".into())});
+        assert!(app.mail.manage.pending.is_empty());assert!(app.mail.manage.message.contains("伺服器拒絕"));
     }
     #[test]fn local_trash_keeps_its_own_limit_when_inbox_also_has_recent_mail(){
         let ctx=eframe::egui::Context::default();let mut app=App::new(&ctx,Default::default());let a=account();app.mail.accounts=vec![a.clone()];app.settings.mail_sync_operations=false;app.mail.recent.clear();
         for uid in 1..=60{app.mail.manage.local.insert(format!("{}:7:{uid}",identity(&a)),LocalFlags{seen:Some(false),removed:true});}
         let items=(1..=80).map(|uid|Item{html:String::new().into(),account:a.email.clone(),from:String::new(),subject:String::new(),time:String::new(),code:None,received_unix:None,summary:"".into(),links:vec![],meeting:None,uid}).collect();
         app.mail_managed(Completed{request:Request{account:a,folder:Folder::Inbox,validity:None,known:vec![],extra:(1..=60).map(|uid|(7,uid)).collect(),action:Action::Load},result:Ok(Snapshot{validity:7,entries:(1..=80).map(|uid|(uid,false)).collect(),items})});
-        assert_eq!(app.mail.recent.len(),20);assert_eq!(app.mail.manage.trash.len(),60,"本机回收站不能被收件箱的显示上限截断");
+        assert_eq!(app.mail.recent.len(),20);assert_eq!(app.mail.manage.trash.len(),60,"本機回收站不能被收件箱的顯示上限截斷");
     }
     #[test]fn read_state_is_separate_for_each_folder_and_account(){
         let mut state=State::default();state.data.insert(("test@example.com".into(),Folder::Inbox),Snapshot{validity:1,entries:vec![(42,true)],items:vec![]});

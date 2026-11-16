@@ -32,7 +32,7 @@ const MAX_BODY: u64 = 1024 * 1024;
 pub fn request(agent: &ureq::Agent, provider: PlanProvider, key: &str) -> Result<Snapshot, (String, u64)> {
     let key = key.trim();
     if key.is_empty() || key.len() > 8192 || key.chars().any(|c| c.is_whitespace() || c.is_control()) {
-        return Err(("请输入有效的套餐 API Key".into(), 0));
+        return Err(("請輸入有效的套餐 API Key".into(), 0));
     }
     let glm=matches!(provider,PlanProvider::GlmChina|PlanProvider::GlmGlobal);
     let response = agent.get(provider.endpoint())
@@ -40,17 +40,17 @@ pub fn request(agent: &ureq::Agent, provider: PlanProvider, key: &str) -> Result
         .call().or_else(|e| match e {
             ureq::Error::Status(_,response) if glm=>Ok(response),
             ureq::Error::Status(s, _) => Err(status_error(s)),
-            _ => Err((if glm{"GLM 额度查询网络失败，请检查网络、代理和所选地区后重试"}else{"套餐额度网络请求失败，请稍后重试"}.into(), 30)),
+            _ => Err((if glm{"GLM 額度查詢網路失敗，請檢查網路、代理和所選地區後重試"}else{"套餐額度網路請求失敗，請稍後重試"}.into(), 30)),
         })?;
     let status=response.status();
     if !(200..300).contains(&status)&&(!glm||(300..400).contains(&status)){return Err(status_error(status));}
     let mut body = Vec::new();
     response.into_reader().take(MAX_BODY + 1).read_to_end(&mut body)
-        .map_err(|_| ("无法读取套餐额度响应".into(), 30))?;
-    if body.len() as u64 > MAX_BODY { return Err(("套餐额度响应过大".into(), 30)); }
+        .map_err(|_| ("無法讀取套餐額度響應".into(), 30))?;
+    if body.len() as u64 > MAX_BODY { return Err(("套餐額度響應過大".into(), 30)); }
     let value = serde_json::from_slice(&body);
     if glm&&!(200..300).contains(&status){return Err(glm_error(value.as_ref().unwrap_or(&Value::Null),Some(status)));}
-    let value=value.map_err(|_| ("套餐额度响应不是有效 JSON".into(), 30))?;
+    let value=value.map_err(|_| ("套餐額度響應不是有效 JSON".into(), 30))?;
     parse(provider, &value).map_err(|e| (e, if glm{glm_error(&value,None).1}else{30}))
 }
 fn glm_error(v:&Value,http:Option<u16>)->(String,u64){
@@ -59,35 +59,35 @@ fn glm_error(v:&Value,http:Option<u16>)->(String,u64){
     let reason=v["msg"].as_str().or_else(||v["message"].as_str()).or_else(||v.pointer("/error/message").and_then(Value::as_str)).unwrap_or_default().to_ascii_lowercase();
     // HTTP 429 也可能表示套餐到期，先按业务码区分；服务端原文不进入界面或缓存。
     let (message,retry)=match code{
-        Some(1003)=>("GLM 密钥已过期，请在所选地区控制台重新获取套餐 Key",0),
-        Some(401|1000|1001)=>("GLM 密钥认证失败，请核对 Key、有效期及所选地区",0),
-        Some(1005)=>("GLM 账号需要二次认证，请在所选地区控制台完成验证后重试",60),
-        Some(403|1220)=>("GLM 额度查询无权限，请核对所选地区及 Coding Plan 套餐 Key",60),
-        Some(1309|1314)=>("GLM 套餐已到期或失效，请在所选地区控制台核对套餐状态",60),
-        Some(1315)=>("GLM 密钥类型不匹配，请使用当前地区 Coding Plan 的套餐 Key",60),
-        Some(1311)=>("GLM 套餐权限不足，请在所选地区控制台核对套餐权益",60),
-        Some(1113)=>("GLM 账号当前欠费，请在所选地区控制台核对账户状态",60),
-        Some(429|1302)=>("GLM 额度查询过于频繁，请稍后重试",180),
-        Some(1305)=>("GLM 服务当前繁忙，请稍后重试",180),
-        Some(1308|1310|1316..=1321)=>("GLM 当前套餐额度已用尽，请在控制台查看恢复时间",180),
-        _ if ["不存在coding plan","不存在 coding plan","no coding plan","coding plan not found","未开通coding plan","套餐不存在"].iter().any(|s|reason.contains(s))=>("GLM 未查询到有效的 Coding Plan，请确认套餐已开通并使用套餐 Key",60),
-        _ if reason.contains("token expired")||reason.contains("invalid api key")=>("GLM 密钥无效或已过期，请重新获取套餐 Key 并核对所选地区",0),
+        Some(1003)=>("GLM 金鑰已過期，請在所選地區控制檯重新獲取套餐 Key",0),
+        Some(401|1000|1001)=>("GLM 金鑰認證失敗，請核對 Key、有效期及所選地區",0),
+        Some(1005)=>("GLM 帳號需要二次認證，請在所選地區控制檯完成驗證後重試",60),
+        Some(403|1220)=>("GLM 額度查詢無許可權，請核對所選地區及 Coding Plan 套餐 Key",60),
+        Some(1309|1314)=>("GLM 套餐已到期或失效，請在所選地區控制檯核對套餐狀態",60),
+        Some(1315)=>("GLM 金鑰型別不匹配，請使用當前地區 Coding Plan 的套餐 Key",60),
+        Some(1311)=>("GLM 套餐許可權不足，請在所選地區控制檯核對套餐權益",60),
+        Some(1113)=>("GLM 帳號當前欠費，請在所選地區控制檯核對賬戶狀態",60),
+        Some(429|1302)=>("GLM 額度查詢過於頻繁，請稍後重試",180),
+        Some(1305)=>("GLM 服務當前繁忙，請稍後重試",180),
+        Some(1308|1310|1316..=1321)=>("GLM 當前套餐額度已用盡，請在控制檯檢視恢復時間",180),
+        _ if ["不存在coding plan","不存在 coding plan","no coding plan","coding plan not found","未開通coding plan","套餐不存在"].iter().any(|s|reason.contains(s))=>("GLM 未查詢到有效的 Coding Plan，請確認套餐已開通並使用套餐 Key",60),
+        _ if reason.contains("token expired")||reason.contains("invalid api key")=>("GLM 金鑰無效或已過期，請重新獲取套餐 Key 並核對所選地區",0),
         _=>return match http{
-            Some(401)=>("GLM 密钥认证失败，请核对 Key、有效期及所选地区".into(),0),
-            Some(403)=>("GLM 额度查询被拒绝（403），请检查账号权限、地区和网络访问情况".into(),60),
-            Some(429)=>("GLM 额度查询过于频繁，请稍后重试".into(),180),
-            Some(status)=>(format!("GLM 额度服务暂不可用（HTTP {status}），请稍后重试"),30),
-            None=>match code.filter(|c|*c<10000){Some(code)=>(format!("GLM 额度查询失败（业务码 {code}），请到所选地区控制台核对套餐状态"),30),None=>("GLM 额度查询失败，请到所选地区控制台核对套餐 Key 和套餐状态".into(),30)},
+            Some(401)=>("GLM 金鑰認證失敗，請核對 Key、有效期及所選地區".into(),0),
+            Some(403)=>("GLM 額度查詢被拒絕（403），請檢查帳號許可權、地區和網路訪問情況".into(),60),
+            Some(429)=>("GLM 額度查詢過於頻繁，請稍後重試".into(),180),
+            Some(status)=>(format!("GLM 額度服務暫不可用（HTTP {status}），請稍後重試"),30),
+            None=>match code.filter(|c|*c<10000){Some(code)=>(format!("GLM 額度查詢失敗（業務碼 {code}），請到所選地區控制檯核對套餐狀態"),30),None=>("GLM 額度查詢失敗，請到所選地區控制檯核對套餐 Key 和套餐狀態".into(),30)},
         },
     };(message.into(),retry)
 }
 fn status_error(status: u16) -> (String, u64) {
     match status {
-        401 => ("套餐密钥认证失败（401），请检查密钥和地区".into(), 0),
-        403 => ("套餐额度查询被拒绝（403），请检查套餐权限和地区".into(), 60),
-        429 => ("套餐额度查询过于频繁，请稍后重试".into(), 180),
-        300..=399 => ("套餐服务发生重定向，已停止以保护密钥；请检查地区".into(), 0),
-        _ => (format!("套餐额度服务暂不可用（{status}）"), 30),
+        401 => ("套餐金鑰認證失敗（401），請檢查金鑰和地區".into(), 0),
+        403 => ("套餐額度查詢被拒絕（403），請檢查套餐許可權和地區".into(), 60),
+        429 => ("套餐額度查詢過於頻繁，請稍後重試".into(), 180),
+        300..=399 => ("套餐服務發生重定向，已停止以保護金鑰；請檢查地區".into(), 0),
+        _ => (format!("套餐額度服務暫不可用（{status}）"), 30),
     }
 }
 fn number(v: &Value) -> Option<f64> {
@@ -109,16 +109,16 @@ pub fn parse(provider: PlanProvider, v: &Value) -> Result<Snapshot, String> {
         PlanProvider::GlmChina | PlanProvider::GlmGlobal => parse_glm(v, &mut snapshot)?,
     }
     if snapshot.windows.is_empty() && snapshot.extra.is_empty() {
-        return Err("服务未返回可识别的有限套餐额度；未知或无限额度不显示为零".into());
+        return Err("服務未返回可識別的有限套餐額度；未知或無限額度不顯示為零".into());
     }
     Ok(snapshot)
 }
 fn parse_opencode(v: &Value, s: &mut Snapshot) -> Result<(), String> {
-    if !v["error"].is_null() { return Err("OpenCode Go 未返回可用套餐额度".into()); }
-    s.plan = "订阅额度".into();
+    if !v["error"].is_null() { return Err("OpenCode Go 未返回可用套餐額度".into()); }
+    s.plan = "訂閱額度".into();
     // The API does not publish rolling duration. Keep provider ordering stable
     // in Snapshot::rings rather than sorting a known week ahead of rolling.
-    for (key, label, duration) in [("rolling", "滚动", None), ("weekly", "本周", None), ("monthly", "本月", None)] {
+    for (key, label, duration) in [("rolling", "滾動", None), ("weekly", "本週", None), ("monthly", "本月", None)] {
         let row = &v["usage"][key];
         if let Some(p) = percent(&row["percent"]) {
             s.windows.push(window(label, duration, 100.0 - p, iso(&row["resetsAt"])));
@@ -139,23 +139,23 @@ fn minimax_percent(row: &Value, prefix: &str) -> Option<f32> {
 }
 fn parse_minimax(v: &Value, s: &mut Snapshot) -> Result<(), String> {
     if let Some(code) = v.pointer("/base_resp/status_code") {
-        if number(code) != Some(0.0) { return Err("MiniMax 未返回可用套餐额度，请检查套餐密钥和地区".into()); }
+        if number(code) != Some(0.0) { return Err("MiniMax 未返回可用套餐額度，請檢查套餐金鑰和地區".into()); }
     }
-    s.plan = "编程套餐".into();
-    let rows = v["model_remains"].as_array().ok_or("MiniMax 额度响应缺少模型列表")?;
+    s.plan = "程式設計套餐".into();
+    let rows = v["model_remains"].as_array().ok_or("MiniMax 額度響應缺少模型列表")?;
     // General is the authoritative shared pool in current plans. Do not sum
     // overlapping model pools or substitute unrelated video/image quotas.
     let row = rows.iter().find(|r| r["model_name"].as_str() == Some("general"))
         .or_else(|| rows.iter().find(|r| r["model_name"].as_str() == Some("MiniMax-M*")))
-        .ok_or("MiniMax 未返回可识别的编程套餐额度")?;
+        .ok_or("MiniMax 未返回可識別的程式設計套餐額度")?;
     for (prefix, start, end, label) in [
-        ("current_interval", "start_time", "end_time", "当前周期"),
-        ("current_weekly", "weekly_start_time", "weekly_end_time", "本周"),
+        ("current_interval", "start_time", "end_time", "當前週期"),
+        ("current_weekly", "weekly_start_time", "weekly_end_time", "本週"),
     ] {
         if let Some(mut p) = minimax_percent(row, prefix) {
             if prefix == "current_weekly" && !row["weekly_boost_permille"].is_null() {
                 let boost = number(&row["weekly_boost_permille"]).filter(|n| *n > 0.0 && *n <= 10000.0)
-                    .ok_or("MiniMax 周额度倍率无效")?;
+                    .ok_or("MiniMax 周額度倍率無效")?;
                 p *= (boost / 1000.0) as f32;
             }
             let reset = millis(&row[end]);
@@ -170,10 +170,10 @@ fn parse_glm(v: &Value, s: &mut Snapshot) -> Result<(), String> {
         return Err(glm_error(v,None).0);
     }
     let data = if v["data"].is_object() { &v["data"] } else { v };
-    let rows = data["limits"].as_array().ok_or("GLM 额度响应缺少限制列表")?;
-    if rows.len()>16{return Err("GLM 返回过多额度窗口，请检查响应版本".into());}
+    let rows = data["limits"].as_array().ok_or("GLM 額度響應缺少限制列表")?;
+    if rows.len()>16{return Err("GLM 返回過多額度視窗，請檢查響應版本".into());}
     if !rows.iter().any(|row|matches!(row["type"].as_str(),Some("TOKENS_LIMIT"|"CREDIT_LIMIT")) && percent(&row["percentage"]).is_some()){
-        return Err("GLM 未返回可识别的编程额度（工具额度不能代替编程额度）".into());
+        return Err("GLM 未返回可識別的程式設計額度（工具額度不能代替程式設計額度）".into());
     }
     // 复用原 ZCode 已支持的周期和重置时间解析，保留两种登录来源的相同口径。
     *s=super::zcode::coding(&serde_json::json!({"data":data}))?;
@@ -188,13 +188,13 @@ mod tests {
     #[test] fn glm_business_errors_are_specific_without_echoing_private_messages(){
         for provider in [PlanProvider::GlmChina,PlanProvider::GlmGlobal]{
             for (code,message,expected) in [
-                (401,"token expired or incorrect synthetic-secret","密钥"),
-                (1003,"synthetic-secret","已过期"),
-                (1220,"synthetic-secret","权限"),
+                (401,"token expired or incorrect synthetic-secret","金鑰"),
+                (1003,"synthetic-secret","已過期"),
+                (1220,"synthetic-secret","許可權"),
                 (1309,"synthetic-secret","套餐已到期"),
                 (1315,"synthetic-secret","套餐 Key"),
-                (1302,"synthetic-secret","频繁"),
-                (500,"用户不存在coding plan synthetic-secret","未查询到有效"),
+                (1302,"synthetic-secret","頻繁"),
+                (500,"使用者不存在coding plan synthetic-secret","未查詢到有效"),
                 (5555,"synthetic-secret https://private.invalid","5555"),
             ]{
                 let error=parse(provider,&json!({"success":false,"code":code,"msg":message})).unwrap_err();
@@ -206,9 +206,9 @@ mod tests {
     #[test] fn glm_http_and_business_errors_preserve_their_meaning_and_retry_delay(){
         for (status,body,expected,delay) in [
             (429,r#"{"error":{"code":"1309","message":"synthetic-secret"}}"#,"套餐已到期",60),
-            (401,r#"{"error":{"code":"1003","message":"synthetic-secret"}}"#,"已过期",0),
-            (200,r#"{"success":false,"code":1302,"msg":"synthetic-secret"}"#,"频繁",180),
-            (429,"<html>synthetic-secret</html>","频繁",180),
+            (401,r#"{"error":{"code":"1003","message":"synthetic-secret"}}"#,"已過期",0),
+            (200,r#"{"success":false,"code":1302,"msg":"synthetic-secret"}"#,"頻繁",180),
+            (429,"<html>synthetic-secret</html>","頻繁",180),
             (503,"<html>synthetic-secret</html>","503",30),
         ]{
             let count=std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));let calls=count.clone();
@@ -261,7 +261,7 @@ mod tests {
     }
     #[test] fn opencode_unknown_rolling_cadence_preserves_primary_order() {
         let s = parse(PlanProvider::OpenCodeGo, &json!({"usage":{"rolling":{"percent":10},"weekly":{"percent":20},"monthly":{"percent":30}}})).unwrap();
-        assert_eq!(s.rings().iter().map(|w| w.label.as_str()).collect::<Vec<_>>(), vec!["滚动", "本周"]);
+        assert_eq!(s.rings().iter().map(|w| w.label.as_str()).collect::<Vec<_>>(), vec!["滾動", "本週"]);
         assert!(s.windows.iter().all(|w| w.seconds.is_none()));
     }
     #[test] fn glm_tools_only_cannot_connect_as_blank_coding_account() {

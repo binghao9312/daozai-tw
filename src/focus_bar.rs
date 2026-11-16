@@ -106,7 +106,7 @@ mod tests {
         let max=outline.iter().map(|p|p.1).fold(f32::NEG_INFINITY,f32::max);
         for fraction in [0.0,0.001,0.01,0.1,0.5,0.9,0.99,0.999,1.0] {for t in [0.0,1.0,3.5,7.0] {
             let points=liquid(&outline,fraction,t);
-            assert!(points.iter().all(|p|p.0.is_finite() && p.1.is_finite() && p.1>=min-0.001 && p.1<=max+0.001),"液面不能越过番茄边界");
+            assert!(points.iter().all(|p|p.0.is_finite() && p.1.is_finite() && p.1>=min-0.001 && p.1<=max+0.001),"液麵不能越過番茄邊界");
             if fraction==0.0 {assert!(points.is_empty());}
             if fraction==1.0 {assert_eq!(points,outline);}
         }}
@@ -116,7 +116,7 @@ mod tests {
         let outline=tomato_outline(0.0,0.0);
         let area=|points:Vec<(f32,f32)>|points.iter().zip(points.iter().cycle().skip(1)).take(points.len()).map(|(a,b)|a.0*b.1-b.0*a.1).sum::<f32>().abs()/2.0;
         let values:Vec<_>=[0.1,0.5,0.9].into_iter().map(|fraction|area(liquid(&outline,fraction,1.0))).collect();
-        assert!(values.windows(2).all(|p|p[0]<p[1]),"剩余时间越少，番茄内的能量应越少");
+        assert!(values.windows(2).all(|p|p[0]<p[1]),"剩餘時間越少，番茄內的能量應越少");
     }
 }
 

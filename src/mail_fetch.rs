@@ -22,7 +22,7 @@ fn parts(body:&BodyStructure<'_>,path:&mut Vec<u32>,out:&mut Vec<Vec<u32>>){
 fn make_item(parsed:Parsed,fetch:&imap::types::Fetch,account:&Account)->Item{
     Item {received_unix: fetch.internal_date().map(|d|d.timestamp()), account:account.email.clone(),
         from:if parsed.from.is_empty(){account.email.clone()}else{parsed.from.clone()},
-        subject:if parsed.subject.is_empty(){"（无主题）".into()}else{parsed.subject.clone()},
+        subject:if parsed.subject.is_empty(){"（無主題）".into()}else{parsed.subject.clone()},
         time:fetch.internal_date().map(|d|d.with_timezone(&chrono::Local).format("%m-%d %H:%M").to_string()).unwrap_or_default(),
         code:code_of(&parsed),summary:body_of(&parsed).into(),html:parsed.html.clone().into(),links:links_of(&parsed),meeting:meeting_of(&parsed.calendar),uid:fetch.uid.unwrap_or(0)}
 }
@@ -103,9 +103,9 @@ mod tests {
     fn out_of_sync_response_reports_an_error_instead_of_crashing(){
         // 用户崩溃日志：vendor\imap\src\client.rs:1369 的标签断言。a2 的位置收到上一条命令迟到的 a1 结束行。
         let (mut session,output)=wire("a1 OK late\r\n* 1 FETCH (UID 42 BODY[HEADER] {9}\r\nSubject:\n)\r\na2 OK fetch\r\n");
-        assert!(item(&mut session,42,&account()).is_err(),"错位的连接应交给上层重连");
+        assert!(item(&mut session,42,&account()).is_err(),"錯位的連線應交給上層重連");
         let commands=String::from_utf8(output.lock().unwrap().clone()).unwrap();
-        assert!(!commands.contains("BODY.PEEK[TEXT]"),"连接失步后不能再发备用读取命令");
+        assert!(!commands.contains("BODY.PEEK[TEXT]"),"連線失步後不能再發備用讀取命令");
         assert!(matches!(session.noop(),Err(imap::Error::ConnectionLost)));
     }
     #[test]
@@ -126,7 +126,7 @@ mod tests {
     #[test]
     fn qq_empty_body_structure_accepts_nil_transfer_encoding(){
         let response=b"* 1 FETCH (UID 42 BODYSTRUCTURE (\"TEXT\" \"PLAIN\" (\"CHARSET\" \"UTF-8\") NIL NIL NIL 0 0 NIL NIL NIL))\r\n";
-        assert!(imap_proto::parse_response(response).is_ok(),"空邮件的 NIL 编码不能让后续收信响应错位");
+        assert!(imap_proto::parse_response(response).is_ok(),"空郵件的 NIL 編碼不能讓後續收信響應錯位");
     }
     #[test]
     fn large_binary_attachment_is_never_requested_and_full_text_is_kept(){
@@ -137,8 +137,8 @@ mod tests {
         let reply=format!("* 1 FETCH (UID 42 BODYSTRUCTURE {structure} BODY[HEADER] {})\r\na2 OK fetch\r\n* 1 FETCH (UID 42 BODY[1.MIME] {} BODY[1] {})\r\na3 OK fetch\r\n",literal(header),literal(mime),literal(&body));
         let (item,commands)=run(reply);
         assert_eq!(item.code.as_deref(),Some("834921"));assert_eq!(item.summary.as_ref(),body.replace("\r\n","\n"));
-        assert!(!commands.contains("BODY.PEEK[TEXT]") && !commands.contains("BODY.PEEK[2]"),"不能下载 32 MiB 二进制附件");
-        let copy=item.clone();assert_eq!(item.summary.as_ptr(),copy.summary.as_ptr(),"列表、详情和独立阅读窗口应共享正文");
+        assert!(!commands.contains("BODY.PEEK[TEXT]") && !commands.contains("BODY.PEEK[2]"),"不能下載 32 MiB 二進位制附件");
+        let copy=item.clone();assert_eq!(item.summary.as_ptr(),copy.summary.as_ptr(),"列表、詳情和獨立閱讀視窗應共享正文");
     }
     #[test]
     fn unsupported_structure_falls_back_without_marking_mail_read(){
@@ -152,8 +152,8 @@ mod tests {
         use base64::Engine;
         let header="Subject: Meeting\r\nContent-Type: multipart/mixed; boundary=x\r\n\r\n";
         let structure=r#"((("TEXT" "PLAIN" ("CHARSET" "UTF-8") NIL NIL "QUOTED-PRINTABLE" 100 1)("TEXT" "HTML" ("CHARSET" "UTF-8") NIL NIL "BASE64" 100 1) "ALTERNATIVE")("IMAGE" "PNG" NIL NIL NIL "BASE64" 10000000)("TEXT" "CALENDAR" ("CHARSET" "UTF-8") NIL NIL "BASE64" 100 1) "MIXED")"#;
-        let html=base64::engine::general_purpose::STANDARD.encode("<p>会议资料</p><a href=\"https://example.com/doc?a=1&amp;b=2\">打开文档</a>");
-        let calendar=base64::engine::general_purpose::STANDARD.encode("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:test-meeting\r\nSUMMARY:项目评审\r\nDTSTART:20261104T060000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
+        let html=base64::engine::general_purpose::STANDARD.encode("<p>會議資料</p><a href=\"https://example.com/doc?a=1&amp;b=2\">開啟文件</a>");
+        let calendar=base64::engine::general_purpose::STANDARD.encode("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:test-meeting\r\nSUMMARY:專案評審\r\nDTSTART:20261104T060000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         let mut reply=format!("* 1 FETCH (UID 42 BODYSTRUCTURE {structure} BODY[HEADER] {})\r\na2 OK fetch\r\n",literal(header));
         for (i,(path,kind,encoding,body)) in [
             ("1.1","plain","quoted-printable","Your verification code is =38=33=34=39=32=31."),
@@ -164,30 +164,30 @@ mod tests {
         }
         let (item,commands)=run(reply);
         assert_eq!(item.code.as_deref(),Some("834921"));
-        assert_eq!(item.links[0].url,"https://example.com/doc?a=1&b=2");assert_eq!(item.links[0].label,"打开文档");
-        assert_eq!(item.meeting.unwrap().title,"项目评审");assert!(!commands.contains("BODY.PEEK[2]"));
+        assert_eq!(item.links[0].url,"https://example.com/doc?a=1&b=2");assert_eq!(item.links[0].label,"開啟文件");
+        assert_eq!(item.meeting.unwrap().title,"專案評審");assert!(!commands.contains("BODY.PEEK[2]"));
     }
 
     #[test]
-    #[ignore="使用已配置邮箱进行只读对比；不打印账号、凭据或邮件内容"]
+    #[ignore="使用已配置信箱進行只讀對比；不列印帳號、憑據或郵件內容"]
     fn live_segment_fetch_matches_legacy_for_recent_mail(){
-        let account=super::super::load_accounts().into_iter().find(|a|a.enabled).expect("需要一个已配置邮箱");
-        let password=super::super::secrets::load(&account.credential_key()).expect("读取凭据失败");
-        let mut session=super::super::net::connect(&account,&password).expect("连接失败");
+        let account=super::super::load_accounts().into_iter().find(|a|a.enabled).expect("需要一個已配置信箱");
+        let password=super::super::secrets::load(&account.credential_key()).expect("讀取憑據失敗");
+        let mut session=super::super::net::connect(&account,&password).expect("連線失敗");
         session.examine("INBOX").unwrap();
         let unread=session.uid_search("UNSEEN").unwrap();
         let mut uids=session.uid_search("ALL").unwrap().into_iter().collect::<Vec<_>>();uids.sort_unstable();
         let mut count=0;
         for uid in uids.into_iter().rev().take(20){
-            let old=legacy(&mut session,uid,&account).expect("旧路径读取失败").unwrap();
-            let new=item(&mut session,uid,&account).expect("分段读取失败").unwrap();
-            assert!(old.subject==new.subject && old.from==new.from && old.time==new.time,"元信息不一致");
-            assert!(old.summary==new.summary,"正文不一致，旧长度={}，新长度={}",old.summary.len(),new.summary.len());
-            assert!(old.code==new.code,"验证码不一致");assert!(old.links==new.links,"链接不一致");assert!(old.meeting==new.meeting,"日程不一致");
+            let old=legacy(&mut session,uid,&account).expect("舊路徑讀取失敗").unwrap();
+            let new=item(&mut session,uid,&account).expect("分段讀取失敗").unwrap();
+            assert!(old.subject==new.subject && old.from==new.from && old.time==new.time,"元訊息不一致");
+            assert!(old.summary==new.summary,"正文不一致，舊長度={}，新長度={}",old.summary.len(),new.summary.len());
+            assert!(old.code==new.code,"驗證碼不一致");assert!(old.links==new.links,"連結不一致");assert!(old.meeting==new.meeting,"日程不一致");
             count+=1;
         }
-        assert!(count>0,"收件箱为空，不能据此确认读取兼容性");
-        assert_eq!(unread,session.uid_search("UNSEEN").unwrap(),"只读检查不能改变未读状态");session.logout().unwrap();
+        assert!(count>0,"收件箱為空，不能據此確認讀取相容性");
+        assert_eq!(unread,session.uid_search("UNSEEN").unwrap(),"只讀檢查不能改變未讀狀態");session.logout().unwrap();
         println!("compared_messages={count} content_equal=true unread_unchanged=true");
     }
 }

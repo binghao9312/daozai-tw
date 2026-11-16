@@ -10,8 +10,8 @@ mod login;
 pub enum LoginSource { Browser, Local, Cookie(String) }
 
 const ENDPOINT: &str = "https://www.doubao.com/alice/commerce/sale/subscription/quota/summary/";
-const LOGIN_ERROR: &str = "豆包登录已失效，请重新连接浏览器账号";
-const PARSE_ERROR: &str = "豆包额度接口已变化，暂时无法读取";
+const LOGIN_ERROR: &str = "豆包登入已失效，請重新連線瀏覽器帳號";
+const PARSE_ERROR: &str = "豆包額度介面已變化，暫時無法讀取";
 const MAX_BODY: u64 = 1024 * 1024;
 const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36";
 
@@ -45,7 +45,7 @@ fn window(limit: &Value) -> Option<Window> {
     let used = used_percent(limit)?;
     let reset = seconds.and_then(|_| integer(&limit["end_time"])).filter(|time| *time > 0)
         .map(|time| if time >= 100_000_000_000 { time / 1000 } else { time });
-    let label = match seconds { Some(18000) => "5 小时", Some(604800) => "本周", _ => "其他额度" };
+    let label = match seconds { Some(18000) => "5 小時", Some(604800) => "本週", _ => "其他額度" };
     Some(Window { label: label.into(), seconds, remaining: (100.0 - used).clamp(0.0, 100.0) as f32, reset, amount: None })
 }
 
@@ -53,7 +53,7 @@ pub fn parse(value: &Value) -> Result<Snapshot, String> {
     if let Some(code) = value.get("code") {
         let code = integer(code).ok_or(PARSE_ERROR)?;
         if code == 710012001 { return Err(LOGIN_ERROR.into()); }
-        if code != 0 { return Err(format!("豆包额度服务返回错误（{code}）")); }
+        if code != 0 { return Err(format!("豆包額度服務返回錯誤（{code}）")); }
     }
     let data = value.get("data").filter(|data| data.is_object()).ok_or(LOGIN_ERROR)?;
     let mut windows = Vec::new();
@@ -64,7 +64,7 @@ pub fn parse(value: &Value) -> Result<Snapshot, String> {
             for limit in group["window_limits"].as_array().into_iter().flatten() {
                 let Some(mut window) = window(limit) else { continue };
                 if section == "incentive_quota_section" {
-                    window.label = if window.seconds.is_some() { format!("活动 · {}", window.label) } else { "活动额度".into() };
+                    window.label = if window.seconds.is_some() { format!("活動 · {}", window.label) } else { "活動額度".into() };
                 }
                 if let Some(name) = group["feature_group_name"].as_str().map(str::trim).filter(|name| !name.is_empty()) {
                     window.label = format!("{name} · {}", window.label);
@@ -85,7 +85,7 @@ pub fn parse(value: &Value) -> Result<Snapshot, String> {
         else { primary.push(window); }
     }
     if primary.is_empty() {
-        if extra.is_empty() { return Err("豆包账号暂未提供可读取的订阅额度".into()); }
+        if extra.is_empty() { return Err("豆包帳號暫未提供可讀取的訂閱額度".into()); }
         primary = std::mem::take(&mut extra);
     }
     let plan = ["/current_subscription/display/short_name", "/current_subscription/display/product_name"]
@@ -99,12 +99,12 @@ fn cookie(raw: &str) -> Result<String, String> {
     let raw = raw.trim();
     let raw = raw.split_once(':').filter(|(name, _)| name.eq_ignore_ascii_case("cookie")).map(|(_, value)| value).unwrap_or(raw).trim();
     if raw.is_empty() || raw.len() > 32768 || !raw.is_ascii() || raw.bytes().any(|byte| byte < 32 || byte == 127) {
-        return Err("请粘贴有效的 Cookie 请求头".into());
+        return Err("請貼上有效的 Cookie 請求頭".into());
     }
     let sessions: Vec<_> = raw.split(';').filter_map(|part| part.trim().split_once('='))
         .filter(|(name, _)| *name == "sessionid").map(|(_, value)| value).collect();
     if sessions.len() != 1 || sessions[0].len() != 32 || !sessions[0].bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        return Err("Cookie 中没有唯一有效的豆包 sessionid，请重新复制".into());
+        return Err("Cookie 中沒有唯一有效的豆包 sessionid，請重新複製".into());
     }
     Ok(raw.into())
 }
@@ -130,15 +130,15 @@ fn save(slot: &str, header: &str) -> Result<(), String> {
     let path = session_path(slot)?;
     let raw = json!({"slot": slot, "cookie": header}).to_string();
     let encrypted = super::gemini::protect(raw.as_bytes(), true)?;
-    fs::create_dir_all(path.parent().ok_or("无法保存豆包登录")?).map_err(|_| "无法保存豆包登录")?;
-    crate::model::atomic_write(&path, &encrypted).map_err(|_| "无法保存豆包登录".into())
+    fs::create_dir_all(path.parent().ok_or("無法儲存豆包登入")?).map_err(|_| "無法儲存豆包登入")?;
+    crate::model::atomic_write(&path, &encrypted).map_err(|_| "無法儲存豆包登入".into())
 }
 
 fn load_slot(slot: &str) -> Result<String, String> {
     let encrypted = fs::read(session_path(slot)?).map_err(|_| LOGIN_ERROR)?;
     let raw = super::gemini::protect(&encrypted, false)?;
     let value: Value = serde_json::from_slice(&raw).map_err(|_| LOGIN_ERROR)?;
-    if value["slot"].as_str() != Some(slot) { return Err("豆包账号不一致，请重新连接".into()); }
+    if value["slot"].as_str() != Some(slot) { return Err("豆包帳號不一致，請重新連線".into()); }
     cookie(value["cookie"].as_str().ok_or(LOGIN_ERROR)?)
 }
 
@@ -146,7 +146,7 @@ fn delete_slot(slot: &str) -> Result<(), String> {
     match fs::remove_file(session_path(slot)?) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(_) => Err("豆包加密登录清理失败，请检查数据目录权限".into()),
+        Err(_) => Err("豆包加密登入清理失敗，請檢查資料目錄許可權".into()),
     }
 }
 
@@ -162,14 +162,14 @@ fn request(agent: &ureq::Agent, url: &str, header: &str) -> Result<Snapshot, (St
         .set("User-Agent", USER_AGENT).send_string(r#"{"product_line":"membership"}"#)
         .map_err(|error| match error {
             ureq::Error::Status(401 | 403, _) => (LOGIN_ERROR.into(), 0),
-            ureq::Error::Status(429, response) => ("豆包请求过于频繁，稍后自动重试".into(),
+            ureq::Error::Status(429, response) => ("豆包請求過於頻繁，稍後自動重試".into(),
                 response.header("Retry-After").and_then(|value| value.parse().ok()).unwrap_or(180).clamp(30, 3600)),
-            ureq::Error::Status(code, _) => (format!("豆包额度服务暂不可用（{code}）"), 60),
-            _ => ("无法连接豆包额度服务，请检查网络或代理".into(), 30),
+            ureq::Error::Status(code, _) => (format!("豆包額度服務暫不可用（{code}）"), 60),
+            _ => ("無法連線豆包額度服務，請檢查網路或代理".into(), 30),
         })?;
     if (300..400).contains(&response.status()) { return Err((LOGIN_ERROR.into(), 0)); }
     let mut body = Vec::new();
-    response.into_reader().take(MAX_BODY + 1).read_to_end(&mut body).map_err(|_| ("读取豆包额度失败".into(), 30))?;
+    response.into_reader().take(MAX_BODY + 1).read_to_end(&mut body).map_err(|_| ("讀取豆包額度失敗".into(), 30))?;
     if body.len() as u64 > MAX_BODY { return Err((PARSE_ERROR.into(), 60)); }
     let value: Value = serde_json::from_slice(&body).map_err(|_| (PARSE_ERROR.into(), 60))?;
     parse(&value).map_err(|error| { let retry = if error == LOGIN_ERROR { 0 } else { 60 }; (error, retry) })
@@ -187,15 +187,15 @@ impl Validated {
     pub fn finish(self, config: &mut Config, target: Option<&str>) -> Result<Connected, String> {
         let old = if let Some(id) = target {
             Some(config.accounts.iter().find(|account| account.id == id && account.provider == Provider::Doubao
-                && account.slot == self.expected).cloned().ok_or("原账号已变化，请重新连接")?)
+                && account.slot == self.expected).cloned().ok_or("原帳號已變化，請重新連線")?)
         } else {
-            if self.expected.is_some() { return Err("原连接窗口已变化，请重新连接".into()); }
+            if self.expected.is_some() { return Err("原連線視窗已變化，請重新連線".into()); }
             config.accounts.iter().filter(|account| account.provider == Provider::Doubao)
                 .find(|account| account.slot.as_deref().and_then(|slot| load_slot(slot).ok()).is_some_and(|header| same_login(&header, &self.header))).cloned()
         };
         use ring::rand::SecureRandom;
         let mut bytes = [0u8; 32];
-        ring::rand::SystemRandom::new().fill(&mut bytes).map_err(|_| "无法生成安全凭据引用")?;
+        ring::rand::SystemRandom::new().fill(&mut bytes).map_err(|_| "無法生成安全憑據引用")?;
         let slot: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
         let mut candidate = config.clone();
         let label = if self.alias.trim().is_empty() {
@@ -228,7 +228,7 @@ impl Connect {
     pub fn start(alias: String, source: LoginSource, expected: Option<String>) -> Self {
         let (tx, rx) = mpsc::channel(); let cancel = Arc::new(AtomicBool::new(false)); let worker_cancel = cancel.clone();
         if CONNECTING.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).is_err() {
-            let _ = tx.send(Err("上次豆包连接仍在结束，请稍后重试".into())); return Self { rx, cancel };
+            let _ = tx.send(Err("上次豆包連線仍在結束，請稍後重試".into())); return Self { rx, cancel };
         }
         std::thread::spawn(move || {
             let _slot = ConnectionSlot;
@@ -240,14 +240,14 @@ impl Connect {
                     #[cfg(windows)]
                     LoginSource::Local => login::local()?,
                     #[cfg(not(windows))]
-                    _ => return Err("豆包官网登录暂仅支持 Windows，也可使用 Cookie 连接".into()),
+                    _ => return Err("豆包官網登入暫僅支援 Windows，也可使用 Cookie 連線".into()),
                 };
                 if let Some(expected) = &expected {
-                    if !same_login(&load_slot(expected)?, &header) { return Err("无法确认原豆包账号，请复制完整 Cookie，或切回原账号后重试".into()); }
+                    if !same_login(&load_slot(expected)?, &header) { return Err("無法確認原豆包帳號，請複製完整 Cookie，或切回原帳號後重試".into()); }
                 }
-                if worker_cancel.load(Ordering::Acquire) { return Err("已取消豆包连接".into()); }
+                if worker_cancel.load(Ordering::Acquire) { return Err("已取消豆包連線".into()); }
                 let snapshot = request(&super::http_agent(), ENDPOINT, &header).map_err(|error| error.0)?;
-                if worker_cancel.load(Ordering::Acquire) { return Err("已取消豆包连接".into()); }
+                if worker_cancel.load(Ordering::Acquire) { return Err("已取消豆包連線".into()); }
                 Ok(Validated { alias, header, snapshot, expected })
             })();
             let _ = tx.send(result);
@@ -266,7 +266,7 @@ impl Connect {
     #[cfg(test)]
     pub(crate) fn ready_test() -> (Self, Arc<AtomicBool>) {
         let (tx, rx) = mpsc::channel(); let cancel = Arc::new(AtomicBool::new(false));
-        assert!(tx.send(Ok(Validated { alias: "测试".into(), header: format!("sessionid={}", "a".repeat(32)), snapshot: Snapshot::default(), expected: None })).is_ok());
+        assert!(tx.send(Ok(Validated { alias: "測試".into(), header: format!("sessionid={}", "a".repeat(32)), snapshot: Snapshot::default(), expected: None })).is_ok());
         (Self { rx, cancel: cancel.clone() }, cancel)
     }
 }

@@ -16,12 +16,12 @@ pub enum DeviceKind { Bone, Earbuds, Headphones, Speaker, Keyboard, Mouse, Gamep
 fn device_kind(name: &str, classic: bool, class: Option<u32>) -> DeviceKind {
     use DeviceKind::*;
     let name = name.to_lowercase();
-    if ["shokz", "aftershokz", "openmove", "openrun", "骨传导"].iter().any(|s| name.contains(s)) { return Bone; }
+    if ["shokz", "aftershokz", "openmove", "openrun", "骨傳導","骨传导"].iter().any(|s| name.contains(s)) { return Bone; }
     if ["earbuds", "airpods", "buds", "earphones", "入耳"].iter().any(|s| name.contains(s)) { return Earbuds; }
-    if ["keyboard", "键盘"].iter().any(|s| name.contains(s)) { return Keyboard; }
-    if ["mouse", "鼠标"].iter().any(|s| name.contains(s)) { return Mouse; }
+    if ["keyboard", "鍵盤", "键盘"].iter().any(|s| name.contains(s)) { return Keyboard; }
+    if ["mouse", "滑鼠", "鼠标"].iter().any(|s| name.contains(s)) { return Mouse; }
     if ["gamepad", "controller", "手柄"].iter().any(|s| name.contains(s)) { return Gamepad; }
-    if ["speaker", "音箱", "音响"].iter().any(|s| name.contains(s)) { return Speaker; }
+    if ["speaker", "音箱", "音響", "音响"].iter().any(|s| name.contains(s)) { return Speaker; }
     if let Some(class) = class {
         if classic {
             match (class >> 8) & 0x1f {
@@ -40,14 +40,14 @@ fn device_kind(name: &str, classic: bool, class: Option<u32>) -> DeviceKind {
             }
         }
     }
-    if ["headphone", "headset", "耳机"].iter().any(|s| name.contains(s)) { Headphones } else { Other }
+    if ["headphone", "headset", "耳機", "耳机"].iter().any(|s| name.contains(s)) { Headphones } else { Other }
 }
 
 impl Device {
     /// 通知条正文：`名称 · 电量 80%`，设备没上报电量时只写名称。
     pub fn summary(&self) -> String {
         match self.battery {
-            Some(b) => format!("{} · 电量 {b}%", self.name),
+            Some(b) => format!("{} · 電量 {b}%", self.name),
             None => self.name.clone(),
         }
     }
@@ -215,7 +215,7 @@ mod tests {
             let found=cache.update(vec![device("AA")],start+Duration::from_secs(second),|_|{scans+=1;Ok(vec![("AA".into(),80)])});
             assert_eq!(found[0].battery,Some(80));
         }
-        assert_eq!(scans,6,"六分钟内同一设备的电量扫描应最多每分钟一次");
+        assert_eq!(scans,6,"六分鐘內同一裝置的電量掃描應最多每分鐘一次");
     }
 
     #[test]
@@ -226,8 +226,8 @@ mod tests {
         assert_eq!(found[1].battery,Some(60));
         let found=cache.update(vec![device("AA"),device("BB")],now+Duration::from_secs(62),|_|Err(()));
         assert_eq!(found[0].battery,Some(79));
-        cache.update(vec![device("AA"),device("BB")],now+Duration::from_secs(64),|_|panic!("失败后不能立即重复扫描"));
-        assert!(cache.update(vec![],now+Duration::from_secs(66),|_|panic!("无设备不能扫描整机")).is_empty());
+        cache.update(vec![device("AA"),device("BB")],now+Duration::from_secs(64),|_|panic!("失敗後不能立即重複掃描"));
+        assert!(cache.update(vec![],now+Duration::from_secs(66),|_|panic!("無裝置不能掃描整機")).is_empty());
         cache.update(vec![device("AA")],now+Duration::from_secs(68),|_|Ok(vec![("AA".into(),78)]));
         assert_eq!(cache.devices[0].battery,Some(78));
     }
@@ -237,9 +237,9 @@ mod tests {
         assert_eq!(device_kind("OpenMove by Shokz", true, Some(0x240418)), DeviceKind::Bone);
         assert_eq!(device_kind("QingLong 87 Ultra 8K", false, Some(961)), DeviceKind::Keyboard);
         assert_eq!(device_kind("MX Anywhere", false, Some(962)), DeviceKind::Mouse);
-        assert_eq!(device_kind("耳机", true, Some(0x0404)), DeviceKind::Headphones);
+        assert_eq!(device_kind("耳機", true, Some(0x0404)), DeviceKind::Headphones);
         assert_eq!(device_kind("AirPods", true, None), DeviceKind::Earbuds);
-        assert_eq!(device_kind("未知设备", false, None), DeviceKind::Other);
+        assert_eq!(device_kind("未知裝置", false, None), DeviceKind::Other);
     }
 
     #[test]
@@ -247,7 +247,7 @@ mod tests {
         let d = Device { id: "1".into(), name: "Headset".into(), battery: None, kind: DeviceKind::Headphones };
         assert_eq!(d.summary(), "Headset");
         let d = Device { battery: Some(80), ..d };
-        assert_eq!(d.summary(), "Headset · 电量 80%");
+        assert_eq!(d.summary(), "Headset · 電量 80%");
     }
 }
 

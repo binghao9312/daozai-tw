@@ -19,17 +19,17 @@ pub fn run(data_dir:&Path)->Result<(),String> {
     use std::os::windows::process::CommandExt;
     const CREATE_NEW_CONSOLE:u32=0x0000_0010;
     let work=std::env::temp_dir().join(format!("daozai-diagnostics-tool-{}",std::process::id()));
-    std::fs::create_dir_all(&work).map_err(|e|format!("无法创建临时目录：{e}"))?;
+    std::fs::create_dir_all(&work).map_err(|e|format!("無法建立臨時目錄：{e}"))?;
     let script=work.join("collect-diagnostics.ps1");
     let result=(||{
         // 脚本自带 UTF-8 BOM，Windows PowerShell 5.1 才能正确读中文。
-        std::fs::write(&script,SCRIPT).map_err(|e|format!("无法写入诊断脚本：{e}"))?;
+        std::fs::write(&script,SCRIPT).map_err(|e|format!("無法寫入診斷指令碼：{e}"))?;
         let output=dirs_desktop().unwrap_or_else(||data_dir.to_path_buf());
         let status=std::process::Command::new("powershell.exe")
             .args(["-NoProfile","-ExecutionPolicy","Bypass","-File"]).arg(&script)
             .arg("-DataDirectory").arg(data_dir).arg("-OutputDirectory").arg(output).arg("-RevealArchive")
-            .creation_flags(CREATE_NEW_CONSOLE).status().map_err(|e|format!("无法启动 PowerShell：{e}"))?;
-        if !status.success(){return Err("诊断收集未完成".into());}
+            .creation_flags(CREATE_NEW_CONSOLE).status().map_err(|e|format!("無法啟動 PowerShell：{e}"))?;
+        if !status.success(){return Err("診斷收集未完成".into());}
         Ok(())
     })();
     let _=std::fs::remove_file(&script);let _=std::fs::remove_dir(&work);
@@ -64,7 +64,7 @@ mod tests {
     }
     #[test]
     fn embedded_script_keeps_bom_and_collects_music_gaps(){
-        assert!(SCRIPT.starts_with(&[0xEF,0xBB,0xBF]),"Windows PowerShell 5.1 需要 BOM 才能读中文");
+        assert!(SCRIPT.starts_with(&[0xEF,0xBB,0xBF]),"Windows PowerShell 5.1 需要 BOM 才能讀中文");
         let text=String::from_utf8_lossy(SCRIPT);
         assert!(text.contains("music-gaps.log") && text.contains("param("));
     }

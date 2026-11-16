@@ -35,7 +35,7 @@ pub fn connected()->Vec<Display>{
             let name=if found{text(&details.DeviceString)}else{String::new()};
             let number=device.trim_start_matches(r"\\.\DISPLAY");let r=info.monitorInfo.rcMonitor;
             let primary=info.monitorInfo.dwFlags&1!=0;
-            let label=format!("显示器 {number}{} · {} × {}{}",if name.is_empty(){String::new()}else{format!(" · {name}")},r.right-r.left,r.bottom-r.top,if primary{" · 主屏"}else{""});
+            let label=format!("顯示器 {number}{} · {} × {}{}",if name.is_empty(){String::new()}else{format!(" · {name}")},r.right-r.left,r.bottom-r.top,if primary{" · 主屏"}else{""});
             let displays=&mut *(data.0 as *mut Vec<Display>);
             displays.push(Display{id:if stable_id.is_empty(){device}else{stable_id},label,bounds:Bounds{left:r.left,top:r.top,right:r.right,bottom:r.bottom},work_top:info.monitorInfo.rcWork.top,primary});
         }
@@ -124,8 +124,8 @@ mod shift_slack_tests {
         let m=Bounds{left:0,top:0,right:1920,bottom:1080};
         for scale in [1.0,1.25,1.5,2.0] {
             let (back,forth)=slack(m,Dock::Top,scale,0.0);
-            assert_eq!(back,forth,"居中时两侧余量相同：{scale}");
-            assert_eq!(back,island_travel(m,scale).floor() as i32,"余量应等于可移动范围");
+            assert_eq!(back,forth,"居中時兩側餘量相同：{scale}");
+            assert_eq!(back,island_travel(m,scale).floor() as i32,"餘量應等於可移動範圍");
         }
     }
 
@@ -133,16 +133,16 @@ mod shift_slack_tests {
     fn pushing_the_island_to_the_edge_leaves_no_room_outwards(){
         let m=Bounds{left:0,top:0,right:1920,bottom:1080};
         let (back,forth)=slack(m,Dock::Top,1.0,1.0);
-        assert_eq!(forth,0,"拉到最右后不能再往右挪，否则展开面板会被裁掉");
+        assert_eq!(forth,0,"拉到最右後不能再往右挪，否則展開面板會被裁掉");
         let (back,forth)=slack(m,Dock::Top,1.0,-1.0);
-        assert_eq!(back,0,"拉到最左后不能再往左挪");
+        assert_eq!(back,0,"拉到最左後不能再往左挪");
         assert!(forth>0);
     }
 
     #[test]
     fn narrow_screens_have_no_room_at_all(){
-        assert_eq!(slack(Bounds{left:0,top:0,right:480,bottom:900},Dock::Top,1.0,0.0),(0,0),"宽度不够放展开面板时不挪");
-        assert_eq!(slack(Bounds{left:0,top:0,right:1920,bottom:300},Dock::Left,1.0,0.0),(0,0),"高度不够放展开面板时不挪");
+        assert_eq!(slack(Bounds{left:0,top:0,right:480,bottom:900},Dock::Top,1.0,0.0),(0,0),"寬度不夠放展開面板時不挪");
+        assert_eq!(slack(Bounds{left:0,top:0,right:1920,bottom:300},Dock::Left,1.0,0.0),(0,0),"高度不夠放展開面板時不挪");
     }
 
     #[test]
@@ -151,7 +151,7 @@ mod shift_slack_tests {
         for dock in [Dock::Left,Dock::Right] {
             let (back,forth)=slack(m,dock,1.0,0.0);
             assert_eq!((back,forth),((540.0-crate::side_dock::SIDE_HALF_EXTENT) as i32,(540.0-crate::side_dock::SIDE_HALF_EXTENT) as i32));
-            assert_eq!(slack(m,dock,1.0,1.0).1,0,"贴到最下后不能再往下挪");
+            assert_eq!(slack(m,dock,1.0,1.0).1,0,"貼到最下後不能再往下挪");
         }
     }
 
@@ -168,13 +168,13 @@ mod shift_slack_tests {
                 for scale in [1.0,1.25,1.5,2.0] {
                     for offset in [-1.0,-0.6,0.0,0.6,1.0] {
                         let (back,forth)=slack(m,dock,scale,offset);
-                        assert!(back>=0 && forth>=0,"余量不能为负：{m:?} {dock:?} {scale} {offset}");
+                        assert!(back>=0 && forth>=0,"餘量不能為負：{m:?} {dock:?} {scale} {offset}");
                         let half=if dock.is_side() {crate::side_dock::SIDE_HALF_EXTENT} else {ISLAND_HALF_EXTENT} as f64*scale as f64;
                         let (low,high)=limits(m,dock);
                         let travel=((high-low)/2.0-half).max(0.0);
                         let center=(low+high)/2.0+travel*offset as f64;
-                        assert!(center-half-back as f64>=low-1.0,"向小坐标挪不能越界：{m:?} {dock:?} {scale} {offset}");
-                        assert!(center+half+forth as f64<=high+1.0,"向大坐标挪不能越界");
+                        assert!(center-half-back as f64>=low-1.0,"向小座標挪不能越界：{m:?} {dock:?} {scale} {offset}");
+                        assert!(center+half+forth as f64<=high+1.0,"向大座標挪不能越界");
                     }
                 }
             }
@@ -191,9 +191,9 @@ mod top_bar_tests {
         for (m,bar) in [(Bounds{left:0,top:0,right:1920,bottom:1080},28),(Bounds{left:-2560,top:-400,right:0,bottom:1040},42)] {
             let d=display(m,m.top+bar);
             assert_eq!(placement_bounds(&d,true),Bounds{top:m.top+bar,..m});
-            assert_eq!(placement_bounds(&d,false),m,"关闭后回到屏幕顶边");
+            assert_eq!(placement_bounds(&d,false),m,"關閉後回到螢幕頂邊");
             let (x,y)=island_origin_offset(placement_bounds(&d,true),640.0,1.5,0.3).unwrap();
-            assert_eq!((x,y-bar),island_origin_offset(m,640.0,1.5,0.3).unwrap(),"只下移，不改变水平位置");
+            assert_eq!((x,y-bar),island_origin_offset(m,640.0,1.5,0.3).unwrap(),"只下移，不改變水平位置");
         }
     }
     #[test]
@@ -251,7 +251,7 @@ mod offset_tests {
             let right=island_origin_offset(m,640.0,scale,1.0).unwrap().0;
             let center=island_origin(m,640.0,scale).unwrap().0;
             assert!(left<center && center<right);
-            assert!(((center-left)-(right-center)).abs()<=1,"左右对称");
+            assert!(((center-left)-(right-center)).abs()<=1,"左右對稱");
         }
     }
     #[test]
@@ -278,7 +278,7 @@ mod tests {
         if !displays.is_empty(){assert_eq!(displays.iter().filter(|d|d.primary).count(),1);}
     }
     #[test] fn display_selection_survives_reordering_disconnect_and_reconnect(){
-        let primary=Display{id:"internal".into(),label:"内屏".into(),bounds:Bounds{left:0,top:0,right:1920,bottom:1080},work_top:0,primary:true};
+        let primary=Display{id:"internal".into(),label:"內屏".into(),bounds:Bounds{left:0,top:0,right:1920,bottom:1080},work_top:0,primary:true};
         let external=Display{id:"external".into(),label:"外屏".into(),bounds:Bounds{left:-2560,top:-400,right:0,bottom:1040},work_top:-400,primary:false};
         for displays in [vec![primary.clone(),external.clone()],vec![external.clone(),primary.clone()]] {
             assert_eq!(selected(&displays,"").unwrap().id,"internal");

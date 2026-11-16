@@ -7,7 +7,7 @@ use std::{io::Read,path::{Path,PathBuf}};
 pub(crate) fn path()->Option<PathBuf>{
     Some(PathBuf::from(std::env::var_os("USERPROFILE")?).join(".zcode/v2/credentials.json"))
 }
-const CREDENTIAL_ERROR:&str="无法读取当前 Windows 用户的 ZCode 登录，请在客户端重新登录";
+const CREDENTIAL_ERROR:&str="無法讀取當前 Windows 使用者的 ZCode 登入，請在客戶端重新登入";
 fn hash(bytes:&[u8])->String{digest::digest(&digest::SHA256,bytes).as_ref().iter().map(|b|format!("{b:02x}")).collect()}
 #[cfg(windows)]
 fn system_key(path:&Path)->Result<Vec<u8>,String>{
@@ -16,26 +16,26 @@ fn system_key(path:&Path)->Result<Vec<u8>,String>{
     let path=path.to_str().ok_or(CREDENTIAL_ERROR)?.replace('/',"\\");
     let path=if let Some(unc)=path.strip_prefix("\\\\?\\UNC\\"){format!("\\\\{unc}")}else{path.strip_prefix("\\\\?\\").unwrap_or(&path).to_owned()};
     let encoded=keyring::Entry::new("ZCode Credential Encryption",&hash(path.as_bytes())).and_then(|entry|entry.get_password())
-        .map_err(|_|"无法读取 ZCode 的安全存储密钥，请用当前 Windows 用户打开 ZCode 后重试")?;
+        .map_err(|_|"無法讀取 ZCode 的安全儲存金鑰，請用當前 Windows 使用者開啟 ZCode 後重試")?;
     if encoded.len()!=43{return Err(CREDENTIAL_ERROR.into());}
     URL_SAFE_NO_PAD.decode(encoded).ok().filter(|key|key.len()==32).ok_or_else(||CREDENTIAL_ERROR.into())
 }
 #[cfg(not(windows))]
-fn system_key(_path:&Path)->Result<Vec<u8>,String>{Err("当前系统不支持读取 ZCode 的 Windows 安全存储密钥".into())}
+fn system_key(_path:&Path)->Result<Vec<u8>,String>{Err("當前系統不支援讀取 ZCode 的 Windows 安全儲存金鑰".into())}
 fn v2_key(path:&Path,source:&str,secret:Option<String>,secret_file:Option<PathBuf>)->Result<Vec<u8>,String>{
-    if secret.is_some()&&secret_file.is_some(){return Err("ZCode 的两种凭据密钥配置不能同时使用".into());}
+    if secret.is_some()&&secret_file.is_some(){return Err("ZCode 的兩種憑據金鑰配置不能同時使用".into());}
     if source=="os"{
-        if secret.is_some()||secret_file.is_some(){return Err("ZCode 凭据的密钥来源与当前环境不一致".into());}
+        if secret.is_some()||secret_file.is_some(){return Err("ZCode 憑據的金鑰來源與當前環境不一致".into());}
         return system_key(path);
     }
     if let Some(secret)=secret{return Ok(digest::digest(&digest::SHA256,secret.as_bytes()).as_ref().to_vec());}
     let file=secret_file.unwrap_or_else(||path.with_file_name("credential-secret"));
-    let mut bytes=Vec::new();std::fs::File::open(file).and_then(|f|f.take(4097).read_to_end(&mut bytes)).map_err(|_|"无法读取 ZCode 的凭据密钥文件")?;
-    if !(32..=4096).contains(&bytes.len())||std::str::from_utf8(&bytes).is_err(){return Err("ZCode 的凭据密钥文件无效".into());}
+    let mut bytes=Vec::new();std::fs::File::open(file).and_then(|f|f.take(4097).read_to_end(&mut bytes)).map_err(|_|"無法讀取 ZCode 的憑據金鑰檔案")?;
+    if !(32..=4096).contains(&bytes.len())||std::str::from_utf8(&bytes).is_err(){return Err("ZCode 的憑據金鑰檔案無效".into());}
     Ok(digest::digest(&digest::SHA256,&bytes).as_ref().to_vec())
 }
 fn value(root:&Value,name:&str,path:&Path)->Result<String,String>{
-    let raw=root[name].as_str().ok_or("请先在 ZCode 中登录个人账号")?;
+    let raw=root[name].as_str().ok_or("請先在 ZCode 中登入個人帳號")?;
     let error=CREDENTIAL_ERROR;
     let (encoded,key)=if let Some(encoded)=raw.strip_prefix("enc:v2:"){
         let parts=encoded.split(':').collect::<Vec<_>>();
@@ -43,13 +43,13 @@ fn value(root:&Value,name:&str,path:&Path)->Result<String,String>{
         if !matches!(*source,"os"|"env")||fingerprint.len()!=24||!fingerprint.bytes().all(|b|b.is_ascii_digit()||(b'a'..=b'f').contains(&b)){return Err(error.into());}
         let key=v2_key(path,source,std::env::var("ZCODE_CREDENTIAL_SECRET").ok().filter(|s|!s.is_empty()),
             std::env::var_os("ZCODE_CREDENTIAL_SECRET_FILE").filter(|s|!s.is_empty()).map(PathBuf::from))?;
-        if &hash(&key)[..24]!=*fingerprint{return Err("ZCode 凭据与当前安全存储密钥不匹配，请在客户端确认登录".into());}
+        if &hash(&key)[..24]!=*fingerprint{return Err("ZCode 憑據與當前安全儲存金鑰不匹配，請在客戶端確認登入".into());}
         (*payload,key)
     }else if let Some(encoded)=raw.strip_prefix("enc:v1:"){
         let secret=std::env::var("ZCODE_CREDENTIAL_SECRET").ok().filter(|s|!s.trim().is_empty()).unwrap_or_else(||format!(
             "zcode-credential-fallback:win32:{}:{}",std::env::var("USERPROFILE").unwrap_or_default(),std::env::var("USERNAME").unwrap_or_default()));
         (encoded,digest::digest(&digest::SHA256,secret.trim().as_bytes()).as_ref().to_vec())
-    }else if raw.starts_with("enc:"){return Err("ZCode 登录凭据格式不受支持，请更新岛仔".into());}else{return Ok(raw.into());};
+    }else if raw.starts_with("enc:"){return Err("ZCode 登入憑據格式不受支援，請更新島仔".into());}else{return Ok(raw.into());};
     let parts=encoded.split('.').map(|s|URL_SAFE_NO_PAD.decode(s)).collect::<Result<Vec<_>,_>>().map_err(|_|error)?;
     let [iv,tag,cipher]=parts.as_slice() else{return Err(error.into());};
     if tag.len()!=16{return Err(error.into());}
@@ -61,16 +61,16 @@ fn value(root:&Value,name:&str,path:&Path)->Result<String,String>{
 struct Login { family:String, slot:String, coding_subject:Option<String>, jwt:String }
 fn login(root:&Value,path:&Path)->Result<Login,String>{
     let provider=value(root,"oauth:active_provider",path)?;
-    let family=match provider.as_str(){"zai"=>"zai","bigmodel"|"zai_cn"=>"bigmodel",_=>return Err("暂不支持这个 ZCode 登录区域".into())};
+    let family=match provider.as_str(){"zai"=>"zai","bigmodel"|"zai_cn"=>"bigmodel",_=>return Err("暫不支援這個 ZCode 登入區域".into())};
     let jwt=value(root,"zcodejwttoken",path)?;
-    let payload=jwt.split('.').nth(1).and_then(|s|URL_SAFE_NO_PAD.decode(s).ok()).and_then(|s|serde_json::from_slice::<Value>(&s).ok()).ok_or("ZCode 账号标识无效")?;
-    let id=payload["sub"].as_str().or_else(||payload["user_id"].as_str()).ok_or("ZCode 未返回账号标识")?;
+    let payload=jwt.split('.').nth(1).and_then(|s|URL_SAFE_NO_PAD.decode(s).ok()).and_then(|s|serde_json::from_slice::<Value>(&s).ok()).ok_or("ZCode 帳號標識無效")?;
+    let id=payload["sub"].as_str().or_else(||payload["user_id"].as_str()).ok_or("ZCode 未返回帳號標識")?;
     let slot=hash(format!("{family}/{id}").as_bytes());
     // 国内新登录的套餐身份来自显式关联，ZCode JWT 的主体只用于识别本机账号。
     let coding_subject=if provider=="zai_cn"{
         if root.get("oauth:linked_bigmodel").is_some(){
-            let linked:Value=serde_json::from_str(&value(root,"oauth:linked_bigmodel",path)?).map_err(|_|"ZCode 关联的 BigModel 账号信息无效")?;
-            Some(linked["customerId"].as_str().filter(|s|!s.trim().is_empty()).ok_or("ZCode 关联的 BigModel 账号标识无效")?.to_owned())
+            let linked:Value=serde_json::from_str(&value(root,"oauth:linked_bigmodel",path)?).map_err(|_|"ZCode 關聯的 BigModel 帳號訊息無效")?;
+            Some(linked["customerId"].as_str().filter(|s|!s.trim().is_empty()).ok_or("ZCode 關聯的 BigModel 帳號標識無效")?.to_owned())
         }else{None}
     }else{Some(id.to_owned())};
     Ok(Login{family:family.into(),slot,coding_subject,jwt})
@@ -78,17 +78,17 @@ fn login(root:&Value,path:&Path)->Result<Login,String>{
 pub(crate) fn add(config:&mut super::Config,path:&Path,alias:&str)->Result<(),String>{
     let l=login(&super::login_json(path)?,path)?;
     if config.accounts.iter().any(|a|a.provider==super::Provider::ZCode&&a.slot.as_ref()==Some(&l.slot)){return Ok(());}
-    config.accounts.push(Account{id:format!("ZCode-{}",l.slot),provider:super::Provider::ZCode,alias:if alias.trim().is_empty(){"智谱 ZCode".into()}else{alias.trim().into()},source:path.to_owned(),slot:Some(l.slot),enabled:true,pinned:false});Ok(())
+    config.accounts.push(Account{id:format!("ZCode-{}",l.slot),provider:super::Provider::ZCode,alias:if alias.trim().is_empty(){"智譜 ZCode".into()}else{alias.trim().into()},source:path.to_owned(),slot:Some(l.slot),enabled:true,pinned:false});Ok(())
 }
 fn read(agent:&ureq::Agent,url:&str,auth:&str,device_mid:Option<&str>)->Result<Value,String>{
     let mut request=agent.get(url).set("Authorization",auth).set("Accept","application/json");
     if let Some(mid)=device_mid{request=request.set("X-Device-Mid",mid);}
     let response=request.call().map_err(|e|match e{
-        ureq::Error::Status(401|403,_)=>"ZCode 授权被拒绝，请在客户端确认登录".into(),
-        ureq::Error::Status(code,_)=>format!("ZCode 用量服务返回 {code}"),
-        _=>"无法连接 ZCode 用量服务".into(),
+        ureq::Error::Status(401|403,_)=>"ZCode 授權被拒絕，請在客戶端確認登入".into(),
+        ureq::Error::Status(code,_)=>format!("ZCode 用量服務返回 {code}"),
+        _=>"無法連線 ZCode 用量服務".into(),
     })?;
-    serde_json::from_reader(response.into_reader().take(1024*1024)).map_err(|_|"ZCode 用量响应无效".into())
+    serde_json::from_reader(response.into_reader().take(1024*1024)).map_err(|_|"ZCode 用量響應無效".into())
 }
 fn success(v:&Value)->bool{ matches!(v["code"].as_i64(),Some(0|200)) || (v["code"].is_null()&&v["success"]==true) }
 pub(super) fn coding(v:&Value)->Result<Snapshot,String>{
@@ -98,32 +98,32 @@ pub(super) fn coding(v:&Value)->Result<Snapshot,String>{
         let multiplier=match row["unit"].as_i64(){Some(1)=>Some(86400),Some(3)=>Some(3600),Some(5)=>Some(60),Some(6)=>Some(604800),_=>None};
         let seconds=row["number"].as_i64().filter(|n|*n>0).zip(multiplier).and_then(|(n,m)|n.checked_mul(m));
         let kind=row["type"].as_str().unwrap_or_default();
-        let label=if kind=="TIME_LIMIT"{"工具调用".into()}else{super::cadence(seconds)};
+        let label=if kind=="TIME_LIMIT"{"工具呼叫".into()}else{super::cadence(seconds)};
         let reset=row["nextResetTime"].as_i64().filter(|x|*x>0).map(|x|if x>10_000_000_000{x/1000}else{x});
         let window=Window{label,seconds,remaining:(100.0-used) as f32,reset,amount:None};
         match kind{"TOKENS_LIMIT"|"CREDIT_LIMIT"=>snapshot.windows.push(window),"TIME_LIMIT"=>snapshot.extra.push(window),_=>{}}
     }
     if snapshot.windows.is_empty(){std::mem::swap(&mut snapshot.windows,&mut snapshot.extra);}
-    if snapshot.windows.is_empty(){return Err("ZCode 未提供可显示的套餐比例".into());}
+    if snapshot.windows.is_empty(){return Err("ZCode 未提供可顯示的套餐比例".into());}
     Ok(snapshot)
 }
 fn start(v:&Value)->Result<Snapshot,String>{
     let mut snapshot=Snapshot{plan:"Start Plan".into(),at:chrono::Utc::now().timestamp(),..Default::default()};
-    let buckets=v["data"]["balances"].as_array().ok_or("ZCode 响应缺少体验额度明细")?;
-    if buckets.is_empty(){snapshot.plan="暂无体验额度".into();return Ok(snapshot);}
+    let buckets=v["data"]["balances"].as_array().ok_or("ZCode 響應缺少體驗額度明細")?;
+    if buckets.is_empty(){snapshot.plan="暫無體驗額度".into();return Ok(snapshot);}
     for bucket in buckets{
         let Some(total)=super::number(&bucket["total_units"]).filter(|n|*n>0.0) else{continue;};
         let Some(left)=super::number(&bucket["remaining_units"]).filter(|n|*n>=0.0) else{continue;};
         let reset=super::number(&bucket["expires_at"]).map(|n|n as i64);
         if reset.is_some_and(|t|t<=snapshot.at){continue;}
-        snapshot.windows.push(Window{label:bucket["show_name"].as_str().filter(|s|!s.is_empty()).unwrap_or("体验额度").into(),seconds:None,remaining:(left/total*100.0).clamp(0.0,100.0) as f32,reset,amount:None});
+        snapshot.windows.push(Window{label:bucket["show_name"].as_str().filter(|s|!s.is_empty()).unwrap_or("體驗額度").into(),seconds:None,remaining:(left/total*100.0).clamp(0.0,100.0) as f32,reset,amount:None});
     }
-    if snapshot.windows.is_empty(){return Err("当前 ZCode 账号暂无有效体验额度".into());}
+    if snapshot.windows.is_empty(){return Err("當前 ZCode 帳號暫無有效體驗額度".into());}
     Ok(snapshot)
 }
 pub(super) fn fetch(agent:&ureq::Agent,a:&Account)->Result<Snapshot,String>{
     let root=super::login_json(&a.source)?;let l=login(&root,&a.source)?;
-    if a.slot.as_ref()!=Some(&l.slot){return Err("ZCode 已切换账号，请重新识别本机账号".into());}
+    if a.slot.as_ref()!=Some(&l.slot){return Err("ZCode 已切換帳號，請重新識別本機帳號".into());}
     let key=l.coding_subject.as_ref().map(|id|format!("account-provider:coding-plan:account:{}-individual-coding-plan:account:{}:api-key",l.family,id));
     let mut no_coding_plan=false;
     if let Some(key)=key.filter(|key|root.get(key).is_some()){
@@ -131,7 +131,7 @@ pub(super) fn fetch(agent:&ureq::Agent,a:&Account)->Result<Snapshot,String>{
         let v=read(agent,url,&value(&root,&key,&a.source)?,None)?;
         if success(&v){return coding(&v);}
         let msg=v["msg"].as_str().or_else(||v["message"].as_str()).unwrap_or("").to_lowercase();
-        if !(msg.contains("不存在coding plan")||msg.contains("不存在 coding plan")||msg.contains("no coding plan")){return Err(format!("ZCode 编程套餐查询失败（{}）",v["code"]));}
+        if !(msg.contains("不存在coding plan")||msg.contains("不存在 coding plan")||msg.contains("no coding plan")){return Err(format!("ZCode 程式設計套餐查詢失敗（{}）",v["code"]));}
         no_coding_plan=true;
     }
     let mut url=url::Url::parse("https://zcode.z.ai/api/v1/zcode-plan/billing/balance").unwrap();
@@ -146,9 +146,9 @@ pub(super) fn fetch(agent:&ureq::Agent,a:&Account)->Result<Snapshot,String>{
     }
     let telemetry=a.source.with_file_name("telemetry-state.json");
     let device=super::login_json(&telemetry).ok();
-    let mid=device.as_ref().and_then(|v|v["deviceMid"].as_str()).filter(|s|!s.is_empty() && s.bytes().all(|b|b.is_ascii_graphic())).ok_or("请打开 ZCode，等待客户端初始化设备信息")?;
-    let v=read(agent,url.as_str(),&format!("Bearer {}",l.jwt),Some(mid)).map_err(|e|if no_coding_plan{format!("未开通 Coding Plan；体验套餐查询失败：{e}")}else{e})?;
-    if !success(&v){return Err(format!("ZCode 体验额度暂不可用（{}）",v["code"]));}
+    let mid=device.as_ref().and_then(|v|v["deviceMid"].as_str()).filter(|s|!s.is_empty() && s.bytes().all(|b|b.is_ascii_graphic())).ok_or("請開啟 ZCode，等待客戶端初始化裝置訊息")?;
+    let v=read(agent,url.as_str(),&format!("Bearer {}",l.jwt),Some(mid)).map_err(|e|if no_coding_plan{format!("未開通 Coding Plan；體驗套餐查詢失敗：{e}")}else{e})?;
+    if !success(&v){return Err(format!("ZCode 體驗額度暫不可用（{}）",v["code"]));}
     start(&v)
 }
 #[cfg(test)]
@@ -221,7 +221,7 @@ mod tests{
                 ureq::Response::new(200,"Test",body)
             }).build();
             assert_eq!(fetch(&agent,&config.accounts[0]).unwrap().windows[0].remaining,75.0);assert_eq!(count.load(std::sync::atomic::Ordering::Relaxed),1);assert_eq!(std::fs::read(&fixture.0).unwrap(),raw);
-            let mut wrong=config.accounts[0].clone();wrong.slot=Some("another-account".into());assert!(fetch(&agent,&wrong).unwrap_err().contains("切换账号"));assert_eq!(count.load(std::sync::atomic::Ordering::Relaxed),1);
+            let mut wrong=config.accounts[0].clone();wrong.slot=Some("another-account".into());assert!(fetch(&agent,&wrong).unwrap_err().contains("切換帳號"));assert_eq!(count.load(std::sync::atomic::Ordering::Relaxed),1);
         }
     }
     #[cfg(windows)]
@@ -237,7 +237,7 @@ mod tests{
             "account-provider:coding-plan:account:bigmodel-individual-coding-plan:account:synthetic-customer:api-key":system_sealed("synthetic-coding-key",&key)}).to_string();
         std::fs::write(&path,&raw).unwrap();
         let mut config=super::super::Config::default();
-        for provider in [super::super::Provider::Glm,super::super::Provider::Codex]{config.accounts.push(Account{id:provider.name().into(),provider,alias:"保留备注".into(),source:"synthetic-source".into(),slot:Some("synthetic-slot".into()),enabled:false,pinned:true});}
+        for provider in [super::super::Provider::Glm,super::super::Provider::Codex]{config.accounts.push(Account{id:provider.name().into(),provider,alias:"保留備註".into(),source:"synthetic-source".into(),slot:Some("synthetic-slot".into()),enabled:false,pinned:true});}
         config.selected="GLM".into();let before=config.clone();
         add(&mut config,&path,"").unwrap();add(&mut config,&path,"").unwrap();
         assert_eq!(&config.accounts[..2],before.accounts.as_slice());assert_eq!(config.selected,before.selected);assert_eq!(config.accounts.len(),3);

@@ -93,7 +93,7 @@ impl Expressions {
     pub fn draw(&mut self,c:&Card,cx:f32,palette:Option<Palette>)->bool {
         let Some((expression,time))=self.clip else{return false;};
         if self.sheet.as_ref().is_none_or(|(previous,previous_palette,_)|(*previous,*previous_palette)!=(expression,palette)) {
-            let decoded=image::load_from_memory(expression.sheet()).expect("内置表情序列图").into_rgba8();
+            let decoded=image::load_from_memory(expression.sheet()).expect("內建表情序列圖").into_rgba8();
             let mut image=egui::ColorImage::from_rgba_unmultiplied([decoded.width() as usize,decoded.height() as usize],decoded.as_raw());
             drop(decoded);
             if let Some(palette)=palette {for pixel in &mut image.pixels {if pixel.a()>0 {*pixel=crate::skin_paint::map_color(*pixel,&palette);}}}
@@ -123,18 +123,18 @@ mod tests {
                     expressions.step(PetState::Awake,0.1,true);
                     if expressions.current().is_some(){break;}
                 }
-                seen.insert(expressions.current().expect("日常表情应在等待时间内触发") as usize);
+                seen.insert(expressions.current().expect("日常表情應在等待時間內觸發") as usize);
                 for _ in 0..100 {
                     expressions.step(PetState::Awake,0.1,true);
                     if expressions.current().is_none(){break;}
                 }
-                assert!(expressions.current().is_none(),"日常表情应按时结束");
-                for _ in 0..210 {expressions.step(PetState::Awake,0.1,true);assert!(expressions.current().is_none(),"日常动作之间应有安静间隔");}
+                assert!(expressions.current().is_none(),"日常表情應按時結束");
+                for _ in 0..210 {expressions.step(PetState::Awake,0.1,true);assert!(expressions.current().is_none(),"日常動作之間應有安靜間隔");}
             }
         }else{
             for _ in 0..400 {
                 expressions.step(PetState::Awake,0.1,true);
-                assert!(expressions.current().is_none(),"系统关闭动画时应保持安静待机");
+                assert!(expressions.current().is_none(),"系統關閉動畫時應保持安靜待機");
             }
         }
         for _ in 0..4 {
@@ -145,7 +145,7 @@ mod tests {
         }
         let expected=Expression::ALL.into_iter().filter(|expression|idle_animations || !matches!(expression,Expression::Scan|Expression::Peek|Expression::Search))
             .map(|expression|expression as usize).collect::<std::collections::HashSet<_>>();
-        assert_eq!(seen,expected,"应覆盖当前系统动画设置下可触发的全部表情");
+        assert_eq!(seen,expected,"應覆蓋當前系統動畫設定下可觸發的全部表情");
     }
     #[test]
     fn hidden_feedback_pauses_and_hover_has_a_cooldown(){
@@ -155,7 +155,7 @@ mod tests {
         expressions.clear();expressions.step(PetState::Curious,0.1,true);let first=expressions.current().unwrap();
         for _ in 0..50 {expressions.step(PetState::Curious,0.1,true);}
         expressions.step(PetState::Awake,0.1,true);expressions.step(PetState::Curious,0.1,true);
-        assert!(expressions.current().is_none(),"快速反复经过不能一直重播互动");
+        assert!(expressions.current().is_none(),"快速反覆經過不能一直重播互動");
         for _ in 0..180 {expressions.step(PetState::Curious,0.1,true);}
         expressions.step(PetState::Awake,0.1,true);expressions.step(PetState::Curious,0.1,true);
         assert_ne!(expressions.current().unwrap(),first);
@@ -171,7 +171,7 @@ mod tests {
     fn sheets_keep_alpha_and_the_looking_eyes_really_move(){
         for expression in Expression::ALL {
             let image=image::load_from_memory(expression.sheet()).unwrap().into_rgba8();
-            assert_eq!(image.dimensions(),(144,1440),"每张序列图 16 帧、保持 3 倍密度");assert_eq!(image.get_pixel(0,0).0[3],0);
+            assert_eq!(image.dimensions(),(144,1440),"每張序列圖 16 幀、保持 3 倍密度");assert_eq!(image.get_pixel(0,0).0[3],0);
             let mut centers=Vec::new();
             for frame in 0..16 {
                 let mut xs=Vec::new();
@@ -192,21 +192,21 @@ mod tests {
         });
         let output=frame(&mut expressions,None);let id=expressions.sheet.as_ref().unwrap().2.id();
         let delta=&output.textures_delta.set.iter().find(|(texture,_)|*texture==id).unwrap().1;
-        let egui::ImageData::Color(image)=&delta.image else{panic!("表情应为彩色纹理")};
-        assert_eq!(image.size,[144,1440],"只上传正在播放的表情，不上传整张图集");
+        let egui::ImageData::Color(image)=&delta.image else{panic!("表情應為彩色紋理")};
+        assert_eq!(image.size,[144,1440],"只上傳正在播放的表情，不上傳整張圖集");
         let white=image.pixels.iter().position(|p|p.a()>250&&p.r()>240&&p.g()>240&&p.b()>240).unwrap();
-        assert!(!frame(&mut expressions,None).textures_delta.set.iter().any(|(texture,_)|*texture==id),"同一表情、同一皮肤不能重复解码或上传");
+        assert!(!frame(&mut expressions,None).textures_delta.set.iter().any(|(texture,_)|*texture==id),"同一表情、同一皮膚不能重複解碼或上傳");
         for palette in [crate::skin_paint::CREAM,crate::skin_paint::GLASS_LIGHT] {
             let output=frame(&mut expressions,Some(palette));assert_eq!(expressions.sheet.as_ref().unwrap().2.id(),id);
             let delta=&output.textures_delta.set.iter().find(|(texture,_)|*texture==id).unwrap().1;
             let egui::ImageData::Color(image)=&delta.image else{unreachable!()};
-            assert!(image.pixels[white].r()<70&&image.pixels[white].g()<70&&image.pixels[white].b()<70,"浅色皮肤上的眼睛应为深色");
+            assert!(image.pixels[white].r()<70&&image.pixels[white].g()<70&&image.pixels[white].b()<70,"淺色皮膚上的眼睛應為深色");
         }
         expressions.play(Expression::Search);
-        let output=frame(&mut expressions,None);assert_eq!(expressions.sheet.as_ref().unwrap().2.id(),id,"换表情原地替换，不新建纹理");
+        let output=frame(&mut expressions,None);assert_eq!(expressions.sheet.as_ref().unwrap().2.id(),id,"換表情原地替換，不新建紋理");
         assert!(output.textures_delta.set.iter().any(|(texture,_)|*texture==id));
         for _ in 0..100 {expressions.step(PetState::Awake,0.1,true);if expressions.current().is_none(){break;}}
-        assert!(expressions.current().is_none() && expressions.sheet.is_none(),"播完释放纹理，不常驻显存");
+        assert!(expressions.current().is_none() && expressions.sheet.is_none(),"播完釋放紋理，不常駐視訊記憶體");
         let output=ctx.run(Default::default(),|_|{});assert!(output.textures_delta.free.contains(&id));
     }
 
@@ -216,7 +216,7 @@ mod tests {
         for expression in Expression::ALL {
             let sheet=image::load_from_memory(expression.sheet()).unwrap().into_rgba8();
             let column=image::imageops::crop_imm(&atlas,expression as u32*144,0,144,1440).to_image();
-            assert!(sheet==column,"{expression:?} 与图集不一致，请重新拆分");
+            assert!(sheet==column,"{expression:?} 與圖集不一致，請重新拆分");
         }
     }
 }

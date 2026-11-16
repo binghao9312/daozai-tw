@@ -60,7 +60,7 @@ pub struct State {
 
 /// 菜单固定中文：启动 / 吉祥物 / 极简 / —— / 设置 / 关于 / 退出。
 fn labels() -> [&'static str; 6] {
-    ["开机启动", "吉祥物", "极简刘海", "关于岛仔", "退出", "设置…"]
+    ["開機啟動", "吉祥物", "極簡劉海", "關於島仔", "退出", "設定…"]
 }
 
 struct Ctx {
@@ -153,7 +153,7 @@ fn add_icon(hwnd: HWND, hicon: HICON) -> bool {
         hIcon: hicon,
         ..Default::default()
     };
-    fill_tip(&mut nid.szTip, "岛仔");
+    fill_tip(&mut nid.szTip, "島仔");
     unsafe {
         if !Shell_NotifyIconW(NIM_ADD, &nid).as_bool() {
             // explorer 里已有同名残留时，用 MODIFY 顶掉
@@ -223,10 +223,10 @@ fn menu_items(menu: HMENU) -> Vec<(String, bool, bool)> {
 
 fn about() {
     let text = wide(&format!(
-        "岛仔 {}\n\nWindows 桌面灵动岛小助手\n退出请右键托盘图标，选择「退出」。",
+        "島仔 {}\n\nWindows 桌面靈動島小助手\n退出請右鍵系統匣圖示，選擇「退出」。",
         env!("CARGO_PKG_VERSION")
     ));
-    let title = wide("关于岛仔");
+    let title = wide("關於島仔");
     unsafe {
         MessageBoxW(
             None,
@@ -383,7 +383,7 @@ impl Tray {
             .name("daozai-tray".into())
             .spawn(move || unsafe {
                 let Ok(module) = GetModuleHandleW(None) else {
-                    let _ = ready_tx.send(Err("GetModuleHandleW 失败".to_string()));
+                    let _ = ready_tx.send(Err("GetModuleHandleW 失敗".to_string()));
                     return;
                 };
                 let hinst = HINSTANCE(module.0);
@@ -404,7 +404,7 @@ impl Tray {
                 let hwnd = match CreateWindowExW(
                     WS_EX_TOOLWINDOW,
                     class,
-                    w!("岛仔托盘"),
+                    w!("島仔系統匣"),
                     WS_POPUP,
                     0,
                     0,
@@ -417,12 +417,12 @@ impl Tray {
                 ) {
                     Ok(h) => h,
                     Err(e) => {
-                        let _ = ready_tx.send(Err(format!("创建托盘窗口失败：{e}")));
+                        let _ = ready_tx.send(Err(format!("建立系統匣視窗失敗：{e}")));
                         return;
                     }
                 };
                 let Some(hicon) = load_icon() else {
-                    let _ = ready_tx.send(Err("读取托盘图标失败".to_string()));
+                    let _ = ready_tx.send(Err("讀取系統匣圖示失敗".to_string()));
                     return;
                 };
                 let ctx = Box::new(Ctx {
@@ -461,7 +461,7 @@ impl Tray {
                 return None;
             }
             Err(_) => {
-                eprintln!("tray: 启动超时");
+                eprintln!("tray: 啟動超時");
                 return None;
             }
         };
@@ -561,11 +561,11 @@ pub fn set_autostart(on: bool) -> Result<(), String> {
             let value = format!("\"{}\"", exe.display());
             let utf16 = wide(&value);
             let bytes = std::slice::from_raw_parts(utf16.as_ptr() as *const u8, utf16.len() * 2);
-            let key = run_key().ok_or_else(|| "打不开 HKCU\\Run".to_string())?;
+            let key = run_key().ok_or_else(|| "打不開 HKCU\\Run".to_string())?;
             let rc = RegSetValueExW(key, RUN_VALUE, 0, REG_SZ, Some(bytes));
             let _ = RegCloseKey(key);
             if rc.0 != 0 {
-                return Err(format!("写 HKCU\\Run 失败：{}", rc.0));
+                return Err(format!("寫 HKCU\\Run 失敗：{}", rc.0));
             }
         } else {
             let mut key = HKEY::default();
@@ -584,7 +584,7 @@ mod tests {
 
     #[test]
     fn repeated_launch_requests_settings_or_calendar() {
-        let tray=Tray::start(State::default()).expect("托盘应能启动");
+        let tray=Tray::start(State::default()).expect("系統匣應能啟動");
         for (calendar,expected) in [(false,Event::OpenSettings),(true,Event::OpenCalendar)] {
             assert!(request_existing_window(tray.hwnd(),calendar));
             assert_eq!(tray.events.recv_timeout(Duration::from_secs(2)).unwrap(),expected);
@@ -599,13 +599,13 @@ mod tests {
             (State { pet: true, minimal: false, autostart: true }, [true, true, false]),
             (State { pet: false, minimal: true, autostart: false }, [false, false, true]),
         ] {
-            let menu = popup_menu(state).expect("创建菜单");
+            let menu = popup_menu(state).expect("建立選單");
             let items = menu_items(menu);
-            assert_eq!(items.len(), 7, "6 项 + 1 分隔线");
-            assert!(items[3].2, "第 4 项是分隔线");
+            assert_eq!(items.len(), 7, "6 項 + 1 分隔線");
+            assert!(items[3].2, "第 4 項是分隔線");
             let texts: Vec<_> = items.iter().filter(|i| !i.2).map(|i| i.0.as_str()).collect();
-            assert_eq!(texts, ["开机启动", "吉祥物", "极简刘海", "设置…", "关于岛仔", "退出"]);
-            assert_eq!([items[0].1, items[1].1, items[2].1], want, "勾选态应与状态一致");
+            assert_eq!(texts, ["開機啟動", "吉祥物", "極簡劉海", "設定…", "關於島仔", "退出"]);
+            assert_eq!([items[0].1, items[1].1, items[2].1], want, "勾選態應與狀態一致");
             unsafe {
                 let _ = DestroyMenu(menu);
             }
@@ -614,7 +614,7 @@ mod tests {
 
     #[test]
     fn labels_are_fixed_chinese() {
-        assert_eq!(labels(), ["开机启动", "吉祥物", "极简刘海", "关于岛仔", "退出", "设置…"]);
+        assert_eq!(labels(), ["開機啟動", "吉祥物", "極簡劉海", "關於島仔", "退出", "設定…"]);
     }
 
     #[test]
@@ -649,7 +649,7 @@ fn request_existing_window(hwnd:HWND,calendar:bool)->bool {unsafe{
 
 pub fn activate_existing(calendar:bool)->bool {unsafe{
     let Ok(tray)=FindWindowW(w!("DaozaiTray"),PCWSTR::null()) else{return false;};
-    let Ok(window)=FindWindowW(PCWSTR::null(),w!("岛仔")) else{return false;};
+    let Ok(window)=FindWindowW(PCWSTR::null(),w!("島仔")) else{return false;};
     let(mut tray_pid,mut window_pid)=(0,0);
     GetWindowThreadProcessId(tray,Some(&mut tray_pid));
     GetWindowThreadProcessId(window,Some(&mut window_pid));

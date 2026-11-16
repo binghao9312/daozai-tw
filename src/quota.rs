@@ -30,7 +30,7 @@ mod native_auth;
 pub struct Discovery {pub added:usize,pub notes:Vec<String>}
 impl Discovery {
     pub fn message(&self)->String{
-        let mut text=if self.added>0{format!("新增 {} 个账号",self.added)}else{"未发现新的本机账号".into()};
+        let mut text=if self.added>0{format!("新增 {} 個帳號",self.added)}else{"未發現新的本機帳號".into()};
         if !self.notes.is_empty(){text.push_str("；");text.push_str(&self.notes.join("；"));}text
     }
 }
@@ -39,7 +39,7 @@ impl Discovery {
 pub enum Provider { #[default] Codex, Claude, Kimi, GrokBot, Gemini, ZCode, WorkBuddy, DeepSeek, OpenCodeGo, MiniMax, Glm, NewApi, OneApi, Sub2Api, Kiro, Doubao, RelayGeneral, RelayCustom }
 impl Provider {
     pub const ALL: [Self; 18] = [Self::Codex, Self::Claude, Self::Kimi, Self::GrokBot, Self::Gemini, Self::ZCode, Self::WorkBuddy, Self::DeepSeek, Self::OpenCodeGo, Self::MiniMax, Self::Glm, Self::NewApi, Self::OneApi, Self::Sub2Api, Self::Kiro, Self::Doubao, Self::RelayGeneral, Self::RelayCustom];
-    pub fn name(self) -> &'static str { match self {Self::Codex=>"Codex",Self::Claude=>"Claude",Self::Kimi=>"Kimi",Self::GrokBot=>"Grok Bot",Self::Gemini=>"Gemini",Self::ZCode=>"ZCode",Self::WorkBuddy=>"WorkBuddy",Self::DeepSeek=>"DeepSeek",Self::OpenCodeGo=>"OpenCode Go",Self::MiniMax=>"MiniMax",Self::Glm=>"GLM",Self::NewApi=>"New API",Self::OneApi=>"One API",Self::Sub2Api=>"Sub2API",Self::Kiro=>"Kiro",Self::Doubao=>"豆包",Self::RelayGeneral=>"通用余额",Self::RelayCustom=>"自定义查询"} }
+    pub fn name(self) -> &'static str { match self {Self::Codex=>"Codex",Self::Claude=>"Claude",Self::Kimi=>"Kimi",Self::GrokBot=>"Grok Bot",Self::Gemini=>"Gemini",Self::ZCode=>"ZCode",Self::WorkBuddy=>"WorkBuddy",Self::DeepSeek=>"DeepSeek",Self::OpenCodeGo=>"OpenCode Go",Self::MiniMax=>"MiniMax",Self::Glm=>"GLM",Self::NewApi=>"New API",Self::OneApi=>"One API",Self::Sub2Api=>"Sub2API",Self::Kiro=>"Kiro",Self::Doubao=>"豆包",Self::RelayGeneral=>"通用餘額",Self::RelayCustom=>"自定義查詢"} }
     pub fn api_key(self)->bool{matches!(self,Self::OpenCodeGo|Self::MiniMax|Self::Glm)||self.relay()}
     pub fn relay(self)->bool{matches!(self,Self::NewApi|Self::OneApi|Self::Sub2Api|Self::RelayGeneral|Self::RelayCustom)}
     pub fn balance(self)->bool{matches!(self,Self::WorkBuddy|Self::DeepSeek)||self.relay()}
@@ -50,7 +50,7 @@ pub enum Accent { #[default] Brand, Violet, Orange, Blue, Cyan, Pink, Gold, Gree
 impl Accent {
     pub const ALL:[Self;8]=[Self::Brand,Self::Violet,Self::Orange,Self::Blue,Self::Cyan,Self::Pink,Self::Gold,Self::Green];
     pub fn key(self)->&'static str{match self{Self::Brand=>"brand",Self::Violet=>"violet",Self::Orange=>"orange",Self::Blue=>"blue",Self::Cyan=>"cyan",Self::Pink=>"pink",Self::Gold=>"gold",Self::Green=>"green"}}
-    pub fn label(self)->&'static str{match self{Self::Brand=>"跟随厂商",Self::Violet=>"蓝紫",Self::Orange=>"暖橙",Self::Blue=>"湛蓝",Self::Cyan=>"青蓝",Self::Pink=>"玫红",Self::Gold=>"金黄",Self::Green=>"翠绿"}}
+    pub fn label(self)->&'static str{match self{Self::Brand=>"跟隨廠商",Self::Violet=>"藍紫",Self::Orange=>"暖橙",Self::Blue=>"湛藍",Self::Cyan=>"青藍",Self::Pink=>"玫紅",Self::Gold=>"金黃",Self::Green=>"翠綠"}}
     fn parse(key:&str)->Self{Self::ALL.into_iter().find(|c|c.key()==key).unwrap_or_default()}
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -74,27 +74,27 @@ impl Config {
     fn json(&self)->Value {let colors:serde_json::Map<String,Value>=self.colors.iter().map(|(id,color)|(id.clone(),json!(color.key()))).collect();json!({"enabled":self.enabled,"compact":self.compact,"selected":self.selected,"colors":colors,"accounts":self.accounts.iter().map(|a|json!({"id":a.id,"provider":a.provider.name(),"alias":a.alias,"source":a.source,"slot":a.slot,"enabled":a.enabled,"pinned":a.pinned})).collect::<Vec<_>>()})}
     pub fn save(&self) {let _=self.save_checked();}
     pub(crate) fn save_checked(&self)->Result<(),String>{
-        let dir=crate::model::config_dir();fs::create_dir_all(&dir).map_err(|_|"无法创建额度配置目录")?;
-        let raw=serde_json::to_vec_pretty(&self.json()).map_err(|_|"无法生成额度配置")?;
-        crate::model::atomic_write(&dir.join("ai-quota.json"),&raw).map_err(|_|"无法保存额度配置，原账号未变更".into())
+        let dir=crate::model::config_dir();fs::create_dir_all(&dir).map_err(|_|"無法建立額度配置目錄")?;
+        let raw=serde_json::to_vec_pretty(&self.json()).map_err(|_|"無法生成額度配置")?;
+        crate::model::atomic_write(&dir.join("ai-quota.json"),&raw).map_err(|_|"無法儲存額度配置，原帳號未變更".into())
     }
     pub fn add(&mut self,provider:Provider,alias:String,source:PathBuf)->Result<(),String>{
-        if provider.api_key(){return Err("请使用 API Key 连接，无需登录 JSON".into());}
+        if provider.api_key(){return Err("請使用 API Key 連線，無需登入 JSON".into());}
         if provider==Provider::ZCode{return zcode::add(self,&source,&alias);}
         if provider==Provider::Kiro{return kiro::add(self,&source,&alias);}
-        if provider==Provider::WorkBuddy{return Err("请使用浏览器连接 WorkBuddy".into());}
-        if provider==Provider::DeepSeek{return Err("请使用 API Key 连接 DeepSeek".into());}
-        if provider==Provider::Gemini{return Err("请使用浏览器或 Cookie 连接 Gemini 网页账号".into());}
-        if provider==Provider::Doubao{return Err("请使用浏览器或 Cookie 连接豆包网页账号".into());}
+        if provider==Provider::WorkBuddy{return Err("請使用瀏覽器連線 WorkBuddy".into());}
+        if provider==Provider::DeepSeek{return Err("請使用 API Key 連線 DeepSeek".into());}
+        if provider==Provider::Gemini{return Err("請使用瀏覽器或 Cookie 連線 Gemini 網頁帳號".into());}
+        if provider==Provider::Doubao{return Err("請使用瀏覽器或 Cookie 連線豆包網頁帳號".into());}
         if provider==Provider::GrokBot{return self.import_grok(&source,&alias).map(|_|());}
         if provider==Provider::Claude{return self.import_claude(&source,&alias).map(|_|());}
-        if !source.is_file(){return Err("请选择已有的登录 JSON 文件".into());}
+        if !source.is_file(){return Err("請選擇已有的登入 JSON 檔案".into());}
         let auth=credentials(provider,&source)?;
-        if self.accounts.iter().filter(|a|a.provider==provider).any(|a|account_credentials(a).is_ok_and(|existing|same_login(&existing,&auth))){return Err("这个账号已经添加".into());}
+        if self.accounts.iter().filter(|a|a.provider==provider).any(|a|account_credentials(a).is_ok_and(|existing|same_login(&existing,&auth))){return Err("這個帳號已經新增".into());}
         let path=fs::canonicalize(&source).unwrap_or(source);
-        if self.accounts.iter().any(|a|a.provider==provider && a.source.to_string_lossy().eq_ignore_ascii_case(&path.to_string_lossy())){return Err("这个登录文件已经添加".into());}
+        if self.accounts.iter().any(|a|a.provider==provider && a.source.to_string_lossy().eq_ignore_ascii_case(&path.to_string_lossy())){return Err("這個登入檔案已經新增".into());}
         let next=self.accounts.iter().filter(|a|a.provider==provider).count()+1;
-        let alias=if alias.trim().is_empty(){format!("{} · 账号 {}",provider.name(),next)}else{alias.trim().to_owned()};
+        let alias=if alias.trim().is_empty(){format!("{} · 帳號 {}",provider.name(),next)}else{alias.trim().to_owned()};
         let id=format!("{}-{}",provider.name(),std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos());
         let pinned=self.accounts.is_empty();if pinned{self.selected=id.clone();}
         self.accounts.push(Account{id,provider,alias,source:path,slot:None,enabled:true,pinned});Ok(())
@@ -104,7 +104,7 @@ impl Config {
             a.source=PathBuf::new();a.enabled=true;if !alias.trim().is_empty(){a.alias=alias;}self.selected=a.id.clone();return;
         }
         let id=format!("GrokBot-{slot}");let pinned=self.pinned_indices().len()<3;
-        let alias=if alias.trim().is_empty(){format!("Grok Bot · 账号 {}",self.accounts.iter().filter(|a|a.provider==Provider::GrokBot).count()+1)}else{alias};
+        let alias=if alias.trim().is_empty(){format!("Grok Bot · 帳號 {}",self.accounts.iter().filter(|a|a.provider==Provider::GrokBot).count()+1)}else{alias};
         self.selected=id.clone();self.accounts.push(Account{id,provider:Provider::GrokBot,alias,source:PathBuf::new(),slot:Some(slot),enabled:true,pinned});
     }
     pub(crate) fn connect_workbuddy(&mut self,slot:String,alias:String)->String{
@@ -148,7 +148,7 @@ impl Config {
         let path=claude::code_path();claude::install_code_collector(&path)?;self.import_claude(&path,alias)
     }
     pub(crate) fn connect_claude_desktop(&mut self,alias:&str)->Result<usize,String>{
-        let roaming=std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_default();let local=std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_default();let mut added=0;let mut found=false;let mut error="请先打开 Claude 桌面版并查看用量".to_string();
+        let roaming=std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_default();let local=std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_default();let mut added=0;let mut found=false;let mut error="請先開啟 Claude 桌面版並檢視用量".to_string();
         for path in claude::paths(&roaming,&local){match self.import_claude(&path,alias){Ok(n)=>{added+=n;found=true;},Err(e)=>error=e}}
         if found{Ok(added)}else{Err(error)}
     }
@@ -183,7 +183,7 @@ impl Config {
                 continue;
             }
             let next=self.accounts.iter().filter(|a|a.provider==*provider).count()+1;
-            if let Err(error)=self.add(*provider,format!("{} · 本机 {}",provider.name(),next),path.clone()){notes.push(format!("{}：{error}",provider.name()));}
+            if let Err(error)=self.add(*provider,format!("{} · 本機 {}",provider.name(),next),path.clone()){notes.push(format!("{}：{error}",provider.name()));}
         }
         notes
     }
@@ -196,8 +196,8 @@ impl Config {
     pub fn ordered_indices(&self,pinned:bool)->Vec<usize>{let mut indices:Vec<_>=self.accounts.iter().enumerate().filter_map(|(i,a)|(a.enabled && (!pinned||a.pinned)).then_some(i)).collect();indices.sort_by_key(|i|match self.accounts[*i].provider{Provider::WorkBuddy=>1,Provider::DeepSeek=>2,_=>0});indices}
     pub fn pinned_indices(&self)->Vec<usize>{self.ordered_indices(true)}
     pub fn reconnect_deepseek(&mut self,id:&str,slot:String,alias:String)->Result<String,String>{
-        if self.accounts.iter().any(|a|a.id!=id&&a.provider==Provider::DeepSeek&&a.slot.as_deref()==Some(&slot)){return Err("这把 API Key 已连接到另一个账号".into());}
-        let account=self.accounts.iter_mut().find(|a|a.id==id&&a.provider==Provider::DeepSeek).ok_or("原账号已移除，请重新添加")?;
+        if self.accounts.iter().any(|a|a.id!=id&&a.provider==Provider::DeepSeek&&a.slot.as_deref()==Some(&slot)){return Err("這把 API Key 已連線到另一個帳號".into());}
+        let account=self.accounts.iter_mut().find(|a|a.id==id&&a.provider==Provider::DeepSeek).ok_or("原帳號已移除，請重新新增")?;
         account.slot=Some(slot);account.alias=alias;self.selected=id.into();Ok(id.into())
     }
     pub fn connect_deepseek(&mut self,slot:String,alias:String)->String{
@@ -226,7 +226,7 @@ impl Window {
     /// 剩余量的书面写法：数值型额度给出“剩余 / 总额”，其余给出百分比。
     pub fn value_text(&self)->String{self.amount.as_ref().map(Amount::full).unwrap_or_else(||format!("{:.0}%",self.remaining))}
     /// 一句话额度摘要，用于小岛提示与设置页。
-    pub fn summary(&self)->String{format!("{}剩余 {}",self.label,self.value_text())}
+    pub fn summary(&self)->String{format!("{}剩餘 {}",self.label,self.value_text())}
 }
 #[derive(Clone, Debug, Default)]
 #[derive(serde::Serialize,serde::Deserialize)]
@@ -250,13 +250,13 @@ impl Snapshot {
 }
 fn number(v:&Value)->Option<f64>{v.as_f64().or_else(||v.as_str()?.parse().ok()).filter(|n|n.is_finite())}
 fn reset(v:&Value)->Option<i64>{v.as_i64().filter(|n|*n>0).or_else(||chrono::DateTime::parse_from_rfc3339(v.as_str()?).ok().map(|d|d.timestamp()))}
-fn cadence(seconds:Option<i64>)->String{match seconds{Some(18000)=>"5 小时".into(),Some(604800)=>"本周".into(),Some(86400)=>"今日".into(),Some(s)if s>0 && s%86400==0=>format!("{} 天",s/86400),Some(s)if s>0 && s%3600==0=>format!("{} 小时",s/3600),Some(s)if s>0=>format!("{} 分钟",s/60),_=>"额度周期".into()}}
+fn cadence(seconds:Option<i64>)->String{match seconds{Some(18000)=>"5 小時".into(),Some(604800)=>"本週".into(),Some(86400)=>"今日".into(),Some(s)if s>0 && s%86400==0=>format!("{} 天",s/86400),Some(s)if s>0 && s%3600==0=>format!("{} 小時",s/3600),Some(s)if s>0=>format!("{} 分鐘",s/60),_=>"額度週期".into()}}
 fn codex_window(v:&Value)->Option<Window>{
     let used=number(&v["used_percent"])?;let seconds=v["limit_window_seconds"].as_i64().filter(|s|*s>0);
     Some(Window{label:cadence(seconds),seconds,remaining:(100.0-used).clamp(0.0,100.0) as f32,reset:reset(&v["reset_at"]),amount:None})
 }
 pub fn parse(provider:Provider,v:&Value)->Result<Snapshot,String>{
-    if provider.api_key(){return Err("请使用对应服务的地区及协议解析额度".into());}
+    if provider.api_key(){return Err("請使用對應服務的地區及協議解析額度".into());}
     if provider==Provider::WorkBuddy{return workbuddy::parse(v);}
     if provider==Provider::DeepSeek{return deepseek::parse(v);}
     if provider==Provider::GrokBot{return grok::parse(v);}
@@ -266,10 +266,10 @@ pub fn parse(provider:Provider,v:&Value)->Result<Snapshot,String>{
     let mut s=Snapshot{plan:v["plan_type"].as_str().unwrap_or_default().into(),at:chrono::Utc::now().timestamp(),..Default::default()};
     match provider {
         Provider::Codex=>{
-            let rate=&v["rate_limit"];if !rate.is_object(){return Err("服务没有返回额度信息".into());}
-            for key in ["primary_window","secondary_window"]{if !rate[key].is_null(){let w=codex_window(&rate[key]).ok_or("额度字段不完整，暂时无法判断周期")?;s.windows.push(w);}}
+            let rate=&v["rate_limit"];if !rate.is_object(){return Err("服務沒有返回額度訊息".into());}
+            for key in ["primary_window","secondary_window"]{if !rate[key].is_null(){let w=codex_window(&rate[key]).ok_or("額度欄位不完整，暫時無法判斷週期")?;s.windows.push(w);}}
             for a in v["additional_rate_limits"].as_array().into_iter().flatten(){
-                for key in ["primary_window","secondary_window"]{if let Some(mut w)=codex_window(&a["rate_limit"][key]){let label=a["limit_name"].as_str().or_else(||a["limit_id"].as_str()).unwrap_or("额外额度");w.label=format!("{label} · {}",w.label);s.extra.push(w);}}
+                for key in ["primary_window","secondary_window"]{if let Some(mut w)=codex_window(&a["rate_limit"][key]){let label=a["limit_name"].as_str().or_else(||a["limit_id"].as_str()).unwrap_or("額外額度");w.label=format!("{label} · {}",w.label);s.extra.push(w);}}
             }
         }
         Provider::Claude=>{
@@ -277,39 +277,39 @@ pub fn parse(provider:Provider,v:&Value)->Result<Snapshot,String>{
         }
         Provider::Kimi=>{
             if let Some(usages)=v["usages"].as_object(){
-                for (key,label,seconds) in [("limit_5h","5 小时",Some(18000)),("limit_7d","本周",Some(604800)),("limit_month_total","本月总额度",None),("limit_month_code","本月编程",None)]{
+                for (key,label,seconds) in [("limit_5h","5 小時",Some(18000)),("limit_7d","本週",Some(604800)),("limit_month_total","本月總額度",None),("limit_month_code","本月程式設計",None)]{
                     let Some(entry)=usages.get(key) else{continue;};
                     let Some(used)=number(&entry["used_ratio"]).filter(|n|(0.0..=1.0).contains(n)) else{continue;};
                     s.windows.push(Window{label:label.into(),seconds,remaining:((1.0-used)*100.0) as f32,reset:reset(&entry["reset_time"]),amount:None});
                 }
                 if !s.windows.is_empty(){return Ok(s);}
             }
-            if v.as_object().is_some_and(|o|o.is_empty()){return Err("Kimi 已登录，官网暂未返回周期额度".into());}
+            if v.as_object().is_some_and(|o|o.is_empty()){return Err("Kimi 已登入，官網暫未返回週期額度".into());}
             let section=|v:&Value,seconds:Option<i64>|->Option<Window>{let limit=number(&v["limit"])?;if limit<=0.0{return None;}let remaining=number(&v["remaining"]).or_else(||Some(limit-number(&v["used"])?))?;Some(Window{label:cadence(seconds),seconds,remaining:(remaining/limit*100.0).clamp(0.0,100.0) as f32,reset:reset(&v["resetTime"]),amount:None})};
             if let Some(w)=section(&v["usage"],Some(604800)){s.windows.push(w);}
             for limit in v["limits"].as_array().into_iter().flatten(){let duration=limit["window"]["duration"].as_i64();let unit=limit["window"]["timeUnit"].as_str().unwrap_or_default();let factor=match unit{"TIME_UNIT_MINUTE"=>Some(60),"TIME_UNIT_HOUR"=>Some(3600),"TIME_UNIT_DAY"=>Some(86400),"TIME_UNIT_SECOND"=>Some(1),_=>None};let seconds=duration.zip(factor).and_then(|(d,f)|d.checked_mul(f));if let Some(w)=section(&limit["detail"],seconds){if !s.windows.iter().any(|old|old.seconds==w.seconds){s.windows.push(w);}}}
         }
         _=>unreachable!(),
     }
-    if s.windows.is_empty(){return Err("服务未提供周期额度，暂不绘制进度".into());}
+    if s.windows.is_empty(){return Err("服務未提供週期額度，暫不繪製進度".into());}
     s.windows.sort_by_key(|w|w.seconds.unwrap_or(i64::MAX));Ok(s)
 }
 
 struct Credential {token:String,account_id:Option<String>,identity:Option<String>,stamp:Option<std::time::SystemTime>}
 fn same_login(a:&Credential,b:&Credential)->bool{a.token==b.token||a.identity.as_ref().zip(b.identity.as_ref()).is_some_and(|(a,b)|a==b)}
 fn login_json(path:&Path)->Result<Value,String>{
-    let raw=fs::read(path).map_err(|_|"无法读取登录文件".to_string())?;
-    serde_json::from_slice(raw.strip_prefix(b"\xef\xbb\xbf").unwrap_or(&raw)).map_err(|_|"登录文件不是有效的 JSON".into())
+    let raw=fs::read(path).map_err(|_|"無法讀取登入檔案".to_string())?;
+    serde_json::from_slice(raw.strip_prefix(b"\xef\xbb\xbf").unwrap_or(&raw)).map_err(|_|"登入檔案不是有效的 JSON".into())
 }
 fn account_credentials(account:&Account)->Result<Credential,String>{
     credentials(account.provider,&account.source)
 }
 fn credentials(provider:Provider,path:&Path)->Result<Credential,String>{
-    if provider.api_key(){return Err("API Key 账号不读取登录文件".into());}
-    if provider==Provider::Claude{return Err("Claude 仅使用本地用量记录，不读取登录令牌".into());}
+    if provider.api_key(){return Err("API Key 帳號不讀取登入檔案".into());}
+    if provider==Provider::Claude{return Err("Claude 僅使用本地用量記錄，不讀取登入令牌".into());}
     let root=login_json(path)?;
     let v=if provider==Provider::Codex{root.get("auth_json").unwrap_or(&root)}else{&root};
-    let token=match provider{Provider::Codex=>v.pointer("/tokens/access_token").or_else(||v.get("access_token")),Provider::Kimi=>v.get("access_token"),_=>None}.and_then(Value::as_str).filter(|s|!s.trim().is_empty()).ok_or("未找到订阅账号的登录凭据，请选择对应工具的登录文件")?.to_owned();
+    let token=match provider{Provider::Codex=>v.pointer("/tokens/access_token").or_else(||v.get("access_token")),Provider::Kimi=>v.get("access_token"),_=>None}.and_then(Value::as_str).filter(|s|!s.trim().is_empty()).ok_or("未找到訂閱帳號的登入憑據，請選擇對應工具的登入檔案")?.to_owned();
     let claims=token.split('.').nth(1).and_then(|b|base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(b).ok()).and_then(|b|serde_json::from_slice::<Value>(&b).ok()).unwrap_or(Value::Null);
     let account_id=v.pointer("/tokens/account_id").or_else(||v.get("account_id")).and_then(Value::as_str).or_else(||claims.pointer("/https:~1~1api.openai.com~1auth/chatgpt_account_id").and_then(Value::as_str)).filter(|s|!s.is_empty()).map(str::to_owned);
     let identity=match provider{
@@ -428,17 +428,17 @@ fn fetch(agent:&ureq::Agent,account:&Account)->Result<Snapshot,(String,u64)>{
     let url=match account.provider{Provider::Codex=>"https://chatgpt.com/backend-api/wham/usage",Provider::Kimi=>"https://api.kimi.com/coding/v1/usages",_=>unreachable!()};
     let mut req=agent.get(url).set("Authorization",&format!("Bearer {}",auth.token)).set("Accept","application/json").set("User-Agent","codex-cli/Daozai");
     if account.provider==Provider::Codex{if let Some(id)=&auth.account_id{req=req.set("ChatGPT-Account-Id",id);}}
-    let response=req.call().map_err(|e|match e{ureq::Error::Status(401|403,_)=>("登录已失效或权限不足，请在对应工具中重新登录".into(),0),ureq::Error::Status(429,r)=>("请求过于频繁，稍后自动重试".into(),r.header("Retry-After").and_then(|s|s.parse().ok()).unwrap_or(180).clamp(30,3600)),ureq::Error::Status(n,_)=>(format!("额度服务暂不可用（{n}）"),60),_=>("无法连接额度服务，请检查网络或代理".into(),30)})?;
-    let mut body=String::new();response.into_reader().take(1024*1024).read_to_string(&mut body).map_err(|_|("读取额度响应失败".into(),30))?;
-    if auth.stamp!=fs::metadata(&account.source).and_then(|m|m.modified()).ok(){return Err(("登录信息已变化，请刷新额度".into(),0));}
-    let value=serde_json::from_str(&body).map_err(|_|("服务没有返回有效的额度数据".into(),60))?;
+    let response=req.call().map_err(|e|match e{ureq::Error::Status(401|403,_)=>("登入已失效或許可權不足，請在對應工具中重新登入".into(),0),ureq::Error::Status(429,r)=>("請求過於頻繁，稍後自動重試".into(),r.header("Retry-After").and_then(|s|s.parse().ok()).unwrap_or(180).clamp(30,3600)),ureq::Error::Status(n,_)=>(format!("額度服務暫不可用（{n}）"),60),_=>("無法連線額度服務，請檢查網路或代理".into(),30)})?;
+    let mut body=String::new();response.into_reader().take(1024*1024).read_to_string(&mut body).map_err(|_|("讀取額度響應失敗".into(),30))?;
+    if auth.stamp!=fs::metadata(&account.source).and_then(|m|m.modified()).ok(){return Err(("登入訊息已變化，請重新整理額度".into(),0));}
+    let value=serde_json::from_str(&body).map_err(|_|("服務沒有返回有效的額度資料".into(),60))?;
     parse(account.provider,&value).map_err(|e|(e,60))
 }
 
 #[cfg(test)] mod tests {
     use super::*;
     #[test] fn lightweight_quota_startup_has_no_unused_workers(){
-        let mut service=Service::start();assert!(service.workers.is_empty(),"未启用额度来源时不应创建后台线程");
+        let mut service=Service::start();assert!(service.workers.is_empty(),"未啟用額度來源時不應建立後臺執行緒");
         assert!(service.refresh(vec![]));assert!(service.workers.is_empty());
     }
     #[test] fn api_cache_is_bound_to_endpoint_region_and_credential(){
@@ -475,7 +475,7 @@ fn fetch(agent:&ureq::Agent,account:&Account)->Result<Snapshot,(String,u64)>{
         let mut outdated=slow.clone();outdated.id="outdated".into();assert!(service.refresh_with(vec![outdated],run.clone()));
         assert!(service.refresh_with(vec![],run.clone()));
         let mut resumed=slow;resumed.id="resumed".into();assert!(service.refresh_with(vec![resumed],run.clone()));
-        assert!(Arc::ptr_eq(&original,&service.workers[&group].pending),"在途线程应直接复用，不能随开关切换叠加");
+        assert!(Arc::ptr_eq(&original,&service.workers[&group].pending),"在途執行緒應直接複用，不能隨開關切換疊加");
         release.send(()).unwrap();assert_eq!(events.recv_timeout(Duration::from_secs(2)).unwrap(),"resumed");
         assert!(service.refresh_with(vec![],run));
         let deadline=Instant::now()+Duration::from_secs(2);
@@ -487,7 +487,7 @@ fn fetch(agent:&ureq::Agent,account:&Account)->Result<Snapshot,(String,u64)>{
         let account=Account{id:"limited".into(),provider:Provider::NewApi,alias:String::new(),source:PathBuf::new(),slot:None,enabled:true,pinned:false};
         pending.lock().unwrap().cooldowns.insert((account.id.clone(),None,PathBuf::new()),(Instant::now()+Duration::from_secs(60),"限流中".into()));
         let(wake,_)=mpsc::sync_channel(1);service.workers.insert(group,Worker{pending:pending.clone(),wake});
-        assert!(service.refresh_with(vec![account.clone()],|_,_|panic!("退避期间不能重新发请求")));
+        assert!(service.refresh_with(vec![account.clone()],|_,_|panic!("退避期間不能重新發請求")));
         let c=Config{accounts:vec![account],..Config::default()};let deadline=Instant::now()+Duration::from_secs(2);let mut received=None;
         while Instant::now()<deadline{if let Some(event)=service.try_recv(&c){received=Some(event.result);break;}std::thread::sleep(Duration::from_millis(2));}
         assert_eq!(received.unwrap().unwrap_err(),"限流中");assert!(std::sync::Arc::ptr_eq(&pending,&service.workers[&group].pending));
@@ -502,29 +502,29 @@ fn fetch(agent:&ureq::Agent,account:&Account)->Result<Snapshot,(String,u64)>{
 
     #[test]
     fn claude_local_config_ignores_retired_reset_fields(){
-        let current=json!({"enabled":true,"compact":false,"selected":"desktop","colors":{"desktop":"blue"},"accounts":[{"id":"desktop","provider":"Claude","alias":"离线账号","source":"fixture/config.json","slot":"first","enabled":true,"pinned":true}]});
+        let current=json!({"enabled":true,"compact":false,"selected":"desktop","colors":{"desktop":"blue"},"accounts":[{"id":"desktop","provider":"Claude","alias":"離線帳號","source":"fixture/config.json","slot":"first","enabled":true,"pinned":true}]});
         let mut legacy=current.clone();legacy["manual_resets"]=json!({"desktop":{"source":"fixture/config.json","slot":"first","five_hour":1000,"seven_day":2000}});
         let config=Config::from_json(&legacy);
-        assert_eq!(config,Config::from_json(&current),"旧的手动时间不应影响账号及其他设置");
-        assert!(config.json().get("manual_resets").is_none(),"保存配置不应继续保留已撤回的手动时间");
+        assert_eq!(config,Config::from_json(&current),"舊的手動時間不應影響帳號及其他設定");
+        assert!(config.json().get("manual_resets").is_none(),"儲存配置不應繼續保留已撤回的手動時間");
         assert_eq!(Config::from_json(&config.json()),config);
     }
-    #[test] #[ignore="连接本机 ZCode 并只读核验套餐"]
+    #[test] #[ignore="連線本機 ZCode 並只讀核驗套餐"]
     fn zcode_connect_local(){
         let mut config=Config::load();let path=zcode::path().unwrap();
         zcode::add(&mut config,&path,"").unwrap();config.save();
         let a=config.accounts.iter().find(|a|a.provider==Provider::ZCode).unwrap();
-        match zcode::fetch(&http_agent(),a){Ok(s)=>println!("ZCode 返回 {} 个周期",s.windows.len()),Err(msg)=>println!("ZCode 查询状态：{msg}")}
+        match zcode::fetch(&http_agent(),a){Ok(s)=>println!("ZCode 返回 {} 個週期",s.windows.len()),Err(msg)=>println!("ZCode 查詢狀態：{msg}")}
     }
     #[test]
-    #[ignore="只读验证本机开启的 AI 账号"]
+    #[ignore="只讀驗證本機開啟的 AI 帳號"]
     fn enabled_account_probe(){
         let config=Config::load();
         let agent=http_agent();
         for a in config.accounts.iter().filter(|a|a.enabled){
             match fetch(&agent,a){
-                Ok(s)=>println!("{} 查询成功，{} 个周期",a.provider.name(),s.windows.len()),
-                Err((reason,_))=>println!("{} 查询失败：{}",a.provider.name(),reason),
+                Ok(s)=>println!("{} 查詢成功，{} 個週期",a.provider.name(),s.windows.len()),
+                Err((reason,_))=>println!("{} 查詢失敗：{}",a.provider.name(),reason),
             }
         }
     }
@@ -537,9 +537,9 @@ fn fetch(agent:&ureq::Agent,account:&Account)->Result<Snapshot,(String,u64)>{
         fs::write(&personal,a).unwrap();fs::write(&work,b).unwrap();fs::write(&duplicate,a).unwrap();
         let mut config=Config::default();let paths=vec![(Provider::Kimi,personal.clone()),(Provider::Kimi,work.clone()),(Provider::Kimi,duplicate)];
         config.discover_files(&paths);
-        assert_eq!(config.accounts.len(),2,"同一服务的不同有效账号都应被识别，相同账号只添加一次");
-        config.accounts[0].enabled=false;config.accounts[0].alias="自定义备注".into();let saved=config.clone();
-        config.discover_files(&paths);assert_eq!(config,saved,"重复识别不能覆盖原有账号偏好");
+        assert_eq!(config.accounts.len(),2,"同一服務的不同有效帳號都應被識別，相同帳號只新增一次");
+        config.accounts[0].enabled=false;config.accounts[0].alias="自定義備註".into();let saved=config.clone();
+        config.discover_files(&paths);assert_eq!(config,saved,"重複識別不能覆蓋原有帳號偏好");
         assert_eq!(fs::read_to_string(personal).unwrap(),a);assert_eq!(fs::read_to_string(work).unwrap(),b);
         let _=fs::remove_dir_all(dir);
     }
@@ -551,39 +551,39 @@ fn fetch(agent:&ureq::Agent,account:&Account)->Result<Snapshot,(String,u64)>{
         fs::write(&old,json!({"access_token":token(json!({"user_id":"same-user","jti":"old"}))}).to_string()).unwrap();
         fs::File::options().write(true).open(&old).unwrap().set_times(fs::FileTimes::new().set_modified(std::time::UNIX_EPOCH+Duration::from_secs(100))).unwrap();
         fs::write(&new,format!("\u{feff}{}",json!({"access_token":token(json!({"user_id":"same-user","jti":"new"}))}))).unwrap();
-        let mut config=Config::default();config.add(Provider::Kimi,"保留备注".into(),old.clone()).unwrap();config.accounts[0].enabled=false;
+        let mut config=Config::default();config.add(Provider::Kimi,"保留備註".into(),old.clone()).unwrap();config.accounts[0].enabled=false;
         config.discover_files(&[(Provider::Kimi,old),(Provider::Kimi,new.clone())]);
-        assert_eq!(config.accounts.len(),1);assert_eq!(config.accounts[0].alias,"保留备注");assert!(!config.accounts[0].enabled);assert_eq!(config.accounts[0].source,fs::canonicalize(&new).unwrap());
+        assert_eq!(config.accounts.len(),1);assert_eq!(config.accounts[0].alias,"保留備註");assert!(!config.accounts[0].enabled);assert_eq!(config.accounts[0].source,fs::canonicalize(&new).unwrap());
         for user in ["first-user","second-user"]{
             let path=dir.join(format!("{user}.json"));fs::write(&path,json!({"tokens":{"account_id":"same-workspace","access_token":token(json!({"sub":user}))}}).to_string()).unwrap();
             config.add(Provider::Codex,String::new(),path).unwrap();
         }
-        assert_eq!(config.accounts.iter().filter(|a|a.provider==Provider::Codex).count(),2,"同一工作区的不同用户不能合并");
+        assert_eq!(config.accounts.iter().filter(|a|a.provider==Provider::Codex).count(),2,"同一工作區的不同使用者不能合併");
         let _=fs::remove_dir_all(dir);
     }
     #[test]
-    #[ignore="按需只读核验本机识别与 Claude 本地额度，不保存配置或续期凭据"]
+    #[ignore="按需只讀核驗本機識別與 Claude 本地額度，不儲存配置或續期憑據"]
     fn native_account_read_only_probe(){
         let mut config=Config::load();let before=config.accounts.len();let report=config.discover();
         println!("discovery_added={} notes={:?}",report.added,report.notes);
         for provider in Provider::ALL{println!("provider={} accounts={}",provider.name(),config.accounts.iter().filter(|a|a.provider==provider).count());}
         let agent=http_agent();
         for account in config.accounts.iter().filter(|a|a.provider==Provider::Claude&&a.slot.is_some()){
-            let snapshot=fetch(&agent,account).expect("Claude 桌面版本地额度应可只读获取");
+            let snapshot=fetch(&agent,account).expect("Claude 桌面版本地額度應可只讀獲取");
             println!("claude_windows={:?}",snapshot.windows.iter().map(|w|(&w.label,w.remaining)).collect::<Vec<_>>());
         }
         for account in config.accounts.iter().skip(before){
             println!("discovered_account={}",json!({"id":account.id,"provider":account.provider.name(),"alias":account.alias,"source":account.source,"slot":account.slot,"enabled":account.enabled,"pinned":account.pinned}));
         }
-        let saved=config.clone();assert_eq!(config.discover().added,0);assert_eq!(config,saved,"重复识别不能改变账号和偏好");
+        let saved=config.clone();assert_eq!(config.discover().added,0);assert_eq!(config,saved,"重複識別不能改變帳號和偏好");
     }
     #[test] fn gemini_accounts_keep_colors_selection_and_credentials_separate(){
-        let mut c=Config::default();let personal=c.connect_gemini("personal".into(),"个人".into());let work=c.connect_gemini("work".into(),"工作".into());c.colors.insert(personal.clone(),Accent::Cyan);c.colors.insert(work.clone(),Accent::Gold);c.accounts[0].pinned=false;
-        c.connect_gemini("personal".into(),"个人更新".into());assert_eq!(c.accounts.len(),2);assert_eq!(c.selected,personal);assert!(!c.accounts[0].pinned);assert_eq!(c.colors[&work],Accent::Gold);assert_eq!(Config::from_json(&c.json()),c);let raw=c.json().to_string();assert!(!raw.contains("cookie"));assert!(!raw.contains("access_token"));assert!(c.add(Provider::Gemini,"错误来源".into(),"oauth_creds.json".into()).is_err());
+        let mut c=Config::default();let personal=c.connect_gemini("personal".into(),"個人".into());let work=c.connect_gemini("work".into(),"工作".into());c.colors.insert(personal.clone(),Accent::Cyan);c.colors.insert(work.clone(),Accent::Gold);c.accounts[0].pinned=false;
+        c.connect_gemini("personal".into(),"個人更新".into());assert_eq!(c.accounts.len(),2);assert_eq!(c.selected,personal);assert!(!c.accounts[0].pinned);assert_eq!(c.colors[&work],Accent::Gold);assert_eq!(Config::from_json(&c.json()),c);let raw=c.json().to_string();assert!(!raw.contains("cookie"));assert!(!raw.contains("access_token"));assert!(c.add(Provider::Gemini,"錯誤來源".into(),"oauth_creds.json".into()).is_err());
     }
     #[test] fn grok_slots_share_a_file_but_keep_selection_colors_and_reconnection_separate(){
         let mut config=Config::from_json(&json!({"selected":"work","colors":{"personal":"green","work":"blue"},"accounts":[
-            {"id":"personal","provider":"Grok Bot","alias":"个人","source":"sand-secrets.json","slot":"personal","pinned":true},
+            {"id":"personal","provider":"Grok Bot","alias":"個人","source":"sand-secrets.json","slot":"personal","pinned":true},
             {"id":"work","provider":"GrokBot","alias":"工作","source":"sand-secrets.json","slot":"work","pinned":false}
         ]}));
         assert_eq!(Config::from_json(&config.json()),config);let personal=config.accounts[0].clone();
@@ -593,12 +593,12 @@ fn fetch(agent:&ureq::Agent,account:&Account)->Result<Snapshot,(String,u64)>{
         let raw=config.json().to_string();assert!(!raw.contains("accessToken"));assert!(!raw.contains("refreshToken"));
     }
     #[test] fn old_or_unknown_colors_keep_accounts_and_use_brand_defaults(){
-        let old=json!({"selected":"personal","accounts":[{"id":"personal","provider":"Codex","alias":"个人","source":"auth.json"}]});
+        let old=json!({"selected":"personal","accounts":[{"id":"personal","provider":"Codex","alias":"個人","source":"auth.json"}]});
         let old_config=Config::from_json(&old);assert_eq!(old_config.accounts.len(),1);assert!(old_config.colors.is_empty());
         for value in [json!("unknown"),json!(123),Value::Null]{let mut raw=old.clone();raw["colors"]=json!({"personal":value});let restored=Config::from_json(&raw);assert_eq!(restored.accounts,old_config.accounts);assert!(restored.colors.is_empty());}
     }
     #[test] fn colors_are_saved_per_account_without_changing_credentials_or_selection(){
-        let mut c=Config::from_json(&json!({"selected":"personal","accounts":[{"id":"personal","provider":"Codex","alias":"个人","source":"personal/auth.json"},{"id":"work","provider":"Codex","alias":"工作","source":"work/auth.json"}]}));
+        let mut c=Config::from_json(&json!({"selected":"personal","accounts":[{"id":"personal","provider":"Codex","alias":"個人","source":"personal/auth.json"},{"id":"work","provider":"Codex","alias":"工作","source":"work/auth.json"}]}));
         let accounts=c.accounts.clone();c.colors.insert("personal".into(),Accent::Violet);c.colors.insert("work".into(),Accent::Orange);
         let restored=Config::from_json(&c.json());assert_eq!(restored,c);assert_eq!(restored.accounts,accounts);assert_eq!(restored.selected,"personal");
         c.colors.remove("personal");let restored=Config::from_json(&c.json());assert!(!restored.colors.contains_key("personal"));assert_eq!(restored.colors["work"],Accent::Orange);
@@ -606,24 +606,24 @@ fn fetch(agent:&ureq::Agent,account:&Account)->Result<Snapshot,(String,u64)>{
     #[test] fn deepseek_reconnect_preserves_account_preferences(){
         let mut c=Config::default();let id=c.connect_deepseek("old".into(),"工作".into());c.accounts[0].pinned=false;c.accounts[0].enabled=false;c.colors.insert(id.clone(),Accent::Gold);
         assert_eq!(c.reconnect_deepseek(&id,"new".into(),"工作".into()).unwrap(),id);assert_eq!(c.accounts.len(),1);assert_eq!(c.accounts[0].slot.as_deref(),Some("new"));assert!(!c.accounts[0].pinned);assert!(!c.accounts[0].enabled);assert_eq!(c.colors[&id],Accent::Gold);
-        c.connect_deepseek("other".into(),"个人".into());assert!(c.reconnect_deepseek(&id,"other".into(),"工作".into()).is_err());assert_eq!(c.accounts[0].slot.as_deref(),Some("new"));
+        c.connect_deepseek("other".into(),"個人".into());assert!(c.reconnect_deepseek(&id,"other".into(),"工作".into()).is_err());assert_eq!(c.accounts[0].slot.as_deref(),Some("new"));
     }
     #[test] fn deepseek_stays_last_and_visible_with_overflow(){
-        let mut c=Config::default();c.connect_deepseek("key-reference".into(),"余额".into());
+        let mut c=Config::default();c.connect_deepseek("key-reference".into(),"餘額".into());
         for n in 0..5{c.accounts.push(Account{id:format!("c{n}"),provider:Provider::Codex,alias:String::new(),source:PathBuf::new(),slot:None,enabled:true,pinned:true});}
         assert_eq!(c.pinned_indices(),vec![1,2,3,4,5,0]);
         c.accounts[0].enabled=false;assert_eq!(c.pinned_indices(),vec![1,2,3,4,5]);
         assert!(!c.json().to_string().contains("api_key"));
     }
-    #[test] fn codex_week_only_is_a_single_real_window(){let s=parse(Provider::Codex,&json!({"plan_type":"pro","rate_limit":{"primary_window":null,"secondary_window":{"used_percent":43,"limit_window_seconds":604800,"reset_at":1900000000}}})).unwrap();assert_eq!(s.rings().len(),1);assert_eq!(s.rings()[0].label,"本周");assert_eq!(s.rings()[0].remaining,57.0);}
+    #[test] fn codex_week_only_is_a_single_real_window(){let s=parse(Provider::Codex,&json!({"plan_type":"pro","rate_limit":{"primary_window":null,"secondary_window":{"used_percent":43,"limit_window_seconds":604800,"reset_at":1900000000}}})).unwrap();assert_eq!(s.rings().len(),1);assert_eq!(s.rings()[0].label,"本週");assert_eq!(s.rings()[0].remaining,57.0);}
     #[test] fn pro_plan_does_not_hide_an_existing_five_hour_window(){let s=parse(Provider::Codex,&json!({"plan_type":"pro","rate_limit":{"primary_window":{"used_percent":0,"limit_window_seconds":18000},"secondary_window":{"used_percent":25,"limit_window_seconds":604800}}})).unwrap();assert_eq!(s.rings().len(),2);assert_eq!(s.rings()[0].remaining,100.0);}
-    #[test] fn primary_can_be_weekly_and_missing_is_not_unlimited(){let s=parse(Provider::Codex,&json!({"rate_limit":{"primary_window":{"used_percent":100,"limit_window_seconds":604800}}})).unwrap();assert_eq!(s.rings()[0].label,"本周");assert_eq!(s.rings()[0].remaining,0.0);assert!(parse(Provider::Codex,&json!({"rate_limit":{}})).is_err());assert!(parse(Provider::Codex,&json!({"rate_limit":{"primary_window":{"reset_at":1900000000}}})).is_err());}
+    #[test] fn primary_can_be_weekly_and_missing_is_not_unlimited(){let s=parse(Provider::Codex,&json!({"rate_limit":{"primary_window":{"used_percent":100,"limit_window_seconds":604800}}})).unwrap();assert_eq!(s.rings()[0].label,"本週");assert_eq!(s.rings()[0].remaining,0.0);assert!(parse(Provider::Codex,&json!({"rate_limit":{}})).is_err());assert!(parse(Provider::Codex,&json!({"rate_limit":{"primary_window":{"reset_at":1900000000}}})).is_err());}
     #[test] fn extra_codex_buckets_do_not_replace_main_windows(){let s=parse(Provider::Codex,&json!({"rate_limit":{"secondary_window":{"used_percent":20,"limit_window_seconds":604800}},"additional_rate_limits":[{"limit_name":"reserve","rate_limit":{"primary_window":{"used_percent":80,"limit_window_seconds":604800}}}]})).unwrap();assert_eq!(s.windows.len(),1);assert_eq!(s.extra[0].remaining,20.0);assert_eq!(s.windows[0].remaining,80.0);}
     #[test] fn kimi_current_usage_and_empty_account(){
         let s=parse(Provider::Kimi,&json!({"usages":{"limit_5h":{"used_ratio":"0.25"},"limit_month_code":{"used_ratio":0}}})).unwrap();
         assert_eq!(s.windows[0].remaining,75.0);assert_eq!(s.windows[1].remaining,100.0);
-        assert!(parse(Provider::Kimi,&json!({})).unwrap_err().contains("已登录"));
+        assert!(parse(Provider::Kimi,&json!({})).unwrap_err().contains("已登入"));
     }
     #[test] fn claude_null_window_and_kimi_string_numbers(){let c=parse(Provider::Claude,&json!({"five_hour":null,"seven_day":{"utilization":60,"resets_at":"2030-01-01T12:00:00Z"}})).unwrap();assert_eq!(c.rings().len(),1);assert!(c.windows[0].reset.is_some());let k=parse(Provider::Kimi,&json!({"usage":{"limit":"100","remaining":"70"},"limits":[{"window":{"duration":300,"timeUnit":"TIME_UNIT_MINUTE"},"detail":{"limit":"20","used":"5"}}]})).unwrap();assert_eq!(k.rings().len(),2);assert_eq!(k.rings()[0].remaining,75.0);}
-    #[test] fn multi_account_config_keeps_sources_and_selection_separate(){let mut c=Config::default();for n in 1..=2{c.accounts.push(Account{id:n.to_string(),provider:Provider::Codex,alias:format!("账号 {n}"),source:PathBuf::from(format!("profile-{n}/auth.json")),slot:None,enabled:true,pinned:true});}c.selected="2".into();let raw=c.json();assert_eq!(Config::from_json(&raw),c);assert_eq!(c.selected_index(),Some(1));assert_eq!(c.pinned_indices(),vec![0,1]);assert!(!raw.to_string().contains("access_token"));}
+    #[test] fn multi_account_config_keeps_sources_and_selection_separate(){let mut c=Config::default();for n in 1..=2{c.accounts.push(Account{id:n.to_string(),provider:Provider::Codex,alias:format!("帳號 {n}"),source:PathBuf::from(format!("profile-{n}/auth.json")),slot:None,enabled:true,pinned:true});}c.selected="2".into();let raw=c.json();assert_eq!(Config::from_json(&raw),c);assert_eq!(c.selected_index(),Some(1));assert_eq!(c.pinned_indices(),vec![0,1]);assert!(!raw.to_string().contains("access_token"));}
 }

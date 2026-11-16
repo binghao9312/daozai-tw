@@ -5,9 +5,9 @@ use std::{collections::BTreeMap, fs, net::{Ipv4Addr, SocketAddr, TcpStream}, os:
     path::{Path, PathBuf}, process::{Child, Command, Stdio}, sync::atomic::{AtomicBool, Ordering}, time::{Duration, Instant}};
 use tungstenite::{client::client_with_config, protocol::WebSocketConfig, Message};
 
-const LOCAL_ERROR: &str = "无法读取本机豆包当前登录，请使用浏览器登录；无需安装扩展";
-const BROWSER_ERROR: &str = "无法连接豆包登录窗口，请关闭该窗口后重试";
-const CANCELLED: &str = "已取消豆包连接";
+const LOCAL_ERROR: &str = "無法讀取本機豆包當前登入，請使用瀏覽器登入；無需安裝擴充套件";
+const BROWSER_ERROR: &str = "無法連線豆包登入視窗，請關閉該視窗後重試";
+const CANCELLED: &str = "已取消豆包連線";
 
 fn check_cancel(cancel: &AtomicBool) -> Result<(), String> {
     if cancel.load(Ordering::Acquire) { Err(CANCELLED.into()) } else { Ok(()) }
@@ -93,25 +93,25 @@ fn cdp(port: u16, url: &str, method: &str) -> Result<Value, String> {
 
 pub(super) fn browser(cancel: &AtomicBool) -> Result<String, String> {
     check_cancel(cancel)?;
-    let exe = find_browser().ok_or("未找到 Chrome 或 Edge，请先安装其中一个浏览器，或从本机豆包客户端导入")?;
+    let exe = find_browser().ok_or("未找到 Chrome 或 Edge，請先安裝其中一個瀏覽器，或從本機豆包客戶端匯入")?;
     use ring::rand::SecureRandom;
     let mut random = [0u8; 16];
     ring::rand::SystemRandom::new().fill(&mut random).map_err(|_| BROWSER_ERROR)?;
     let name: String = random.iter().map(|b| format!("{b:02x}")).collect();
     let profile = crate::model::config_dir().join("browser-login").join(name);
-    fs::create_dir_all(&profile).map_err(|_| "无法创建豆包独立登录目录")?;
+    fs::create_dir_all(&profile).map_err(|_| "無法建立豆包獨立登入目錄")?;
     let child = match Command::new(exe).arg(format!("--user-data-dir={}", profile.display()))
         .args(["--remote-debugging-port=0", "--remote-debugging-address=127.0.0.1", "--no-first-run", "--no-default-browser-check", "--disable-background-mode", "--new-window", "https://www.doubao.com/chat/"])
         .stdout(Stdio::null()).stderr(Stdio::null()).spawn() {
         Ok(child) => child,
-        Err(_) => { let _ = fs::remove_dir_all(&profile); return Err("无法打开豆包登录窗口".into()); }
+        Err(_) => { let _ = fs::remove_dir_all(&profile); return Err("無法開啟豆包登入視窗".into()); }
     };
     let mut browser = Browser { child, profile };
     let start = Instant::now();
     let mut address = None;
     while start.elapsed() < Duration::from_secs(600) {
         check_cancel(cancel)?;
-        if browser.child.try_wait().map_err(|_| BROWSER_ERROR)?.is_some() { return Err("豆包登录窗口已关闭，未保存登录".into()); }
+        if browser.child.try_wait().map_err(|_| BROWSER_ERROR)?.is_some() { return Err("豆包登入視窗已關閉，未儲存登入".into()); }
         if address.is_none() {
             address = fs::read_to_string(browser.profile.join("DevToolsActivePort")).ok().and_then(|raw| endpoint(&raw).ok());
             if start.elapsed() > Duration::from_secs(20) && address.is_none() { return Err(BROWSER_ERROR.into()); }
@@ -131,7 +131,7 @@ pub(super) fn browser(cancel: &AtomicBool) -> Result<String, String> {
         }
         for _ in 0..10 { check_cancel(cancel)?; std::thread::sleep(Duration::from_millis(100)); }
     }
-    Err("豆包登录等待超时，请重新登录".into())
+    Err("豆包登入等待超時，請重新登入".into())
 }
 
 fn profile(root: &Path) -> Result<PathBuf, String> {

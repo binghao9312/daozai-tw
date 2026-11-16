@@ -80,7 +80,7 @@ impl State {
                 Some(Err(mpsc::TryRecvError::Disconnected)) => {
                     self.rx = None; self.cancel = None;
                     self.automatic_check = false; self.next_check = Some(Instant::now() + RETRY_INTERVAL);
-                    self.message = "检查或下载已中断，请重试。".into(); break;
+                    self.message = "檢查或下載已中斷，請重試。".into(); break;
                 }
                 _ => break,
             };
@@ -100,12 +100,12 @@ impl State {
                 Event::Ready(work) => {
                     if self.cancel.as_ref().is_some_and(|cancel| cancel.load(Ordering::Relaxed)) {
                         self.rx = None; self.cancel = None;
-                        self.message = "下载已取消".into();
+                        self.message = "下載已取消".into();
                         let _ = std::fs::remove_dir_all(work);
                         continue;
                     }
                     let (tx, rx) = mpsc::channel(); self.rx = Some(rx); self.cancel = None;
-                    self.message = "正在准备重启…".into();
+                    self.message = "正在準備重啟…".into();
                     let ctx = ctx.clone();
                     std::thread::spawn(move || {
                         let event = match launch_installer(&work) { Ok(()) => Event::Installed, Err(error) => Event::Failed(error) };
@@ -124,18 +124,18 @@ impl State {
     }
 
     pub(crate) fn ui(&mut self, ui: &mut egui::Ui) {
-        if ui.add_enabled(self.rx.is_none(), egui::Button::new("检查更新")).clicked() {
+        if ui.add_enabled(self.rx.is_none(), egui::Button::new("檢查更新")).clicked() {
             self.begin_check(ui.ctx(), false, check);
         }
         match &self.result {
             Some(Ok(Some(release))) => {
-                if ui.button(format!("发现新版本 {} · 查看更新", release.version)).clicked() {
+                if ui.button(format!("發現新版本 {} · 檢視更新", release.version)).clicked() {
                     self.dialog_open = true; self.focus_requested = true;
                 }
             }
-            Some(Ok(None)) => { ui.label("当前已是最新版本"); }
-            Some(Err(message)) => { ui.label(message); ui.hyperlink_to("打开发布页", RELEASES); }
-            None if self.rx.is_some() => { ui.label("正在检查…"); }
+            Some(Ok(None)) => { ui.label("當前已是最新版本"); }
+            Some(Err(message)) => { ui.label(message); ui.hyperlink_to("開啟發布頁", RELEASES); }
+            None if self.rx.is_some() => { ui.label("正在檢查…"); }
             _ => {}
         }
         ui.add_space(5.0);
@@ -157,7 +157,7 @@ impl State {
         }).id();
         let installing = self.rx.is_some() && self.cancel.is_none();
         ctx.show_viewport_immediate(egui::ViewportId::from_hash_of("daozai-update"),
-            egui::ViewportBuilder::default().with_title("岛仔更新").with_icon(theme::app_icon())
+            egui::ViewportBuilder::default().with_title("島仔更新").with_icon(theme::app_icon())
                 .with_inner_size([520.0, 416.0]).with_resizable(false).with_decorations(false)
                 .with_transparent(true).with_active(true), |ctx, _| {
                 if focus {
@@ -175,7 +175,7 @@ impl State {
                     ui.painter().rect_filled(window, 22.0, egui::Color32::from_rgb(25,25,28));
                     ui.painter().rect_stroke(window, 22.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(55,55,61)), egui::StrokeKind::Inside);
                     let close_rect = egui::Rect::from_min_size(window.right_top()+egui::vec2(-42.0,12.0),egui::vec2(28.0,28.0));
-                    let close = ui.interact(close_rect, ui.id().with("update-close"), egui::Sense::click()).on_hover_text("关闭");
+                    let close = ui.interact(close_rect, ui.id().with("update-close"), egui::Sense::click()).on_hover_text("關閉");
                     if close.hovered() { ui.painter().rect_filled(close_rect, 8.0, theme::BTN_HOVER); }
                     let center = close_rect.center();
                     for direction in [-1.0,1.0] {
@@ -199,7 +199,7 @@ impl State {
                             ui.image((logo,egui::vec2(52.0,52.0)));
                             ui.add_space(4.0);
                             ui.vertical(|ui| {
-                                ui.label(egui::RichText::new("岛仔有新版本了").font(theme::font(21.0,W::Semibold)));
+                                ui.label(egui::RichText::new("島仔有新版本了").font(theme::font(21.0,W::Semibold)));
                                 ui.horizontal(|ui| {
                                     ui.label(egui::RichText::new(option_env!("DAOZAI_BUILD_LABEL").unwrap_or(env!("CARGO_PKG_VERSION"))).color(theme::DIM));
                                     ui.label(egui::RichText::new("→").color(theme::DIM));
@@ -217,7 +217,7 @@ impl State {
                                 ui.label(egui::RichText::new("本次更新").color(theme::GRAY).font(theme::font(11.5,W::Semibold)));
                                 egui::ScrollArea::vertical().id_salt("update-notes").max_height(96.0).min_scrolled_height(96.0)
                                     .auto_shrink([false,false]).show(ui, |ui| {
-                                        if release.notes.trim().is_empty() { ui.label("新版本已准备好。"); }
+                                        if release.notes.trim().is_empty() { ui.label("新版本已準備好。"); }
                                         else { for line in release.notes.lines() {
                                             let line = line.trim();
                                             if line.is_empty() { ui.add_space(3.0); continue; }
@@ -230,18 +230,18 @@ impl State {
                                     });
                             });
                         ui.add_space(4.0);
-                        ui.label(egui::RichText::new(if self.message.is_empty(){"更新后自动重启，设置和记录会保留。"}else{&self.message}).color(theme::DIM).size(11.5));
+                        ui.label(egui::RichText::new(if self.message.is_empty(){"更新後自動重啟，設定和記錄會保留。"}else{&self.message}).color(theme::DIM).size(11.5));
                         if self.cancel.is_some() {
                             ui.add(egui::ProgressBar::new(self.progress).fill(theme::BLUE).desired_height(8.0));
                             ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new(if self.progress==0.0{"正在连接下载服务器…".into()}else if self.progress<1.0{format!("正在下载更新 · {:.0}%",self.progress*100.0)}else{"正在校验安装包…".into()}).color(theme::GRAY));
-                                if ui.button("取消下载").clicked() { self.cancel.as_ref().unwrap().store(true,Ordering::Relaxed); }
+                                ui.label(egui::RichText::new(if self.progress==0.0{"正在連線下載伺服器…".into()}else if self.progress<1.0{format!("正在下載更新 · {:.0}%",self.progress*100.0)}else{"正在校驗安裝包…".into()}).color(theme::GRAY));
+                                if ui.button("取消下載").clicked() { self.cancel.as_ref().unwrap().store(true,Ordering::Relaxed); }
                             });
                         } else {
                             ui.add_space(4.0);
                             ui.horizontal(|ui| {
-                                if ui.add_enabled(!installing,egui::Button::new("稍后").fill(theme::BTN).min_size(egui::vec2(110.0,40.0))).clicked() { self.dismiss(); }
-                                let install = egui::Button::new(egui::RichText::new(if installing{"正在准备重启…"}else{"下载并安装"}).color(theme::WHITE))
+                                if ui.add_enabled(!installing,egui::Button::new("稍後").fill(theme::BTN).min_size(egui::vec2(110.0,40.0))).clicked() { self.dismiss(); }
+                                let install = egui::Button::new(egui::RichText::new(if installing{"正在準備重啟…"}else{"下載並安裝"}).color(theme::WHITE))
                                     .fill(theme::BLUE).min_size(egui::vec2(ui.available_width(),40.0));
                                 if ui.add_enabled(release.package.is_some() && self.rx.is_none(),install).clicked() {
                                     let (tx,rx)=mpsc::channel(); self.rx=Some(rx);
@@ -261,7 +261,7 @@ impl State {
                             ui.label(egui::RichText::new("·").color(theme::DIM));
                             ui.hyperlink_to(egui::RichText::new("檢視發行說明").size(11.5).color(theme::GRAY),&release.page);
                         });
-                        if release.package.is_none() { ui.label(egui::RichText::new("此版本请通过浏览器下载。").size(11.5).color(theme::DIM)); }
+                        if release.package.is_none() { ui.label(egui::RichText::new("此版本請透過瀏覽器下載。").size(11.5).color(theme::DIM)); }
                     });
                     if self.rx.is_some() { ctx.request_repaint_after(Duration::from_millis(100)); }
                 });
@@ -303,7 +303,7 @@ fn clip_update_window(rect: egui::Rect, scale: f32) {
     unsafe extern "system" fn visit(hwnd: HWND, data: LPARAM) -> BOOL {
         let mut title = [0u16; 64];
         let len = GetWindowTextW(hwnd, &mut title) as usize;
-        if String::from_utf16_lossy(&title[..len]) != "岛仔更新" { return BOOL(1); }
+        if String::from_utf16_lossy(&title[..len]) != "島仔更新" { return BOOL(1); }
         let &(rect, scale) = &*(data.0 as *const (egui::Rect, f32));
         let region = update_window_region(rect, scale);
         let old = CreateRectRgn(0, 0, 0, 0);
@@ -332,7 +332,7 @@ fn update_agent(proxy: Option<&str>, timeout: Duration) -> Result<ureq::Agent, S
     let mut builder = ureq::AgentBuilder::new().try_proxy_from_env(false)
         .timeout_connect(Duration::from_secs(20)).timeout_read(timeout).timeout_write(timeout);
     if let Some(proxy) = proxy {
-        builder = builder.proxy(ureq::Proxy::new(proxy).map_err(|_| "代理地址无效，请检查代理设置后重试")?);
+        builder = builder.proxy(ureq::Proxy::new(proxy).map_err(|_| "代理地址無效，請檢查代理設定後重試")?);
     }
     Ok(builder.build())
 }
@@ -348,12 +348,12 @@ fn check() -> Result<Option<Release>, String> {
     let response = http_agent()?
         .get(API).set("User-Agent", concat!("Daozai/", env!("CARGO_PKG_VERSION")))
         .set("Accept", "application/vnd.github+json").call().map_err(|error| match error {
-            ureq::Error::Status(403 | 429, _) => "检查过于频繁，请稍后重试".to_owned(),
-            ureq::Error::Status(404, _) => "暂未找到正式版本，请查看发布页".to_owned(),
-            _ => "无法连接更新服务，请检查网络或代理后重试".to_owned(),
+            ureq::Error::Status(403 | 429, _) => "檢查過於頻繁，請稍後重試".to_owned(),
+            ureq::Error::Status(404, _) => "暫未找到正式版本，請檢視釋出頁".to_owned(),
+            _ => "無法連線更新服務，請檢查網路或代理後重試".to_owned(),
         })?;
     let value: serde_json::Value = serde_json::from_reader(response.into_reader())
-        .map_err(|_| "更新信息格式异常，请稍后重试".to_owned())?;
+        .map_err(|_| "更新訊息格式異常，請稍後重試".to_owned())?;
     release_info(&value, env!("CARGO_PKG_VERSION"))
 }
 
@@ -374,21 +374,21 @@ fn release_info(value: &serde_json::Value, current: &str) -> Result<Option<Relea
 }
 
 fn download(release: &Release, tx: &mpsc::Sender<Event>, cancel: &AtomicBool) -> Result<PathBuf, String> {
-    let package = release.package.as_ref().ok_or("请通过浏览器下载此版本")?;
-    let root = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).ok_or("无法找到更新缓存目录")?.join("Daozai/Updates");
+    let package = release.package.as_ref().ok_or("請透過瀏覽器下載此版本")?;
+    let root = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).ok_or("無法找到更新快取目錄")?.join("Daozai/Updates");
     let work = root.join(format!("{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos()));
-    std::fs::create_dir_all(&work).map_err(|_| "无法创建更新缓存")?;
+    std::fs::create_dir_all(&work).map_err(|_| "無法建立更新快取")?;
     let result = (|| {
         let response = http_agent()?
-            .get(&package.url).call().map_err(|_| "连接下载服务器失败，请检查网络或代理，或使用网盘下载")?;
-        if !response.get_url().starts_with("https://") { return Err("更新下载未使用安全连接".into()); }
+            .get(&package.url).call().map_err(|_| "連線下載伺服器失敗，請檢查網路或代理，或使用網盤下載")?;
+        if !response.get_url().starts_with("https://") { return Err("更新下載未使用安全連線".into()); }
         let mut input = response.into_reader();
-        let mut output = std::fs::File::create(work.join("update.zip")).map_err(|_| "无法保存更新包")?;
+        let mut output = std::fs::File::create(work.join("update.zip")).map_err(|_| "無法儲存更新包")?;
         transfer(&mut input, &mut output, package, cancel, |progress| { let _ = tx.send(Event::Progress(progress)); })?;
-        std::fs::write(work.join("apply.ps1"), concat!("\u{feff}", include_str!("../installer/update.ps1"))).map_err(|_| "无法准备更新程序")?;
-        std::fs::write(work.join("version.txt"), release.version.trim_start_matches('v')).map_err(|_| "无法保存更新信息")?;
-        std::fs::write(work.join("hash.txt"), &package.hash).map_err(|_| "无法保存校验信息")?;
-        if cancel.load(Ordering::Relaxed) { return Err("下载已取消".into()); }
+        std::fs::write(work.join("apply.ps1"), concat!("\u{feff}", include_str!("../installer/update.ps1"))).map_err(|_| "無法準備更新程式")?;
+        std::fs::write(work.join("version.txt"), release.version.trim_start_matches('v')).map_err(|_| "無法儲存更新訊息")?;
+        std::fs::write(work.join("hash.txt"), &package.hash).map_err(|_| "無法儲存校驗訊息")?;
+        if cancel.load(Ordering::Relaxed) { return Err("下載已取消".into()); }
         Ok(work.clone())
     })();
     if result.is_err() { let _ = std::fs::remove_dir_all(&work); }
@@ -399,28 +399,28 @@ fn transfer(input: &mut impl Read, output: &mut impl Write, package: &Package, c
     let mut hash = ring::digest::Context::new(&ring::digest::SHA256);
     let mut buffer = [0u8; 65536]; let mut total = 0u64;
     loop {
-        if cancel.load(Ordering::Relaxed) { return Err("下载已取消".into()); }
-        let length = input.read(&mut buffer).map_err(|_| "下载中断或等待超时，请重试或使用网盘下载")?;
+        if cancel.load(Ordering::Relaxed) { return Err("下載已取消".into()); }
+        let length = input.read(&mut buffer).map_err(|_| "下載中斷或等待超時，請重試或使用網盤下載")?;
         if length == 0 { break; }
         total += length as u64;
-        if total > package.size { return Err("更新包大小不符，请重新下载".into()); }
-        output.write_all(&buffer[..length]).map_err(|_| "无法保存更新包，请检查磁盘空间")?;
+        if total > package.size { return Err("更新包大小不符，請重新下載".into()); }
+        output.write_all(&buffer[..length]).map_err(|_| "無法儲存更新包，請檢查磁碟空間")?;
         hash.update(&buffer[..length]); progress(total as f32 / package.size as f32);
     }
     let digest: String = hash.finish().as_ref().iter().map(|b| format!("{b:02x}")).collect();
-    if total != package.size || digest != package.hash { return Err("更新包不完整或校验失败，请重新下载".into()); }
+    if total != package.size || digest != package.hash { return Err("更新包不完整或校驗失敗，請重新下載".into()); }
     Ok(())
 }
 
 #[cfg(windows)]
 fn launch_installer(work: &std::path::Path) -> Result<(), String> {
-    let target = std::env::current_exe().map_err(|_| "无法找到当前程序")?;
-    let shell = std::env::var_os("SystemRoot").map(PathBuf::from).ok_or("无法找到 Windows 目录")?
+    let target = std::env::current_exe().map_err(|_| "無法找到當前程式")?;
+    let shell = std::env::var_os("SystemRoot").map(PathBuf::from).ok_or("無法找到 Windows 目錄")?
         .join("System32/WindowsPowerShell/v1.0/powershell.exe");
     let mut child = crate::child_process::spawn(std::process::Command::new(shell).args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"])
         .arg(work.join("apply.ps1")).arg("-WorkPath").arg(work).arg("-TargetExe").arg(target)
         .arg("-ParentProcessId").arg(std::process::id().to_string()))
-        .map_err(|_| "无法启动更新程序，请通过浏览器下载安装")?;
+        .map_err(|_| "無法啟動更新程式，請透過瀏覽器下載安裝")?;
     // 脚本先确认缓存和安装目录可用，再允许主程序退出。
     for _ in 0..100 {
         if work.join("ready").exists() { return Ok(()); }
@@ -428,10 +428,10 @@ fn launch_installer(work: &std::path::Path) -> Result<(), String> {
         std::thread::sleep(Duration::from_millis(50));
     }
     let _ = child.kill();
-    Err(std::fs::read_to_string(work.join("error.txt")).unwrap_or_else(|_| "无法准备安装，请通过浏览器下载后安装".into()))
+    Err(std::fs::read_to_string(work.join("error.txt")).unwrap_or_else(|_| "無法準備安裝，請透過瀏覽器下載後安裝".into()))
 }
 #[cfg(not(windows))]
-fn launch_installer(_: &std::path::Path) -> Result<(), String> { Err("仅支持 Windows 应用内更新".into()) }
+fn launch_installer(_: &std::path::Path) -> Result<(), String> { Err("僅支援 Windows 應用內更新".into()) }
 
 fn version(value: &str) -> Option<[u64; 3]> {
     let mut parts = value.strip_prefix('v').unwrap_or(value).split('.');
@@ -445,7 +445,7 @@ fn version(value: &str) -> Option<[u64; 3]> {
 }
 
 fn parse_release(value: &serde_json::Value, current: &str) -> Result<Option<String>, String> {
-    let invalid = || "更新信息格式异常，请稍后重试".to_owned();
+    let invalid = || "更新訊息格式異常，請稍後重試".to_owned();
     if value["draft"].as_bool() != Some(false) || value["prerelease"].as_bool() != Some(false) {
         return Err(invalid());
     }
@@ -465,7 +465,7 @@ mod install_size_tests {
         std::fs::write(dir.join("LICENSE"), vec![0u8; 100]).unwrap();
         std::fs::write(dir.join("Other App").join("big.bin"), vec![0u8; 5 * 1024 * 1024]).unwrap();
         std::fs::write(dir.join("other.exe"), vec![0u8; 2 * 1024 * 1024]).unwrap();
-        assert_eq!(super::own_files_kb(&dir), 4, "共享文件夹里其他软件的文件不计入");
+        assert_eq!(super::own_files_kb(&dir), 4, "共享資料夾裡其他軟體的檔案不計入");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
@@ -491,7 +491,7 @@ mod tests {
 
     #[test]
     fn automatic_check_reschedules_success_and_silent_failure() {
-        for (result, delay) in [(Ok(None), Duration::from_secs(24 * 3600)), (Err("网络失败".into()), Duration::from_secs(3600))] {
+        for (result, delay) in [(Ok(None), Duration::from_secs(24 * 3600)), (Err("網路失敗".into()), Duration::from_secs(3600))] {
             let mut state = State::default(); state.automatic_check = true;
             let (tx, rx) = mpsc::channel(); state.rx = Some(rx);
             tx.send(Event::Checked(result)).unwrap();
@@ -533,7 +533,7 @@ mod tests {
         let mut state = State::default();
         let ctx = egui::Context::default();
         assert!(state.begin_check(&ctx, true, || Ok(None)));
-        assert!(!state.begin_check(&ctx, false, || panic!("已有任务时不应发起检查")));
+        assert!(!state.begin_check(&ctx, false, || panic!("已有任務時不應發起檢查")));
         assert!(matches!(state.rx.as_ref().unwrap().recv_timeout(Duration::from_secs(3)), Ok(Event::Checked(Ok(None)))));
     }
 
@@ -583,7 +583,7 @@ mod tests {
         else { assert!(result.is_err()); }
         let elapsed = start.elapsed();
         worker.join().unwrap();
-        assert!(elapsed < Duration::from_secs(1), "等待响应超时未生效：{elapsed:?}");
+        assert!(elapsed < Duration::from_secs(1), "等待響應超時未生效：{elapsed:?}");
         }
     }
     fn release(tag: &str) -> serde_json::Value {
@@ -612,12 +612,12 @@ mod tests {
     #[test]
     fn only_matching_verified_windows_package_can_install() {
         let mut value = release("v0.6.40");
-        value["body"] = "更新说明".into();
+        value["body"] = "更新說明".into();
         value["assets"] = serde_json::json!([{"name":"Daozai-v0.6.40-windows-x64.zip",
             "browser_download_url":format!("{REPOSITORY}/releases/download/v0.6.40/Daozai-v0.6.40-windows-x64.zip"),
             "size":123,"digest":format!("sha256:{}", "a".repeat(64))}]);
         let parsed = release_info(&value, "0.6.39").unwrap().unwrap();
-        assert!(parsed.package.is_some()); assert_eq!(parsed.notes, "更新说明");
+        assert!(parsed.package.is_some()); assert_eq!(parsed.notes, "更新說明");
         for (field, bad) in [("name", serde_json::json!("source.zip")), ("browser_download_url", serde_json::json!("https://example.com/download.zip")),
             ("digest", serde_json::Value::Null), ("digest", serde_json::json!("sha256:bad")), ("size", serde_json::json!(0))] {
             let mut invalid = value.clone(); invalid["assets"][0][field] = bad;
@@ -639,7 +639,7 @@ mod tests {
         assert!(transfer(&mut &data[..], &mut Vec::new(), &package, &cancel, |_|{}).unwrap_err().contains("取消"));
     }
     #[test]
-    #[ignore = "需要连接 GitHub"]
+    #[ignore = "需要連線 GitHub"]
     fn live_update_check() { assert!(check().is_ok()); }
 
     #[test]
@@ -674,13 +674,13 @@ mod tests {
         std::fs::create_dir_all(&work).unwrap();
         tx.send(Event::Ready(work.clone())).unwrap();
         state.poll(&egui::Context::default());
-        assert_eq!(state.message, "下载已取消");
+        assert_eq!(state.message, "下載已取消");
         assert!(state.rx.is_none()); assert!(!work.exists());
     }
 
     #[test]
     fn only_a_new_release_opens_the_update_dialog() {
-        for result in [Ok(None), Err("网络失败".into()), Ok(Some(Release {
+        for result in [Ok(None), Err("網路失敗".into()), Ok(Some(Release {
             version: "v0.6.40".into(), notes: String::new(), page: RELEASES.into(), package: None,
         }))] {
             let expected = matches!(&result, Ok(Some(_)));
@@ -704,16 +704,16 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "按需导出发现新版时的设置界面，使用独立数据目录"]
+    #[ignore = "按需匯出發現新版時的設定介面，使用獨立資料目錄"]
     fn available_update_preview() {
-        let dest = std::path::PathBuf::from(std::env::var_os("DAOZAI_UPDATE_PREVIEW_DIR").expect("需指定预览目录"));
+        let dest = std::path::PathBuf::from(std::env::var_os("DAOZAI_UPDATE_PREVIEW_DIR").expect("需指定預覽目錄"));
         std::fs::create_dir_all(&dest).unwrap();
         let old = std::env::var_os("DAOZAI_DATA_DIR");
         std::env::set_var("DAOZAI_DATA_DIR", dest.join("data"));
         let ctx = egui::Context::default();
         let mut app = crate::app::App::new(&ctx, Default::default());
         app.updates.result = Some(Ok(Some(Release { version: "v0.6.63".into(),
-            notes: "- 更新下载支持 Windows 系统代理\n- 连接失败及时提示，避免长时间停在 0%\n- 新增网盘下载入口".into(), page: RELEASES.into(),
+            notes: "- 更新下載支援 Windows 系統代理\n- 連線失敗及時提示，避免長時間停在 0%\n- 新增網盤下載入口".into(), page: RELEASES.into(),
             package: Some(Package { url: String::new(), size: 100, hash: String::new() }) })));
         app.updates.dialog_open = true;
         app.settings_tab = 9;
@@ -737,7 +737,7 @@ mod tests {
             ("update-dialog", None, ""),
             ("update-connecting", Some(0.0), ""),
             ("update-downloading", Some(0.42), ""),
-            ("update-failed", None, "连接下载服务器失败，请检查网络或代理，或使用网盘下载"),
+            ("update-failed", None, "連線下載伺服器失敗，請檢查網路或代理，或使用網盤下載"),
         ] {
         app.updates.cancel = progress.map(|_| Arc::new(AtomicBool::new(false)));
         app.updates.progress = progress.unwrap_or_default();

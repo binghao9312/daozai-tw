@@ -93,7 +93,7 @@ struct Shell {
     quota_at: PollClock,
 }
 
-const MODULE_OFF:&str="该功能已在「页面管理」中关闭";
+const MODULE_OFF:&str="該功能已在「頁面管理」中關閉";
 
 impl Shell {
     /// 按模块开关启停后台服务：关闭的模块不保留任何线程，重新开启时从头对齐配置。
@@ -112,11 +112,11 @@ impl Shell {
     fn confirm_messenger_open(&mut self,unread:app::Unread)->bool{
         let foreground=self.messengers.foreground(&[unread.source]);
         if !self.app.confirm_messenger_open(unread,foreground){
-            let seen=foreground.map(|(source,pid)|format!("{} 账号 {pid}",source.name())).unwrap_or_else(messenger::windows::describe_foreground);
-            messenger::windows::trace(format!("唤起 {} 账号 {}：未到前台（前台是 {seen}）",unread.source.name(),unread.pid));
+            let seen=foreground.map(|(source,pid)|format!("{} 帳號 {pid}",source.name())).unwrap_or_else(messenger::windows::describe_foreground);
+            messenger::windows::trace(format!("喚起 {} 帳號 {}：未到前臺（前臺是 {seen}）",unread.source.name(),unread.pid));
             return false;
         }
-        messenger::windows::trace(format!("唤起 {} 账号 {}：已在前台",unread.source.name(),unread.pid));
+        messenger::windows::trace(format!("喚起 {} 帳號 {}：已在前臺",unread.source.name(),unread.pid));
         self.messengers.viewed_client(unread.source,unread.pid);
         true
     }
@@ -124,9 +124,9 @@ impl Shell {
     #[cfg(windows)]
     fn clear_exited_messengers(&mut self,ctx:&egui::Context){
         for unread in self.messengers.exited(&self.app.pending_messengers){
-            messenger::windows::trace(format!("清除已退出的{}提醒 账号 {}",unread.source.name(),unread.pid));
+            messenger::windows::trace(format!("清除已退出的{}提醒 帳號 {}",unread.source.name(),unread.pid));
             if self.tray_opening.as_ref().is_some_and(|(target,_)|*target==unread) || self.opening_messenger.is_some_and(|(target,_)|target==unread){
-                self.app.messenger_unavailable(format!("{} 账号已退出",unread.source.name()));
+                self.app.messenger_unavailable(format!("{} 帳號已退出",unread.source.name()));
             }
             self.app.discard_unread(unread);
             ctx.request_repaint();
@@ -137,14 +137,14 @@ impl Shell {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
         diagnostics::graphics(cc);
         let running_compat=cc.wgpu_render_state.is_some();
-        diagnostics::startup("加载本地配置");
+        diagnostics::startup("載入本地配置");
         let mut app = App::new(&cc.egui_ctx, Options::default());
         app.render_compat_running=running_compat;
         #[cfg(feature="record")] let quota_demo=std::env::var("DAOZAI_QUOTA_DEMO").is_ok();
         #[cfg(not(feature="record"))] let quota_demo=false;
-        diagnostics::startup("初始化额度配置");
+        diagnostics::startup("初始化額度配置");
         if !quota_demo{app.quota_initialize();}
-        diagnostics::startup("启动剪贴板记录");
+        diagnostics::startup("啟動剪貼簿記錄");
         if std::env::args().any(|arg|arg=="--settings"){app.open_settings();}
         if std::env::args().any(|arg|arg=="--calendar"){app.open_calendar(None);}
         #[cfg(feature="record")]
@@ -153,7 +153,7 @@ impl Shell {
         if std::env::var("DAOZAI_CAL_DEMO").is_ok(){app.calendar_demo();}
         #[cfg(feature="record")]
         if let Ok(mode)=std::env::var("DAOZAI_QUOTA_DEMO"){app.quota_demo(&mode);}
-        diagnostics::startup("初始化媒体和托盘");
+        diagnostics::startup("初始化媒體和系統匣");
         let media = smtc::shared();
         let media_enabled=smtc::spawn_poller(media.clone(),cc.egui_ctx.clone());
         media_enabled.store(app.settings.visible_pages[0],std::sync::atomic::Ordering::Relaxed);
@@ -165,11 +165,11 @@ impl Shell {
             minimal: app.settings.minimal,
             autostart,
         });
-        diagnostics::startup("初始化通知监听");
+        diagnostics::startup("初始化通知監聽");
         #[cfg(windows)]
-        let incoming=if app.settings.read_notifications {match daozai::system::connect_with_settings(cc.egui_ctx.clone(),&app.settings){Ok(rx)=>Some(rx),Err(e)=>{app.listener_status=format!("Windows 无法读取通知：{}",e.code());None}}}else{None};
+        let incoming=if app.settings.read_notifications {match daozai::system::connect_with_settings(cc.egui_ctx.clone(),&app.settings){Ok(rx)=>Some(rx),Err(e)=>{app.listener_status=format!("Windows 無法讀取通知：{}",e.code());None}}}else{None};
         // 音频、网络与输入法查询由后台完成，避免首帧等待系统服务。
-        diagnostics::startup("创建后台采样与窗口");
+        diagnostics::startup("建立後臺取樣與視窗");
         let initial_input=None;
         #[cfg(windows)] let system_state=daozai::system::Snapshot::default();
         #[cfg(windows)] let system_rx=daozai::system::observe(cc.egui_ctx.clone(),system_state.clone(),initial_input);
@@ -243,18 +243,18 @@ impl Shell {
                 Event::OpenCalendar=>self.app.open_calendar(None),
                 Event::TogglePet => {
                     self.app.set_pet(!self.app.settings.pet);
-                    self.app.say(if self.app.settings.pet { "吉祥物已打开" } else { "吉祥物已关闭" });
+                    self.app.say(if self.app.settings.pet { "吉祥物已開啟" } else { "吉祥物已關閉" });
                 }
                 Event::ToggleMinimal => {
                     self.app.set_minimal(!self.app.settings.minimal);
-                    self.app.say(if self.app.settings.minimal { "极简刘海已打开" } else { "极简刘海已关闭" });
+                    self.app.say(if self.app.settings.minimal { "極簡劉海已開啟" } else { "極簡劉海已關閉" });
                 }
                 Event::ToggleAutostart => {
                     let want = !self.autostart;
                     match tray::set_autostart(want) {
                         Ok(()) => {
                             self.autostart = want;
-                            self.app.say(if want { "已设为开机启动" } else { "已取消开机启动" });
+                            self.app.say(if want { "已設為開機啟動" } else { "已取消開機啟動" });
                         }
                         Err(e) => self.app.say(e),
                     }
@@ -270,7 +270,7 @@ impl Shell {
         if let Some((source,rx))=&self.music_volume_rx {
             if let Ok(success)=rx.try_recv() {
                 if !success && self.media.lock().is_ok_and(|media|media.source==*source) {
-                    self.app.say("音乐应用音量暂不可调，请稍后重试");
+                    self.app.say("音樂應用音量暫不可調，請稍後重試");
                 }
                 self.music_volume_rx=None;
             }
@@ -279,8 +279,8 @@ impl Shell {
         // 电量变化很慢，每 5 秒读一次就够
         if self.sys.2.ready(Duration::from_secs(5)) {
             let (b, c) = read_power();
-            if self.app.settings.show_battery && self.sys.0.is_some() && self.sys.1!=c && self.app.settings.system_hud {self.app.alert(if c {"电源已连接"}else{"已切换电池供电"},b.map(|v|format!("当前电量 {v}%")).unwrap_or_else(||"桌面电源状态已更新".into()),5,false);}
-            if self.app.settings.show_battery && b.is_some_and(|v|v<=20) && !c && self.sys.0.is_some_and(|v|v>20) {self.app.alert("电量偏低",format!("剩余 {}% · 请连接电源",b.unwrap()),5,true);}
+            if self.app.settings.show_battery && self.sys.0.is_some() && self.sys.1!=c && self.app.settings.system_hud {self.app.alert(if c {"電源已連線"}else{"已切換電池供電"},b.map(|v|format!("當前電量 {v}%")).unwrap_or_else(||"桌面電源狀態已更新".into()),5,false);}
+            if self.app.settings.show_battery && b.is_some_and(|v|v<=20) && !c && self.sys.0.is_some_and(|v|v>20) {self.app.alert("電量偏低",format!("剩餘 {}% · 請連線電源",b.unwrap()),5,true);}
             self.sys = (b, c, PollClock::now());
         }
         let ppp = ctx.pixels_per_point();
@@ -363,7 +363,7 @@ impl eframe::App for Shell {
         if guarded && !self.guard_notified {
             // 资源保护熔断：停止音乐会话轮询（含封面、网易云日志）与歌词查询，保住用户电脑，重启后恢复。
             self.guard_notified=true;self.app.opts.fetch_lyrics=false;
-            self.app.alert("岛仔已暂停音乐功能","检测到资源占用异常，已暂停读取音乐信息和歌词。重启岛仔即可恢复；诊断记录在数据目录的 diagnostics 文件夹。",0,false);
+            self.app.alert("島仔已暫停音樂功能","檢測到資源佔用異常，已暫停讀取音樂訊息和歌詞。重啟島仔即可恢復；診斷記錄在資料目錄的 diagnostics 資料夾。",0,false);
         }
         self.media_enabled.store(self.app.settings.visible_pages[0] && !guarded,std::sync::atomic::Ordering::Relaxed);
         if self.media_fast_until.is_some_and(|until|Instant::now()>=until){self.media_fast_until=None;}
@@ -406,7 +406,7 @@ impl eframe::App for Shell {
             self.placement_key=placement_key;
             let display=daozai::display_layout::selected(&self.app.displays,&self.app.settings.display_id);
             if display.is_some_and(|d|self.native.as_ref().is_some_and(|w|w.place_on_display(self.placement_scale,daozai::display_layout::placement_bounds(d,self.app.settings.avoids_top_bar()),offset,self.app.settings.dock,shift))) {
-                if !self.placed {diagnostics::startup("目标屏幕物理坐标定位完成，已请求显示");}
+                if !self.placed {diagnostics::startup("目標螢幕物理座標定位完成，已請求顯示");}
                 self.placed=true;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
             } else if self.t0.elapsed()>=Duration::from_secs(2) {
@@ -429,7 +429,7 @@ impl eframe::App for Shell {
                 let manual=next.is_some_and(|state|self.input_keys.as_ref().is_some_and(|keys|keys.allows(state.context)));
                 if let Some(label)=self.input_state.observe(next,manual){
                     if let Some(keys)=&self.input_keys{keys.clear();}
-                    if self.app.settings.system_hud{self.app.alert("键盘输入语言",label,5,false);}
+                    if self.app.settings.system_hud{self.app.alert("鍵盤輸入語言",label,5,false);}
                 }
                 let new=observation.system;
                 // 切换输出设备时，系统会恢复该设备的音量；等待它稳定后再提示调节。
@@ -437,7 +437,7 @@ impl eframe::App for Shell {
                 if self.system_ready && self.app.settings.system_hud {
                     for (title,body) in new.changes(&self.system_state) {
                         // 拖动音量条刚改过音量时，系统回声不再单独弹一条。
-                        if title=="系统音量" && !self.volume_quiet.ready(Duration::from_millis(900)) { continue; }
+                        if title=="系統音量" && !self.volume_quiet.ready(Duration::from_millis(900)) { continue; }
                         self.app.alert(title,body,5,false);
                     }
                 }
@@ -495,11 +495,11 @@ impl eframe::App for Shell {
                 let mut sources:Vec<app::Messenger>=self.app.pending_messengers.iter().map(|u|u.source).collect();sources.dedup();
                 match self.messengers.foreground(&sources){
                     Some((source,pid))=>{
-                        if self.app.pending_messengers.iter().any(|u|u.source==source){messenger::windows::trace(format!("岛上清除 {} 账号 {pid}（前台切换={foreground_changed}）",source.name()));}
+                        if self.app.pending_messengers.iter().any(|u|u.source==source){messenger::windows::trace(format!("島上清除 {} 帳號 {pid}（前臺切換={foreground_changed}）",source.name()));}
                         self.messengers.viewed_client(source,pid);
                         self.app.viewed_client(source,pid);
                     }
-                    None=>if foreground_changed && !sources.is_empty(){messenger::windows::trace(format!("前台切换但不是消息客户端主窗口：{}；岛上未读 {:?}",messenger::windows::describe_foreground(),self.app.pending_messengers.iter().map(|u|(u.source.name(),u.pid)).collect::<Vec<_>>()));},
+                    None=>if foreground_changed && !sources.is_empty(){messenger::windows::trace(format!("前臺切換但不是訊息客戶端主視窗：{}；島上未讀 {:?}",messenger::windows::describe_foreground(),self.app.pending_messengers.iter().map(|u|(u.source.name(),u.pid)).collect::<Vec<_>>()));},
                 }
             }
             if self.tray_opening.as_ref().is_some_and(|(unread,_)|!self.app.pending_messengers.contains(unread)){
@@ -522,8 +522,8 @@ impl eframe::App for Shell {
                         self.app.messenger_unavailable(error.message(unread.source));
                     }
                     Err(std::sync::mpsc::TryRecvError::Disconnected)=>{
-                        messenger::windows::trace(format!("唤起 {} 账号 {}：唤起线程异常结束，未返回结果",unread.source.name(),unread.pid));
-                        self.tray_opening=None;self.app.messenger_unavailable(format!("{} 暂时无法响应，请重试",unread.source.name()));
+                        messenger::windows::trace(format!("喚起 {} 帳號 {}：喚起執行緒異常結束，未返回結果",unread.source.name(),unread.pid));
+                        self.tray_opening=None;self.app.messenger_unavailable(format!("{} 暫時無法響應，請重試",unread.source.name()));
                     }
                     Err(std::sync::mpsc::TryRecvError::Empty)=>{}
                 }
@@ -533,7 +533,7 @@ impl eframe::App for Shell {
                 else if started.elapsed()>=Duration::from_secs(4){
                     self.opening_messenger=None;
                     if !self.confirm_messenger_open(unread){
-                        self.app.messenger_unavailable(format!("{}尚未切到前台，可点图标重试",unread.source.name()));
+                        self.app.messenger_unavailable(format!("{}尚未切到前臺，可點圖示重試",unread.source.name()));
                     }
                 }
             }
@@ -653,13 +653,13 @@ impl eframe::App for Shell {
                 Cmd::Media(t) => {
                     self.media_fast_until=Some(Instant::now()+Duration::from_secs(3));self.media_enabled.set_interval(smtc::POLL_FAST);
                     let source=self.media.lock().map(|media|media.source.clone()).unwrap_or_default();
-                    let message=if source.eq_ignore_ascii_case("cloudmusic.exe"){"网易云暂未适配进度跳转，请在客户端调整"}
-                        else if source.eq_ignore_ascii_case("bodian_pc.exe"){"波点音乐暂未适配进度跳转，请在客户端调整"}
-                        else if source.eq_ignore_ascii_case("kwmusic.exe"){"酷我音乐暂未适配进度跳转，请在客户端调整"}
-                        else{"播放器未完成跳转，请打开客户端后重试"};
+                    let message=if source.eq_ignore_ascii_case("cloudmusic.exe"){"網易雲暫未適配進度跳轉，請在客戶端調整"}
+                        else if source.eq_ignore_ascii_case("bodian_pc.exe"){"波點音樂暫未適配進度跳轉，請在客戶端調整"}
+                        else if source.eq_ignore_ascii_case("kwmusic.exe"){"酷我音樂暫未適配進度跳轉，請在客戶端調整"}
+                        else{"播放器未完成跳轉，請開啟客戶端後重試"};
                     if self.media_control.is_none(){self.media_control=smtc::ControlWorker::start(ctx.clone());}
                     match self.media_control.as_ref().ok_or(()).and_then(|worker|worker.submit(t,source)){
-                        Ok(Some(rx))=>self.seek_rx=Some((message,rx)),Ok(None)=>{},Err(())=>self.app.say("播放器正在响应，请稍后重试"),
+                        Ok(Some(rx))=>self.seek_rx=Some((message,rx)),Ok(None)=>{},Err(())=>self.app.say("播放器正在響應，請稍後重試"),
                     }
                 }
                 Cmd::MusicVolume(command,source)=>{
@@ -667,7 +667,7 @@ impl eframe::App for Shell {
                     if self.media_control.is_none(){self.media_control=smtc::ControlWorker::start(ctx.clone());}
                     match self.media_control.as_ref().ok_or(()).and_then(|worker|worker.submit(command,source.clone())){
                         Ok(Some(rx))=>self.music_volume_rx=Some((source,rx)),
-                        _=>self.app.say("音乐应用音量暂不可调，请稍后重试"),
+                        _=>self.app.say("音樂應用音量暫不可調，請稍後重試"),
                     }
                 }
                 Cmd::ViewMessenger(unread)=>{
@@ -676,19 +676,19 @@ impl eframe::App for Shell {
                         self.clear_exited_messengers(ctx);
                         if !self.app.pending_messengers.contains(&unread){
                             if was_pending{
-                                messenger::windows::trace(format!("唤起 {} 账号 {}：未开始，账号进程已退出",unread.source.name(),unread.pid));
+                                messenger::windows::trace(format!("喚起 {} 帳號 {}：未開始，帳號程序已退出",unread.source.name(),unread.pid));
                                 self.app.messenger_unavailable(OpenError::Exited.message(unread.source));
                             }
                             continue;
                         }
                         if self.tray_opening.is_some(){
-                            messenger::windows::trace(format!("唤起 {} 账号 {}：未开始，上一次唤起还没结束",unread.source.name(),unread.pid));
+                            messenger::windows::trace(format!("喚起 {} 帳號 {}：未開始，上一次喚起還沒結束",unread.source.name(),unread.pid));
                             self.app.messenger_unavailable(OpenError::Busy.message(unread.source));ctx.request_repaint();continue;
                         }
                         match self.messengers.request(unread,&self.app.settings).start(ctx.clone()){
                             Ok(rx)=>self.tray_opening=Some((unread,rx)),
                             Err(error)=>{
-                                messenger::windows::trace(format!("唤起 {} 账号 {}：未开始 {error:?}",unread.source.name(),unread.pid));
+                                messenger::windows::trace(format!("喚起 {} 帳號 {}：未開始 {error:?}",unread.source.name(),unread.pid));
                                 if error==OpenError::Unidentified{self.app.reveal_messenger_notice(unread);}
                                 self.app.messenger_unavailable(error.message(unread.source));ctx.request_repaint();
                             }
@@ -701,16 +701,16 @@ impl eframe::App for Shell {
                         self.app.save_window_before_exit();
                         #[cfg(windows)] if let Some(tray)=&self.tray {tray.exit_process();}
                         std::process::exit(0);
-                    }else{self.app.say("无法重新启动岛仔，请从托盘退出后手动打开");}
+                    }else{self.app.say("無法重新啟動島仔，請從系統匣退出後手動開啟");}
                 }
                 Cmd::Open(p) => {if let Err(e)=open_path(&p){self.app.say(e);}},
                 Cmd::OpenUrl(url)=>{
                     if let Some(url)=daozai::mail::web_url(&url) {
-                        if open_path(std::path::Path::new(&url)).is_err(){self.app.say("无法打开默认浏览器，请检查 Windows 默认应用设置");}
+                        if open_path(std::path::Path::new(&url)).is_err(){self.app.say("無法開啟預設瀏覽器，請檢查 Windows 預設應用設定");}
                     }
                 },
                 Cmd::CalendarImport=>{
-                    #[cfg(windows)] match daozai::system::pick_files_for("选择要导入的日历文件（.ics）",true){
+                    #[cfg(windows)] match daozai::system::pick_files_for("選擇要匯入的日曆檔案（.ics）",true){
                         Ok(files)=>if !files.is_empty(){
                             let read:Vec<(String,String)>=files.iter().map(|path|{
                                 let name=path.file_name().map(|n|n.to_string_lossy().to_string()).unwrap_or_default();
@@ -719,26 +719,26 @@ impl eframe::App for Shell {
                             }).collect();
                             let note=self.app.import_ics(&read);self.app.say(note);
                         },
-                        Err(e)=>self.app.say(format!("无法选择文件：{}",e.code())),
+                        Err(e)=>self.app.say(format!("無法選擇檔案：{}",e.code())),
                     }
                 },
                 Cmd::AddFiles=>{
-                    #[cfg(windows)] match daozai::system::pick_files(){Ok(files)=>if !files.is_empty(){self.app.on_drop(files);self.app.show_page(3);},Err(e)=>self.app.say(format!("无法选择文件：{}",e.code()))}
+                    #[cfg(windows)] match daozai::system::pick_files(){Ok(files)=>if !files.is_empty(){self.app.on_drop(files);self.app.show_page(3);},Err(e)=>self.app.say(format!("無法選擇檔案：{}",e.code()))}
                 },
                 Cmd::DragFile(p)=>{
-                    #[cfg(windows)] if let Err(e)=daozai::system::drag_file(&p){self.app.say(format!("无法拖出文件：{}",e.code()));}
+                    #[cfg(windows)] if let Err(e)=daozai::system::drag_file(&p){self.app.say(format!("無法拖出檔案：{}",e.code()));}
                     ctx.input_mut(|i| i.pointer=Default::default());
                 },
-                Cmd::DisconnectNotifications=>{#[cfg(windows)]{self.incoming=None;self.app.settings.read_notifications=false;self.app.settings.save();self.app.listener_status="已断开，不再读取 Windows 通知".into();}},
+                Cmd::DisconnectNotifications=>{#[cfg(windows)]{self.incoming=None;self.app.settings.read_notifications=false;self.app.settings.save();self.app.listener_status="已斷開，不再讀取 Windows 通知".into();}},
                 Cmd::Reveal(p)=>{let _=daozai::child_process::spawn(std::process::Command::new("explorer.exe").arg(format!("/select,{}",p.display())));},
                 Cmd::QuotaChooseFile=>{
-                    #[cfg(windows)] match daozai::system::pick_files_for("选择 AI 账号的登录 JSON 文件",false){Ok(files)=>if let Some(path)=files.into_iter().next(){self.app.quota_set_source(path);},Err(_)=>self.app.say("无法选择登录文件")}
+                    #[cfg(windows)] match daozai::system::pick_files_for("選擇 AI 帳號的登入 JSON 檔案",false){Ok(files)=>if let Some(path)=files.into_iter().next(){self.app.quota_set_source(path);},Err(_)=>self.app.say("無法選擇登入檔案")}
                 },
                 Cmd::QuotaRefresh=>{
                     if self.quota_at.ready(Duration::from_secs(15)) {
                         let (active,config)=(self.app.quota_active(),self.app.quota_config());let accounts:Vec<_>=config.accounts.iter().filter(|a|active && a.enabled).cloned().collect();
                         if self.quota.refresh(accounts.clone()){self.app.quota_pending(&accounts);self.quota_at=PollClock::now();}
-                    }else{self.app.say("请稍后再刷新");}
+                    }else{self.app.say("請稍後再重新整理");}
                 },
                 Cmd::QuotaConnected=>{self.quota_sig=None;},
                 Cmd::ToggleAutostart=>{
@@ -752,12 +752,12 @@ impl eframe::App for Shell {
                     #[cfg(windows)] daozai::system::toggle_mute();
                     self.volume_quiet=PollClock::now();
                 },
-                Cmd::Copy(text)=>{ctx.copy_text(text);self.app.say("已复制");},
+                Cmd::Copy(text)=>{ctx.copy_text(text);self.app.say("已複製");},
                 Cmd::Notify(title,body)=>{
                     #[cfg(windows)] if let Some(tray)=&self.tray{tray.notify(&title,&body,self.app.settings.sound);}
                 },
                 cmd @ (Cmd::RequestNotifications|Cmd::RequestQqNotifications)=>{
-                    #[cfg(windows)] {self.app.settings.qq_only=matches!(cmd,Cmd::RequestQqNotifications);self.app.settings.read_notifications=true;self.app.settings.save();self.incoming=None;match daozai::system::connect_with_settings(ctx.clone(),&self.app.settings){Ok(rx)=>{self.incoming=Some(rx);self.app.listener_status="正在请求 Windows 通知权限…".into();},Err(e)=>self.app.listener_status=format!("Windows 未允许读取通知：{}。需要相应的系统权限或应用身份。",e.code())}}
+                    #[cfg(windows)] {self.app.settings.qq_only=matches!(cmd,Cmd::RequestQqNotifications);self.app.settings.read_notifications=true;self.app.settings.save();self.incoming=None;match daozai::system::connect_with_settings(ctx.clone(),&self.app.settings){Ok(rx)=>{self.incoming=Some(rx);self.app.listener_status="正在請求 Windows 通知許可權…".into();},Err(e)=>self.app.listener_status=format!("Windows 未允許讀取通知：{}。需要相應的系統許可權或應用身份。",e.code())}}
                 },
                 // 模块关闭时设置项已置灰；万一仍有命令到达，只提示，不为它临时启动服务。
                 Cmd::MailSync=>if let Some(mail)=&self.mail {
@@ -797,7 +797,7 @@ impl eframe::App for Shell {
         if elapsed>=Duration::from_millis(60) {
             let (page,open)=self.app.debug_state();
             daozai::resources::append_log(&daozai::model::config_dir().join("diagnostics"),"frames",
-                &format!("帧 {:.0} ms｜页面 {}｜展开 {}",elapsed.as_secs_f64()*1000.0,page,open));
+                &format!("幀 {:.0} ms｜頁面 {}｜展開 {}",elapsed.as_secs_f64()*1000.0,page,open));
         }
     }
 }
@@ -834,7 +834,7 @@ mod quota_sig_tests {
         let known=quota_sig(true,&config);
         assert!(quota_sig_matches(&known,true,&config));
         let mut display_only=config.clone();display_only.accounts[0].alias="改名".into();display_only.accounts[1].pinned=true;
-        assert!(quota_sig_matches(&known,true,&display_only),"改别名、置顶不应重新查询");
+        assert!(quota_sig_matches(&known,true,&display_only),"改別名、置頂不應重新查詢");
         assert_eq!(quota_sig(true,&display_only),known);
         let changes:[fn(&mut Config);6]=[
             |c|c.enabled=false,
@@ -847,9 +847,9 @@ mod quota_sig_tests {
         for change in changes {
             let mut changed=config.clone();change(&mut changed);
             assert!(!quota_sig_matches(&known,changed.enabled,&changed));
-            assert_ne!(quota_sig(changed.enabled,&changed),known,"两种判断必须一致");
+            assert_ne!(quota_sig(changed.enabled,&changed),known,"兩種判斷必須一致");
         }
-        assert!(!quota_sig_matches(&known,false,&config),"关闭 AI 额度模块后应停止查询");
+        assert!(!quota_sig_matches(&known,false,&config),"關閉 AI 額度模組後應停止查詢");
     }
 }
 
@@ -883,7 +883,7 @@ mod repaint_tests {
         for fps in [60.0,30.0,20.0,10.0,1.0] {
             let interval=Duration::from_secs_f64(1.0/fps);
             let actual=scheduled_delay(interval,false);
-            assert!(actual.abs_diff(interval)<Duration::from_micros(1),"目标 {fps} 帧不应被提前唤醒：{actual:?}");
+            assert!(actual.abs_diff(interval)<Duration::from_micros(1),"目標 {fps} 幀不應被提前喚醒：{actual:?}");
         }
     }
 
@@ -897,7 +897,7 @@ mod repaint_tests {
 fn local_now() -> (String, String, String) {
     use windows::Win32::System::SystemInformation::GetLocalTime;
     let st = unsafe { GetLocalTime() };
-    let wd = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+    let wd = ["週日", "週一", "週二", "週三", "週四", "週五", "週六"];
     (
         format!("{:02}:{:02}:{:02}", st.wHour, st.wMinute, st.wSecond),
         format!("{:04}-{:02}-{:02}", st.wYear, st.wMonth, st.wDay),
@@ -909,7 +909,7 @@ fn local_now() -> (String, String, String) {
 fn local_now() -> (String, String, String) {
     let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
     let (h, m, s) = ((secs / 3600) % 24, (secs / 60) % 60, secs % 60);
-    (format!("{h:02}:{m:02}:{s:02}"), "1970-01-01".into(), "1月1日 周四".into())
+    (format!("{h:02}:{m:02}:{s:02}"), "1970-01-01".into(), "1月1日 週四".into())
 }
 
 #[cfg(windows)]
@@ -966,7 +966,7 @@ fn open_path_result(p:&std::path::Path,result:windows::core::Result<()>,choose:i
     };
     match result{
         Err(error) if error.code()==windows::core::HRESULT::from_win32(ERROR_CANCELLED.0)=>Ok(()),
-        other=>other.map_err(|_|"无法打开，请检查文件位置和默认应用".into()),
+        other=>other.map_err(|_|"無法開啟，請檢查檔案位置和預設應用".into()),
     }
 }
 
@@ -981,14 +981,14 @@ mod open_path_tests {
 
     #[test]
     fn unassociated_files_offer_open_with_and_cancellation_is_normal(){
-        let path=std::env::temp_dir().join(format!("岛仔 无关联-{}.daozai-open-test",std::process::id()));
+        let path=std::env::temp_dir().join(format!("島仔 無關聯-{}.daozai-open-test",std::process::id()));
         std::fs::write(&path,b"fixture").unwrap();
         for cancel in [false,true]{
             let mut chosen=false;
             let result=open_path_result(&path,Err(error(ERROR_NO_ASSOCIATION)),||{chosen=true;if cancel{Err(error(ERROR_CANCELLED))}else{Ok(())}});
             std::fs::remove_file(&path).unwrap();
-            assert!(chosen,"文件没有默认关联时应提供系统打开方式");
-            assert_eq!(result,Ok(()),"用户取消选择不应显示打开失败");
+            assert!(chosen,"檔案沒有預設關聯時應提供系統開啟方式");
+            assert_eq!(result,Ok(()),"使用者取消選擇不應顯示開啟失敗");
             if !cancel{std::fs::write(&path,b"fixture").unwrap();}
         }
     }
@@ -999,10 +999,10 @@ mod open_path_tests {
         std::fs::write(&file,b"fixture").unwrap();
         for result in [Ok(()),Err(error(ERROR_ACCESS_DENIED)),Err(error(ERROR_FILE_NOT_FOUND))]{
             let success=result.is_ok();
-            let actual=open_path_result(&file,result,||panic!("已有默认程序或其他打开错误不应弹出选择器"));
+            let actual=open_path_result(&file,result,||panic!("已有預設程式或其他開啟錯誤不應彈出選擇器"));
             assert_eq!(actual.is_ok(),success);
         }
-        assert!(open_path_result(&file,Err(error(ERROR_NO_ASSOCIATION)),||Err(error(ERROR_ACCESS_DENIED))).is_err(),"选择器失败应保留错误提示");
+        assert!(open_path_result(&file,Err(error(ERROR_NO_ASSOCIATION)),||Err(error(ERROR_ACCESS_DENIED))).is_err(),"選擇器失敗應保留錯誤提示");
         std::fs::remove_file(file).unwrap();
         for (path,result,success) in [
             ("https://example.com",Ok(()),true),
@@ -1011,7 +1011,7 @@ mod open_path_tests {
             ("missing.daozai-open-test",Err(error(ERROR_FILE_NOT_FOUND)),false),
             ("blocked.daozai-open-test",Err(error(ERROR_ACCESS_DENIED)),false),
         ]{
-            let actual=open_path_result(std::path::Path::new(path),result,||panic!("非文件关联问题不能弹出打开方式"));
+            let actual=open_path_result(std::path::Path::new(path),result,||panic!("非檔案關聯問題不能彈出開啟方式"));
             assert_eq!(actual.is_ok(),success);
         }
     }
@@ -1024,13 +1024,13 @@ fn main() -> std::process::ExitCode {
     if daozai::diagnostics_tool::requested(std::env::args()) {
         return match daozai::diagnostics_tool::run(&daozai::model::config_dir()) {
             Ok(_) => std::process::ExitCode::SUCCESS,
-            Err(error) => {diagnostics::report("诊断收集未完成。", &error); std::process::ExitCode::FAILURE}
+            Err(error) => {diagnostics::report("診斷收集未完成。", &error); std::process::ExitCode::FAILURE}
         };
     }
     match run() {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {
-            diagnostics::report("岛仔启动或运行失败。", &error.to_string());
+            diagnostics::report("島仔啟動或執行失敗。", &error.to_string());
             std::process::ExitCode::FAILURE
         }
     }
@@ -1043,15 +1043,15 @@ fn run() -> eframe::Result<()> {
     #[cfg(windows)]
     if !daozai::tray::single_instance() {
         if !daozai::tray::activate_existing(std::env::args().any(|arg|arg=="--calendar")) {
-            diagnostics::report("岛仔已在运行，但暂时无法打开窗口。\n请稍后重试；若仍无法打开，请在任务管理器的“详细信息”中结束 daozai.exe 后重试。", "已有实例可能正在启动或已无响应。请稍后重试；若仍无法打开，请在任务管理器的“详细信息”中结束 daozai.exe，再重新启动。");
+            diagnostics::report("島仔已在執行，但暫時無法開啟視窗。\n請稍後重試；若仍無法開啟，請在工作管理員的“詳細訊息”中結束 daozai.exe 後重試。", "已有例項可能正在啟動或已無響應。請稍後重試；若仍無法開啟，請在工作管理員的“詳細訊息”中結束 daozai.exe，再重新啟動。");
         }
         return Ok(());
     }
     #[cfg(windows)]
     std::thread::spawn(daozai::record_install_size);
-    diagnostics::startup("初始化图形窗口");
+    diagnostics::startup("初始化圖形視窗");
     let viewport = egui::ViewportBuilder::default()
-        .with_title("岛仔").with_icon(daozai::theme::app_icon())
+        .with_title("島仔").with_icon(daozai::theme::app_icon())
         .with_inner_size([app::CANVAS_W, app::WIN_H])
         .with_decorations(false)
         .with_transparent(true)
@@ -1061,5 +1061,5 @@ fn run() -> eframe::Result<()> {
         .with_always_on_top()
         .with_visible(false);
     let opts = eframe::NativeOptions { viewport, vsync: !cfg!(windows), ..Default::default() };
-    graphics::run(opts,|opts|eframe::run_native("岛仔", opts, Box::new(|cc| Ok(Box::new(Shell::new(cc))))))
+    graphics::run(opts,|opts|eframe::run_native("島仔", opts, Box::new(|cc| Ok(Box::new(Shell::new(cc))))))
 }

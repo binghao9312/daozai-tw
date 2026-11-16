@@ -46,7 +46,7 @@ impl Source<'_> {
         match self {Self::Calendar(Some(provider))=>provider.key(),Self::Calendar(None)=>"calendar",Self::Mail(_)=>"mail",Self::Local=>"local"}
     }
     fn label(self)->String {
-        match self {Self::Calendar(provider)=>provider.map(|p|p.label()).unwrap_or("工作日历").to_string(),Self::Mail(account)=>format!("邮件 · {account}"),Self::Local=>"本机日程".into()}
+        match self {Self::Calendar(provider)=>provider.map(|p|p.label()).unwrap_or("工作日曆").to_string(),Self::Mail(account)=>format!("郵件 · {account}"),Self::Local=>"本機日程".into()}
     }
     fn color(self)->Color32 {
         match self {
@@ -94,13 +94,13 @@ fn featured_index(events:&[Entry<'_>],focus:Option<&str>,now:i64)->Option<usize>
 fn event_status(event:&mail::Meeting,now:i64,today:NaiveDate)->String {
     let left=event.start-now;
     if left>0 {
-        if event_day(event)!=Some(today){"待开始".into()}
-        else if left<60{"即将开始".into()}
-        else if left<3600{format!("{} 分钟后",(left+59)/60)}
-        else{format!("{} 小时后",(left+3599)/3600)}
-    }else if event.end.is_some_and(|end|end<=now){"已结束".into()}
-    else if event.end.is_some(){"进行中".into()}
-    else{"已开始".into()}
+        if event_day(event)!=Some(today){"待開始".into()}
+        else if left<60{"即將開始".into()}
+        else if left<3600{format!("{} 分鐘後",(left+59)/60)}
+        else{format!("{} 小時後",(left+3599)/3600)}
+    }else if event.end.is_some_and(|end|end<=now){"已結束".into()}
+    else if event.end.is_some(){"進行中".into()}
+    else{"已開始".into()}
 }
 pub(crate) fn source_icon(c:&Card,source:Source<'_>,x:f32,y:f32,size:f32) {
     let rect=c.rect(x,y,size,size);
@@ -132,7 +132,7 @@ mod tests {
     #[test]
     fn featured_calendar_excludes_ended_and_all_day_events() {
         let make=|uid:&str,start,end,all_day|mail::Meeting{uid:uid.into(),title:uid.into(),start,end:Some(end),all_day,at:String::new()};
-        let events=[make("全天",0,86400,true),make("已结束",10,20,false),make("下一场",200,300,false),make("进行中",80,150,false)];
+        let events=[make("全天",0,86400,true),make("已結束",10,20,false),make("下一場",200,300,false),make("進行中",80,150,false)];
         let entries:Vec<_>=events.iter().map(|event|Entry{event,sources:vec![Source::Local]}).collect();
         assert_eq!(featured_index(&entries,None,100),Some(3));
         assert_eq!(featured_index(&entries,None,160),Some(2));
@@ -152,7 +152,7 @@ mod tests {
                 source_icon(&c,source,40.0,0.0,28.0);
             });
         });
-        assert!(output.textures_delta.set.iter().any(|(_,delta)|delta.image.size()==[56,56]),"放大的通知图标必须按屏幕像素重新栅格化，不能拉伸小图：{:?}",output.textures_delta.set.iter().map(|(_,d)|d.image.size()).collect::<Vec<_>>());
+        assert!(output.textures_delta.set.iter().any(|(_,delta)|delta.image.size()==[56,56]),"放大的通知圖示必須按螢幕畫素重新柵格化，不能拉伸小圖：{:?}",output.textures_delta.set.iter().map(|(_,d)|d.image.size()).collect::<Vec<_>>());
         }
     }
 
@@ -167,12 +167,12 @@ mod tests {
             source_icon(&c.scaled(50.0,0.0,1.5),Source::Calendar(Some(calendar::Provider::DingTalk)),50.0,0.0,20.0);
         });});
         let first=frame(&ctx);let sizes=first.textures_delta.set.iter().map(|(_,delta)|delta.image.size()).collect::<Vec<_>>();
-        assert!(sizes.contains(&[32,32]) && sizes.contains(&[48,48]),"图标应按实际物理像素过滤，而非直接缩小原始大图：{sizes:?}");
+        assert!(sizes.contains(&[32,32]) && sizes.contains(&[48,48]),"圖示應按實際物理畫素過濾，而非直接縮小原始大圖：{sizes:?}");
         let logo=first.textures_delta.set.iter().find_map(|(_,delta)|match &delta.image{egui::ImageData::Color(image) if image.size==[32,32]=>Some(image),_=>None}).unwrap();
         let rows=(0..32).filter(|y|logo.pixels[y*32..(y+1)*32].iter().any(|pixel|pixel.a()>=128)).collect::<Vec<_>>();
-        assert!(rows.last().unwrap()-rows.first().unwrap()+1>=30,"钉钉标记不能因重复留白而缩小到丢失翅膀和闪电细节");
+        assert!(rows.last().unwrap()-rows.first().unwrap()+1>=30,"釘釘標記不能因重複留白而縮小到丟失翅膀和閃電細節");
         let next=frame(&ctx);
-        assert!(!next.textures_delta.set.iter().any(|(_,delta)|matches!(delta.image.size(),[32,32]|[48,48])),"不同显示尺寸应各自复用贴图，不能每帧重新上传");
+        assert!(!next.textures_delta.set.iter().any(|(_,delta)|matches!(delta.image.size(),[32,32]|[48,48])),"不同顯示尺寸應各自複用貼圖，不能每幀重新上傳");
     }
     #[test]
     fn date_markers_merge_repeat_sources_and_show_at_most_three_colors() {
@@ -316,11 +316,11 @@ impl App {
             if hit.on_hover_text(date.format("%Y年%m月%d日").to_string()).clicked(){self.select_calendar_day(*date);}
         }
         let day=self.calendar.view.day;
-        let heading=format!("{} · {}月{}日",if day==today{"今天"}else{["周一","周二","周三","周四","周五","周六","周日"][day.weekday().num_days_from_monday() as usize]},day.month(),day.day());
+        let heading=format!("{} · {}月{}日",if day==today{"今天"}else{["週一","週二","週三","週四","週五","週六","週日"][day.weekday().num_days_from_monday() as usize]},day.month(),day.day());
         c.text(167.0,44.0,&heading,8.8,W::Semibold,accent,H::Left);
-        let status=if self.calendar.view.loading{"同步中".to_string()}else if !self.calendar.view.error.is_empty(){"重试同步".to_string()}else if !self.calendar.view.warning.is_empty(){"部分同步".to_string()}else {let at=self.calendar.feeds.iter().map(|feed|feed.last_sync.as_str()).max().unwrap_or(&self.calendar.last_sync);if at.is_empty(){"".into()}else{format!("{} 更新",at.split_whitespace().last().unwrap_or(""))}};
+        let status=if self.calendar.view.loading{"同步中".to_string()}else if !self.calendar.view.error.is_empty(){"重試同步".to_string()}else if !self.calendar.view.warning.is_empty(){"部分同步".to_string()}else {let at=self.calendar.feeds.iter().map(|feed|feed.last_sync.as_str()).max().unwrap_or(&self.calendar.last_sync);if at.is_empty(){"".into()}else{format!("{} 更新",at.split_whitespace().last().unwrap_or(""))}};
         c.text(376.0,44.0,&status,7.4,W::Regular,muted,H::Right);
-        let sync_hint=if !self.calendar.view.error.is_empty(){self.calendar.view.error.as_str()}else if !self.calendar.view.warning.is_empty(){self.calendar.view.warning.as_str()}else{"同步这个月份"};
+        let sync_hint=if !self.calendar.view.error.is_empty(){self.calendar.view.error.as_str()}else if !self.calendar.view.warning.is_empty(){self.calendar.view.warning.as_str()}else{"同步這個月份"};
         if !self.calendar_configs().is_empty() && !self.calendar.view.loading && c.hit(326.0,33.0,52.0,15.0,"calendar-sync").on_hover_text(sync_hint).clicked(){self.request_calendar_month(true);}
         let focus=self.calendar.view.focus.clone();
         let scroll_to_focus=if c.live{std::mem::take(&mut self.calendar.view.scroll_to_focus)}else{false};
@@ -337,20 +337,20 @@ impl App {
         if scroll_to_focus {first=0;}
         first=first.min(max);
         if featured_index.is_none() {
-            let message=if self.calendar.view.loading && events.is_empty(){"正在获取日程…"}else if !self.calendar.view.error.is_empty() && events.is_empty(){"暂时无法获取日程"}else if !self.calendar.view.warning.is_empty() && events.is_empty(){"部分日程未同步"}else if ended_count>0 && events.is_empty(){"当天日程已结束"}else if events.is_empty(){"当天暂无日程"}else{"暂无待开始的定时日程"};
+            let message=if self.calendar.view.loading && events.is_empty(){"正在獲取日程…"}else if !self.calendar.view.error.is_empty() && events.is_empty(){"暫時無法獲取日程"}else if !self.calendar.view.warning.is_empty() && events.is_empty(){"部分日程未同步"}else if ended_count>0 && events.is_empty(){"當天日程已結束"}else if events.is_empty(){"當天暫無日程"}else{"暫無待開始的定時日程"};
             c.centered_text(271.0,76.0,message,11.0,W::Regular,theme::GRAY,H::Center);
             if events.is_empty(){
                 let (button,b)=paint::capsule(c,214.0,93.0,70.0,20.0,"calendar-empty-add",theme::BTN,theme::BTN_HOVER);
-                b.centered_text(249.0,103.0,"＋ 添加日程",9.0,W::Regular,theme::WHITE,H::Center);
+                b.centered_text(249.0,103.0,"＋ 新增日程",9.0,W::Regular,theme::WHITE,H::Center);
                 if button.clicked(){add_local=true;}
                 if self.calendar_configs().is_empty(){
-                    c.centered_text(326.0,103.0,"连接日历",9.0,W::Regular,muted,H::Center);
+                    c.centered_text(326.0,103.0,"連線日曆",9.0,W::Regular,muted,H::Center);
                     if c.hit(290.0,93.0,72.0,20.0,"calendar-connect").clicked(){connect=true;}
                 }
             }
         }
         if ended_count>0 {
-            c.centered_text(248.0,44.0,&format!("{} 已结束 {ended_count}",if show_ended{"-"}else{"+"}),8.0,W::Regular,muted,H::Left);
+            c.centered_text(248.0,44.0,&format!("{} 已結束 {ended_count}",if show_ended{"-"}else{"+"}),8.0,W::Regular,muted,H::Left);
             if c.hit(242.0,34.0,76.0,18.0,"calendar-toggle-ended").clicked(){toggle_ended=true;}
         }
         let mut clicked=None;let mut ignored=None;let mut edit_local=None;
@@ -371,7 +371,7 @@ impl App {
                 c.fill(366.0-width,60.0,width,14.0,7.0,if ended{theme::BTN}else{Color32::from_rgb(28,48,68)});
                 c.centered_text(366.0-width/2.0,67.0,&status,7.5,W::Semibold,if ended{muted}else{accent},H::Center);
                 if let Some(end)=event.end.and_then(|end|chrono::DateTime::from_timestamp(end,0)).map(|end|end.with_timezone(&chrono::Local)) {
-                    let label=if event.all_day {format!("截至 {}",(end-chrono::Duration::seconds(1)).format("%m-%d"))}else{format!("{} 结束",end.format(if end.date_naive()==day{"%H:%M"}else{"%m-%d %H:%M"}))};
+                    let label=if event.all_day {format!("截至 {}",(end-chrono::Duration::seconds(1)).format("%m-%d"))}else{format!("{} 結束",end.format(if end.date_naive()==day{"%H:%M"}else{"%m-%d %H:%M"}))};
                     c.centered_text(168.0,110.0,&label,8.4,W::Regular,muted,H::Left);
                 }
                 c.seg((167.0,121.0),(376.0,121.0),0.6,Color32::from_gray(39));
@@ -390,11 +390,11 @@ impl App {
             let title_right=if can_ignore || is_local{352.0}else{371.0};
             c.centered_text(x+2.0,cy,&c.fit(&event.title,size,W::Semibold,title_right-x-2.0),size,W::Semibold,if has_ended(event,now){muted}else{theme::WHITE},H::Left);
             if is_local {
-                c.centered_text(365.0,cy,"编辑",7.5,W::Regular,accent,H::Center);
+                c.centered_text(365.0,cy,"編輯",7.5,W::Regular,accent,H::Center);
                 if c.hit(354.0,cy-8.0,23.0,16.0,("calendar-edit-local",event.uid.as_str())).clicked(){edit_local=Some(event.uid.clone());}
             }
             if can_ignore {
-                let button=c.hit(357.0,cy-8.0,18.0,16.0,("calendar-ignore-mail",entry_key(event))).on_hover_text("忽略此邮件日程；可在邮件详情恢复");
+                let button=c.hit(357.0,cy-8.0,18.0,16.0,("calendar-ignore-mail",entry_key(event))).on_hover_text("忽略此郵件日程；可在郵件詳情恢復");
                 paint::close(c,366.0,cy,3.0,if button.hovered(){theme::WHITE}else{muted});
                 if button.clicked(){ignored=Some(event.clone());}
             }
