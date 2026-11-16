@@ -257,6 +257,7 @@ pub(super) fn control(command:super::Transport)->bool{
     })().is_some()
 }
 
+#[allow(dead_code)]
 fn decode_lyrics(bytes:&[u8])->Option<crate::lyrics::Lyrics>{
     if bytes.len()>1024*1024{return None;}
     let raw=std::str::from_utf8(bytes).ok()?;let key=b"BD1BYDH79nXZ";
@@ -270,6 +271,7 @@ fn decode_lyrics(bytes:&[u8])->Option<crate::lyrics::Lyrics>{
     for line in &mut lyrics.lines{line.t=(line.t+offset/1000.0).max(0.0);}
     lyrics.synced.then_some(lyrics)
 }
+#[allow(dead_code)]
 pub(crate) fn read_lyrics(id:u64)->Option<crate::lyrics::Lyrics>{
     if id==0{return None;}
     let file=std::fs::File::open(data_root()?.join("cache/lyric").join(format!("{id}.lrc"))).ok()?;

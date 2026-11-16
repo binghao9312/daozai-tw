@@ -44,7 +44,7 @@ fn switching_songs_clears_old_lyrics_immediately_even_while_a_request_is_running
     assert!(h.app.island_lyric().is_none());
     assert!(h.app.ly.loading,"新歌应立即显示查找状态，不等旧请求结束");
     assert!(h.app.ly.key.starts_with("新歌|"));
-    assert!(late.send(Ok((crate::lyrics::parse_lrc("[00:01]迟到的旧歌词"),false))).is_err(),"上一首迟到的结果必须丢弃");
+    assert!(late.send(Ok(crate::lyrics::parse_lrc("[00:01]迟到的旧歌词"))).is_err(),"上一首迟到的结果必须丢弃");
     assert!(h.app.ly.pending.is_some() && h.app.ly.rx.is_none(),"在线查询排队，等旧请求结束");
     assert_eq!(h.app.ly_worker.as_ref().unwrap().thread().id(),id,"旧请求未结束时不得另开取词线程");
     finish(&mut h,release);
@@ -94,21 +94,3 @@ fn same_title_with_other_version_or_artist_is_a_different_song(){
     }
 }
 
-#[test]
-fn native_lyrics_polling_starts_on_switch_without_waiting_for_the_old_request(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for source in ["汽水音乐","KuGou.exe"] {
-        let mut h=H::new();lyrics_on(&mut h);let (release,_)=busy(&mut h);
-        showing(&mut h,&song(source,"旧歌","歌手",200.0),"[00:01]旧歌词");
-        let room=crate::resources::NATIVE_LYRICS.active()<2;
-        h.media=song(source,"阶段二测试歌曲","不存在的歌手",180.0);h.frame(vec![]);
-        if room {assert!(h.app.ly.native_rx.is_some(),"{source}：本机歌词轮询应立即开始");}
-        assert!(h.app.ly.pending.is_some() && h.app.ly.rx.is_none(),"{source}：在线查询仍排队等待旧请求");
-        // 本机歌词先到：排队的在线查询取消，不再联网。
-        let (native,rx)=std::sync::mpsc::channel();h.app.ly.native_rx=Some(rx);
-        native.send(Some(crate::lyrics::parse_lrc("[00:01]本机歌词"))).unwrap();h.frame(vec![]);
-        assert_eq!(h.app.ly.lyrics.as_ref().unwrap().lines[0].text,"本机歌词");
-        assert!(!h.app.ly.loading && h.app.ly.pending.is_none(),"{source}：本机歌词到达后取消排队的在线查询");
-        finish(&mut h,release);
-    }
-}
