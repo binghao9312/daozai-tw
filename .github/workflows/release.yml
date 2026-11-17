@@ -1,0 +1,60 @@
+name: release
+
+# 推送 v* 标签时，在 GitHub 托管的 Windows 构建机上按 scripts/package.ps1 打包，
+# 并发布 GitHub Release（安装程序、应用内更新用的 zip、SHA256SUMS.txt）。
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 300
+    steps:
+      - name: Check out tagged commit
+        uses: actions/checkout@v4
+
+      - name: Check tag matches Cargo.toml version
+        shell: pwsh
+        run: |
+          $version = [regex]::Match((Get-Content Cargo.toml -Raw), '(?m)^version = "([^"]+)"').Groups[1].Value
+          if ("v$version" -ne $env:GITHUB_REF_NAME) { throw "tag $env:GITHUB_REF_NAME does not match Cargo.toml version $version" }
+
+      - name: Ensure MSVC toolchain
+        shell: pwsh
+        run: rustup toolchain install stable-x86_64-pc-windows-msvc --profile minimal --target x86_64-pc-windows-msvc
+
+      - name: Fetch NSIS
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'nsis'
+          New-Item -ItemType Directory -Path $dir -Force | Out-Null
+          $compiler = (& ./scripts/get-nsis.ps1 -Directory $dir) | Select-Object -Last 1
+          "NSIS_EXE=$compiler" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Build and package
+        shell: pwsh
+        run: ./scripts/package.ps1 -NsisCompiler $env:NSIS_EXE
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = [regex]::Match((Get-Content Cargo.toml -Raw), '(?m)^version = "([^"]+)"').Groups[1].Value
+          $changelog = Get-Content CHANGELOG.md -Raw -Encoding utf8
+          $section = [regex]::Match($changelog, "(?ms)^## v$([regex]::Escape($version))[^\r\n]*\r?\n(.*?)(?=^## |\z)").Groups[1].Value
+          if (-not $section.Trim()) { $section = "發佈 v$version。" }
+          $notes = Join-Path $env:RUNNER_TEMP 'release-notes.md'
+          Set-Content -LiteralPath $notes -Value $section -Encoding utf8
+          gh release create $env:GITHUB_REF_NAME `
+            "dist/Daozai-Setup-v$version-x64.exe" `
+            "dist/Daozai-v$version-windows-x64.zip" `
+            "dist/SHA256SUMS.txt" `
+            --title "島仔 v$version（臺灣在地化版）" `
+            --notes-file $notes `
+            --verify-tag
