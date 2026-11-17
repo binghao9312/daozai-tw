@@ -86,18 +86,31 @@ impl State {
                 if let Err(error)=verified{event.result=Err(error);}
             }
         }
+        // Claude 桌面版記錄沒有重置時間：視窗長度已過完的舊數字早已不成立，不能因為這次讀取失敗就留在畫面上。
+        let desktop=self.config.accounts.iter().any(|a|a.id==event.id&&a.claude_desktop());
+        if desktop{
+            let all_expired=match self.rows.get_mut(&event.id){Some(Ok(old))=>old.drop_expired_windows(chrono::Utc::now().timestamp())>0&&old.windows.is_empty(),_=>false};
+            if all_expired{self.rows.remove(&event.id);}
+        }
         if let Err(error)=&event.result{
             if matches!(self.rows.get(&event.id),Some(Ok(_))){
                 self.stale.insert(event.id,error.clone());return;
             }
         }
         let success=event.result.is_ok();
-        let old_local_record=self.config.accounts.iter().any(|a|a.id==event.id&&a.provider==Provider::Claude)&&event.result.as_ref().is_ok_and(|s|chrono::Utc::now().timestamp()-s.at>1800);
+        let record_age=event.result.as_ref().ok().map(|s|chrono::Utc::now().timestamp()-s.at).filter(|age|*age>1800);
         self.stale.remove(&event.id);
-        if old_local_record{self.stale.insert(event.id.clone(),"本地記錄較舊，等待 Claude 更新".into());}
+        if let Some(age)=record_age.filter(|_|self.config.accounts.iter().any(|a|a.id==event.id&&a.provider==Provider::Claude)){
+            let hint=if desktop{"；請開啟 Claude 桌面版的用量頁面"}else{""};
+            self.stale.insert(event.id.clone(),format!("本地記錄較舊（{}），等待 Claude 更新{hint}",age_text(age)));
+        }
         self.rows.insert(event.id,event.result);
         if success{self.save_snapshots();}
     }
+}
+/// 記錄距今多久，用於「本地記錄較舊」提示。
+fn age_text(seconds:i64)->String{
+    if seconds<3600{format!("{} 分鐘前",(seconds/60).max(1))}else if seconds<172800{format!("{} 小時前",seconds/3600)}else{format!("{} 天前",seconds/86400)}
 }
 fn accent_color(accent:Accent,provider:Provider)->Color32{
     if accent==Accent::Brand&&provider==Provider::DeepSeek{return Color32::from_rgb(77,107,254);}
@@ -816,9 +829,9 @@ impl App {
                 ui.add(egui::Label::new(CLAUDE_LOCAL_NOTICE).wrap());
                 ui.horizontal(|ui|{
                     if ui.button("讀取桌面版本地記錄").clicked(){self.quota.note=match self.quota.config.connect_claude_desktop(&self.quota.alias){Ok(_)=>{self.pending.push(Cmd::QuotaConnected);"已連線，資料隨 Claude 桌面版使用更新".into()},Err(e)=>e};}
-                    if ui.button("啟用 Code 本地採集").clicked(){self.quota.note=match self.quota.config.connect_claude_code(&self.quota.alias){Ok(_)=>{self.pending.push(Cmd::QuotaConnected);"本地採集已啟用，使用 Claude Code 後更新".into()},Err(e)=>e};}
+                    if ui.button("啟用 Code 本地採集").clicked(){self.quota.note=match self.quota.config.connect_claude_code(&self.quota.alias){Ok(chained)=>{self.pending.push(Cmd::QuotaConnected);if chained{"本地採集已啟用，並接在你原有的狀態列前面（原本的狀態列輸出不變）；使用 Claude Code 後更新"}else{"本地採集已啟用，使用 Claude Code 後更新"}.into()},Err(e)=>e};}
                 });
-                for text in ["桌面版自動從本地用量快取讀取重置時間；快取不可用時顯示未知，額度仍以本地記錄為準。","Code 本地採集會配置官方狀態列輸出，已有狀態列不會被覆蓋。僅使用網頁版時，暫無可讀取的本機記錄。"]{ui.add(egui::Label::new(egui::RichText::new(text).size(12.0).color(ui.visuals().weak_text_color())).wrap());}
+                for text in ["桌面版自動從本地用量快取讀取重置時間；快取不可用時顯示未知，額度仍以本地記錄為準。","Code 本地採集會配置官方狀態列輸出；已有其他狀態列時，島仔接在它前面，原本的輸出不變、不會被覆蓋。僅使用網頁版時，暫無可讀取的本機記錄。"]{ui.add(egui::Label::new(egui::RichText::new(text).size(12.0).color(ui.visuals().weak_text_color())).wrap());}
                 ui.collapsing("選擇本地用量 JSON",|ui|{self.quota_file_form(ui);});
                 claude_disclaimer(ui);
             }else{
@@ -907,6 +920,34 @@ mod tests {
         let at=chrono::Utc::now().timestamp()-60;let snapshot=Snapshot{at,windows:vec![quota::Window{label:"本週".into(),seconds:Some(604800),remaining:16.0,reset:Some(at+86400),amount:None}],..Default::default()};
         let mut state=State::restore(config.clone(),path.clone());state.receive(quota::Event{id:id.clone(),result:Ok(snapshot.clone())});state.receive(quota::Event{id:id.clone(),result:Err("客戶端已關閉，等待新記錄".into())});assert_eq!(state.rows[&id].as_ref().unwrap().windows,snapshot.windows);assert!(state.stale.contains_key(&id));
         let mut restarted=State::restore(config,path.clone());assert_eq!(restarted.rows[&id].as_ref().unwrap().windows,snapshot.windows);restarted.receive(quota::Event{id:id.clone(),result:Err("等待新記錄".into())});assert_eq!(restarted.rows[&id].as_ref().unwrap().windows,snapshot.windows);assert_eq!(restarted.rows[&id].as_ref().unwrap().at,at);std::fs::remove_file(path).unwrap();
+    }
+    #[test]
+    fn expired_claude_desktop_windows_do_not_linger_and_the_old_record_says_how_old_it_is(){
+        let mut config=Config::default();let id="claude-desktop-old".to_string();
+        config.accounts.push(Account{id:id.clone(),provider:Provider::Claude,alias:"Claude".into(),source:"desktop/config.json".into(),slot:Some("fixture".into()),enabled:true,pinned:true});
+        let window=|label:&str,seconds:i64,reset:Option<i64>|quota::Window{label:label.into(),seconds:Some(seconds),remaining:74.0,reset,amount:None};
+        let labels=|state:&State|state.rows[&id].as_ref().unwrap().windows.iter().map(|w|w.label.clone()).collect::<Vec<_>>();
+        let long_ago=chrono::Utc::now().timestamp()-18*3600;
+        let mut state=State{config,..Default::default()};
+        // 18 小時前的記錄：5 小時視窗早已重置，一週視窗仍然有效。
+        state.rows.insert(id.clone(),Ok(Snapshot{at:long_ago,windows:vec![window("5 小時",18000,None),window("本週",604800,None)],..Default::default()}));
+        state.receive(quota::Event{id:id.clone(),result:Err("客戶端已關閉，等待新記錄".into())});
+        assert_eq!(labels(&state),["本週"]);assert!(state.stale.contains_key(&id));
+        // 全部過期：不再顯示舊數字，改顯示原因。
+        state.rows.insert(id.clone(),Ok(Snapshot{at:long_ago,windows:vec![window("5 小時",18000,None)],..Default::default()}));
+        state.receive(quota::Event{id:id.clone(),result:Err("客戶端已關閉，等待新記錄".into())});
+        assert_eq!(state.rows[&id].as_ref().err().map(String::as_str),Some("客戶端已關閉，等待新記錄"));
+        // 有明確重置時間的視窗不受影響。
+        state.rows.insert(id.clone(),Ok(Snapshot{at:long_ago,windows:vec![window("5 小時",18000,Some(long_ago+18000))],..Default::default()}));
+        state.receive(quota::Event{id:id.clone(),result:Err("等待新記錄".into())});assert_eq!(labels(&state),["5 小時"]);
+        // 還沒過期但較舊的記錄：提示說明多舊，以及桌面版要開到用量頁面才會寫新記錄。
+        let two_hours=chrono::Utc::now().timestamp()-7200;
+        state.receive(quota::Event{id:id.clone(),result:Ok(Snapshot{at:two_hours,windows:vec![window("5 小時",18000,None)],..Default::default()})});
+        let note=&state.stale[&id];assert!(note.contains("本地記錄較舊")&&note.contains("2 小時前")&&note.contains("Claude 桌面版"),"{note}");
+        let mut code=state.config.clone();code.accounts[0].source="claude/.credentials.json".into();code.accounts[0].id="claude-code".into();
+        let mut code_state=State{config:code,..Default::default()};
+        code_state.receive(quota::Event{id:"claude-code".into(),result:Ok(Snapshot{at:two_hours,windows:vec![window("5 小時",18000,Some(two_hours+18000))],..Default::default()})});
+        assert!(!code_state.stale["claude-code"].contains("桌面版"),"Claude Code 的記錄不用叫人開桌面版");
     }
     #[test] fn side_amounts_stay_short(){
         for (value,symbol,expected) in [(4.18,"¥","¥4.1"),(999.9,"¥","¥999"),(9999.0,"¥","¥9.99k"),(28560.0,"","2.85萬"),(123456.7,"¥","¥12.3萬"),

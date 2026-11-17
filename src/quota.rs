@@ -144,8 +144,9 @@ impl Config {
         }
         Ok(added)
     }
-    pub(crate) fn connect_claude_code(&mut self,alias:&str)->Result<usize,String>{
-        let path=claude::code_path();claude::install_code_collector(&path)?;self.import_claude(&path,alias)
+    /// 啟用 Claude Code 本地採集；返回 `true` 表示已接在 Claude Code 原有的狀態列前面。
+    pub(crate) fn connect_claude_code(&mut self,alias:&str)->Result<bool,String>{
+        let path=claude::code_path();let chained=claude::install_code_collector(&path)?;self.import_claude(&path,alias)?;Ok(chained)
     }
     pub(crate) fn connect_claude_desktop(&mut self,alias:&str)->Result<usize,String>{
         let roaming=std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_default();let local=std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_default();let mut added=0;let mut found=false;let mut error="請先開啟 Claude 桌面版並檢視用量".to_string();
@@ -247,6 +248,17 @@ impl Account {
 }
 impl Snapshot {
     pub fn rings(&self)->Vec<&Window>{let mut all:Vec<_>=self.windows.iter().collect();all.sort_by_key(|w|w.seconds.unwrap_or(i64::MAX));all.truncate(2);all}
+    /// 沒有重置時間的視窗：記錄時間加上視窗長度已過，代表它早就重置過，舊數字不再成立。
+    /// 拿掉這些視窗並返回拿掉的個數；有明確重置時間的視窗不動。
+    pub fn drop_expired_windows(&mut self,now:i64)->usize{
+        let (at,before)=(self.at,self.windows.len());
+        self.windows.retain(|w|w.reset.is_some()||w.seconds.is_none_or(|seconds|now<at+seconds));
+        before-self.windows.len()
+    }
+}
+impl Account {
+    /// Claude 桌面版的本地記錄：沒有重置時間，靠客戶端開著、開到用量頁面才會寫新記錄。
+    pub(crate) fn claude_desktop(&self)->bool{self.provider==Provider::Claude&&claude::is_desktop(&claude::local_source(&self.source))}
 }
 fn number(v:&Value)->Option<f64>{v.as_f64().or_else(||v.as_str()?.parse().ok()).filter(|n|n.is_finite())}
 fn reset(v:&Value)->Option<i64>{v.as_i64().filter(|n|*n>0).or_else(||chrono::DateTime::parse_from_rfc3339(v.as_str()?).ok().map(|d|d.timestamp()))}
