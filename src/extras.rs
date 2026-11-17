@@ -1845,6 +1845,25 @@ impl App {
                         ui.spacing_mut().item_spacing.y=4.0;
                         // v0.5.6 日程：狀態在最上面，後面才是平臺、賬號和提醒。
                         // 只讀；伺服器地址由平臺決定，使用者不用抄。
+                        // 已連線的日曆帳號：每個帳號一行，點名稱切換到它的設定；「斷開」只影響這一行。
+                        if !self.calendar.feeds.is_empty(){
+                            settings_label(ui,"已連線的日曆");
+                            let rows:Vec<(crate::calendar::Config,bool,bool)>=self.calendar.feeds.iter()
+                                .map(|feed|(feed.config.clone(),feed.connected,!feed.error.is_empty())).collect();
+                            settings_card(ui,|ui|{
+                                for (cfg,connected,failed) in &rows{
+                                    let selected=self.calendar.config.as_ref()==Some(cfg);
+                                    ui.horizontal(|ui|{
+                                        if ui.selectable_label(selected,egui::RichText::new(cfg.display_name()).size(13.0)).clicked(){self.select_calendar_account(cfg.clone());}
+                                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center),|ui|{
+                                            if ui.add_enabled(!self.calendar.testing,egui::Button::new("斷開").small()).clicked(){self.select_calendar_account(cfg.clone());self.pending.push(Cmd::CalendarForget);}
+                                            let (text,ok)=if *connected{("● 已連線",true)}else if *failed{("● 連線失敗",false)}else{("● 正在連線…",false)};
+                                            ui.label(egui::RichText::new(text).size(12.0).color(if ok{settings_color(ctx,Color32::from_rgb(120,220,160),Color32::from_rgb(24,121,64))}else{settings_color(ctx,Color32::from_rgb(240,180,110),Color32::from_rgb(145,89,12))}));
+                                        });
+                                    });
+                                }
+                            });
+                        }
                         if let Some(cfg)=self.calendar.config.clone(){
                             settings_card(ui,|ui|{
                                 let n=self.calendar.events.len();
@@ -1874,7 +1893,7 @@ impl App {
                             });
                         }
                         if ui.add_sized([ui.available_width(),34.0],egui::Button::new("開啟日程")).clicked(){self.open_calendar(None);}
-                        settings_label(ui,"選擇日曆平臺");
+                        settings_label(ui,"新增日曆平臺");
                         settings_card(ui,|ui|{
                             egui::Frame::new().fill(settings_color(ctx,Color32::from_rgb(29,29,31),Color32::from_rgb(236,239,244))).corner_radius(8.0).inner_margin(3).show(ui,|ui|{
                                 ui.set_min_width(ui.available_width());
@@ -1896,7 +1915,7 @@ impl App {
                                                 crate::calendar::Provider::Exchange=>button.on_hover_text("公司自建或第三方 Exchange 日曆（ActiveSync），唯讀同步"),
                                                 _=>button,
                                             };
-                                            if button.clicked() && !selected{
+                                            if button.clicked(){
                                                 self.select_calendar_provider(p);
                                             }
                                         }
@@ -1931,15 +1950,22 @@ impl App {
                                             self.calendar.note="已從貼上內容中填入使用者名稱和密碼".into();
                                             self.calendar.note_error=false;
                                         }
+                                        self.refresh_calendar_shared();
                                     }
                                 });
                                 ui.add_space(5.0);
                                 ui.horizontal(|ui|{
                                     ui.allocate_ui_with_layout(egui::vec2(50.0,30.0),egui::Layout::left_to_right(egui::Align::Center),|ui|{ui.set_min_size(egui::vec2(50.0,30.0));ui.label(egui::RichText::new("密碼").size(13.0).color(settings_color(ctx,Color32::from_gray(210),Color32::from_gray(55))));});
                                     ui.add_sized([input_width,30.0],egui::TextEdit::singleline(&mut self.calendar.form.password).vertical_align(egui::Align::Center)
-                                        .password(!self.calendar.form.show).hint_text(egui::RichText::new("輸入平臺生成的密碼").color(settings_color(ctx,Color32::from_gray(155),Color32::from_gray(100)))));
+                                        .password(!self.calendar.form.show).hint_text(egui::RichText::new(if self.calendar.form.mail_shared{"留空即使用信箱的密碼"}else{"輸入平臺生成的密碼"}).color(settings_color(ctx,Color32::from_gray(155),Color32::from_gray(100)))));
                                     if ui.add_sized([48.0,30.0],egui::Button::new(if self.calendar.form.show{"隱藏"}else{"顯示"})).clicked(){self.calendar.form.show=!self.calendar.form.show;}
                                 });
+                                // 密碼從網頁或文件貼上時常帶換行，這裡直接去掉，不讓它進到連線與儲存。
+                                if self.calendar.form.password.contains(['\r','\n']){self.calendar.form.password.retain(|c|c!='\r'&&c!='\n');}
+                                if self.calendar.form.mail_shared{
+                                    ui.add_space(3.0);
+                                    ui.label(egui::RichText::new("信箱已儲存這個帳號的密碼，留空即可直接連線，不必重新輸入。").size(11.5).color(settings_color(ctx,Color32::from_gray(180),Color32::from_gray(75))));
+                                }
                             });
                             ui.add_space(7.0);
                             let guide=if self.calendar.form.guide_open{"收起獲取方法"}else{"如何獲取使用者名稱和密碼？"};
@@ -1960,17 +1986,21 @@ impl App {
                                 let user=self.calendar.form.username.trim().to_string();
                                 let custom=self.calendar.form.provider.custom_server();
                                 let server=crate::calendar::normalize_server(&self.calendar.form.server);
+                                let typed=crate::mail::clean_secret(&self.calendar.form.password);
+                                let shared=crate::calendar::secrets::shared_mail_password(&crate::calendar::Config{provider:self.calendar.form.provider,username:user.clone(),href:None,server:None});
                                 if custom && server.is_none(){self.calendar.note="請填寫以 https:// 開頭的 CalDAV 伺服器地址".into();self.calendar.note_error=true;}
                                 else if user.is_empty(){self.calendar.note="請先填使用者名稱".into();self.calendar.note_error=true;}
-                                else if self.calendar.form.password.is_empty(){self.calendar.note="請先填密碼".into();self.calendar.note_error=true;}
+                                else if typed.is_empty() && shared.is_none(){self.calendar.note="請先填密碼".into();self.calendar.note_error=true;}
                                 else{
+                                    let password=if typed.is_empty(){shared.unwrap_or_default()}else{typed};
                                     let cfg=crate::calendar::Config{provider:self.calendar.form.provider,username:user,href:None,server:if custom{server}else{None}};
                                     self.calendar.testing=true;
-                                    self.calendar.test_password=self.calendar.form.password.clone();
+                                    self.calendar.test_password=password.clone();
                                     self.calendar.note="正在連線日曆…".into();
                                     self.calendar.note_error=false;
-                                    self.pending.push(Cmd::CalendarTest(cfg,self.calendar.form.password.clone()));
+                                    self.pending.push(Cmd::CalendarTest(cfg,password));
                                 }
+
                             }
                             ui.add_space(5.0);
                             ui.label(egui::RichText::new("連線成功後儲存，密碼儲存在 Windows 憑據管理器中。").size(11.0).color(settings_color(ctx,Color32::from_gray(180),Color32::from_gray(75))));

@@ -885,7 +885,7 @@ fn calendar_combines_platforms_and_settings_tabs_do_not_filter_events() {
     for provider in [feishu.provider,ding.provider] {
         assert!(h.app.history.iter().any(|alert|alert.meeting.as_ref().is_some_and(|(_,source)|source==provider.label())),"所有平臺都應提醒");
     }
-    h.app.select_calendar_provider(feishu.provider);
+    h.app.select_calendar_account(feishu.clone());
     assert_eq!(h.app.calendar_entries(day).len(),2);
     assert_eq!(h.app.calendar.form.username,feishu.username);
     h.app.select_calendar_provider(crate::calendar::Provider::WeCom);
@@ -904,7 +904,7 @@ fn calendar_combines_platforms_and_settings_tabs_do_not_filter_events() {
     let entries=h.app.calendar_entries(day);
     assert_eq!(entries.len(),1);
     assert_eq!(entries[0].sources.len(),2,"同一個會議只顯示一次，但保留兩個平臺的來源");
-    h.app.select_calendar_provider(feishu.provider);
+    h.app.select_calendar_account(feishu.clone());
     h.app.forget_calendar();
     assert_eq!(h.app.calendar_entries(day).len(),1);
     h.app.calendar_event(crate::calendar::Event::Synced{config:feishu,events:vec![event("舊連線結果")],at:"17:01".into()});

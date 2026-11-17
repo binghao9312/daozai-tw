@@ -589,13 +589,19 @@ use crate::otp;
 
 // ---------------------------------------------------------------- 憑據
 
+/// 密碼從網頁或文件複製時常帶換行與首尾空白，儲存和連線前一律去掉。
+pub fn clean_secret(raw: &str) -> String {
+    raw.chars().filter(|c| !matches!(c, '\r' | '\n')).collect::<String>().trim().to_string()
+}
+
 #[cfg(windows)]
 pub mod secrets {
     /// 憑據只進 Windows 憑據管理器；鍵是信箱地址，值是授權碼。
     pub fn save(email: &str, password: &str) -> Result<(), String> {
         let entry = keyring::Entry::new(super::SERVICE, &email.to_ascii_lowercase())
             .map_err(|e| format!("憑據管理器不可用：{e}"))?;
-        entry.set_password(password).map_err(|e| format!("儲存授權碼失敗：{e}"))
+        let password = super::clean_secret(password);
+        entry.set_password(&password).map_err(|e| format!("儲存授權碼失敗：{e}"))
     }
 
     pub fn load(email: &str) -> Result<String, String> {

@@ -625,7 +625,7 @@ mod tests {
         eprintln!("wecom month_events={} upcoming_events={}", month.events.len(), upcoming.events.len());
         if std::env::var("DAOZAI_WECOM_SAVE").as_deref() == Ok("1") {
             cfg.href = Some(month.href);
-            super::super::save_connection(&cfg, &password, None).unwrap();
+            super::super::save_connection(&cfg, &password).unwrap();
         }
     }
 }

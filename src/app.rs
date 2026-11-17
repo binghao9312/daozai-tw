@@ -640,14 +640,19 @@ pub(crate) struct CalendarForm {
     pub password: String,
     pub show: bool,
     pub guide_open: bool,
+    /// 信箱已儲存同一個帳號的密碼（Gmail、iCloud），表單可留空密碼直接連線。
+    pub mail_shared: bool,
 }
 
 impl CalendarState {
     pub fn load() -> Self {
         let config = calendar::load_config();
-        let form = CalendarForm { provider: calendar::selected_provider(),
+        let mut form = CalendarForm { provider: calendar::selected_provider(),
             username: config.as_ref().map(|cfg| cfg.username.clone()).unwrap_or_default(),
             server: config.as_ref().filter(|cfg| cfg.provider.custom_server()).and_then(|cfg| cfg.server.clone()).unwrap_or_default(), ..Default::default() };
+        form.mail_shared = calendar::secrets::shared_mail_password(&calendar::Config {
+            provider: form.provider, username: form.username.trim().to_string(), href: None, server: None,
+        }).is_some();
         let feeds = calendar::load_configs().into_iter().map(CalendarFeed::new).collect();
         let (local,local_error)=match crate::local_calendar::load(){Ok(events)=>(events,String::new()),Err(error)=>(vec![],error)};
         Self { config, form, feeds, local, local_error, ..Default::default() }
@@ -1136,7 +1141,7 @@ impl App {
                     self.calendar.note_error = true;
                     return;
                 };
-                if let Err(e) = calendar::save_connection(&cfg, &self.calendar.test_password, self.calendar.config.as_ref()) {
+                if let Err(e) = calendar::save_connection(&cfg, &self.calendar.test_password) {
                     self.calendar.note = e;
                     self.calendar.note_error = true;
                     return;
@@ -1152,7 +1157,7 @@ impl App {
                     self.calendar.view.error.clear();
                 }
                 if !self.calendar.feeds.iter().any(|feed| feed.config == cfg) {
-                    self.calendar.feeds.retain(|feed| feed.config.provider != cfg.provider);
+                    self.calendar.feeds.retain(|feed| !calendar::same_account(&feed.config, &cfg));
                     self.calendar.feeds.push(CalendarFeed::new(cfg.clone()));
                 }
                 self.calendar.config = Some(cfg);
@@ -1238,34 +1243,83 @@ impl App {
         else {known.len()==self.calendar.feeds.len() && known.iter().zip(&self.calendar.feeds).all(|(known,feed)|*known==feed.config)}
     }
 
+    pub fn selected_calendar_account(&self) -> Option<calendar::Config> {
+        self.calendar.config.clone()
+    }
+
     pub(crate) fn refresh_calendar_month_status(&mut self) {
         let month=self.calendar.view.month;
         self.calendar.view.loading=self.calendar.feeds.iter().any(|feed|feed.month.loading);
         self.calendar.view.loaded=(!self.calendar.feeds.is_empty() && self.calendar.feeds.iter().all(|feed|feed.month.loaded==Some(month))).then_some(month);
         self.calendar.view.error=self.calendar.feeds.iter().filter(|feed|!feed.month.error.is_empty())
-            .map(|feed|format!("{}：{}",feed.config.provider.label(),feed.month.error)).collect::<Vec<_>>().join("；");
+            .map(|feed|format!("{}：{}",feed.config.display_name(),feed.month.error)).collect::<Vec<_>>().join("；");
         self.calendar.view.warning=self.calendar.feeds.iter().filter(|feed|feed.month.loaded==Some(month)&&!feed.month.warning.is_empty())
-            .map(|feed|format!("{}：{}",feed.config.provider.label(),feed.month.warning)).collect::<Vec<_>>().join("；");
+            .map(|feed|format!("{}：{}",feed.config.display_name(),feed.month.warning)).collect::<Vec<_>>().join("；");
     }
 
+    /// 點選平臺：開始新增這個平臺的帳號。表單清空，已連線的帳號仍保留在列表裡。
     pub(crate) fn select_calendar_provider(&mut self, provider: calendar::Provider) {
-        if self.calendar.testing || self.calendar.form.provider == provider { return; }
+        if self.calendar.testing { return; }
         if let Err(error) = calendar::select_provider(provider) {
             self.calendar.note = error;
             self.calendar.note_error = true;
             return;
         }
-        let feed=self.calendar.feeds.iter().find(|feed|feed.config.provider==provider);
-        self.calendar.config=feed.map(|feed|feed.config.clone());
-        self.calendar.events=feed.map(|feed|feed.events.clone()).unwrap_or_default();
-        self.calendar.connected=feed.is_some_and(|feed|feed.connected);
-        self.calendar.last_sync=feed.map(|feed|feed.last_sync.clone()).unwrap_or_default();
-        self.calendar.failures=feed.map(|feed|feed.failures).unwrap_or_default();
-        self.calendar.error=feed.map(|feed|feed.error.clone()).unwrap_or_default();
-        self.calendar.warning=feed.map(|feed|feed.warning.clone()).unwrap_or_default();
-        self.calendar.form=CalendarForm{provider,username:self.calendar.config.as_ref().map(|cfg|cfg.username.clone()).unwrap_or_default(),
-            server:self.calendar.config.as_ref().filter(|cfg|cfg.provider.custom_server()).and_then(|cfg|cfg.server.clone()).unwrap_or_default(),..Default::default()};
-        self.calendar.note.clear();self.calendar.note_error=false;
+        self.calendar.config = None;
+        self.calendar.events.clear();
+        self.calendar.connected = false;
+        self.calendar.last_sync.clear();
+        self.calendar.failures = 0;
+        self.calendar.error.clear();
+        self.calendar.warning.clear();
+        self.calendar.form = CalendarForm { provider, ..Default::default() };
+        self.refresh_calendar_shared();
+        self.calendar.note.clear();
+        self.calendar.note_error = false;
+    }
+
+    /// 點選列表中的帳號：把它的狀態與設定放進表單，之後可以重新測試或斷開。
+    pub(crate) fn select_calendar_account(&mut self, cfg: calendar::Config) {
+        if self.calendar.testing { return; }
+        let feed = self.calendar.feeds.iter().find(|feed| feed.config == cfg);
+        let events = feed.map(|feed| feed.events.clone()).unwrap_or_default();
+        let connected = feed.is_some_and(|feed| feed.connected);
+        let last_sync = feed.map(|feed| feed.last_sync.clone()).unwrap_or_default();
+        let failures = feed.map(|feed| feed.failures).unwrap_or_default();
+        let error = feed.map(|feed| feed.error.clone()).unwrap_or_default();
+        let warning = feed.map(|feed| feed.warning.clone()).unwrap_or_default();
+        if let Err(error) = calendar::select_provider(cfg.provider) {
+            self.calendar.note = error;
+            self.calendar.note_error = true;
+            return;
+        }
+        self.calendar.events = events;
+        self.calendar.connected = connected;
+        self.calendar.last_sync = last_sync;
+        self.calendar.failures = failures;
+        self.calendar.error = error;
+        self.calendar.warning = warning;
+        self.calendar.form = CalendarForm {
+            provider: cfg.provider,
+            username: cfg.username.clone(),
+            server: cfg.server.clone().filter(|_| cfg.provider.custom_server()).unwrap_or_default(),
+            ..Default::default()
+        };
+        self.calendar.config = Some(cfg);
+        self.calendar.note.clear();
+        self.calendar.note_error = false;
+        self.refresh_calendar_shared();
+    }
+
+    /// 表單的帳號是否已有信箱儲存的密碼；只在改動帳號或切換平臺時查詢。
+    pub(crate) fn refresh_calendar_shared(&mut self) {
+        let cfg = calendar::Config {
+            provider: self.calendar.form.provider,
+            username: self.calendar.form.username.trim().to_string(),
+            href: None,
+            server: None,
+        };
+        self.calendar.form.mail_shared = calendar::secrets::shared_mail_password(&cfg).is_some();
     }
 
     /// 只移除正在管理的平臺，保留其他平臺的日程與提醒。
@@ -1286,6 +1340,9 @@ impl App {
         self.calendar.error.clear();
         self.calendar.note.clear();
         self.calendar.warning.clear();
+        self.calendar.form.username.clear();
+        self.calendar.form.password.clear();
+        self.refresh_calendar_shared();
         old
     }
 

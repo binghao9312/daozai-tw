@@ -159,6 +159,19 @@ impl Config {
     pub fn base(&self) -> String {
         self.server.clone().unwrap_or_else(|| self.provider.server().to_string())
     }
+
+    /// 列表顯示用的名稱：平臺加上帳號；帳號太長時截斷，避免撐開設定頁。
+    pub fn display_name(&self) -> String {
+        let user = self.username.trim();
+        let shown: String = user.chars().take(28).collect();
+        let more = if user.chars().count() > 28 { "…" } else { "" };
+        format!("{} · {shown}{more}", self.provider.label())
+    }
+}
+
+/// 同一平臺的同一個帳號（使用者名稱不分大小寫）；同一平臺可以連線多個帳號。
+pub fn same_account(a: &Config, b: &Config) -> bool {
+    a.provider == b.provider && a.username.trim().eq_ignore_ascii_case(b.username.trim())
 }
 
 /// 自定義 CalDAV 地址：去掉空白，補全 https://；只接受 https（本機迴環地址允許 http）。
@@ -231,7 +244,7 @@ pub fn encode_config(cfg: &Config) -> Vec<u8> {
 
 pub fn save_config(cfg: &Config) -> Result<(), String> {
     let mut accounts = load_configs();
-    if let Some(saved) = accounts.iter_mut().find(|saved| saved.provider == cfg.provider) {
+    if let Some(saved) = accounts.iter_mut().find(|saved| same_account(saved, cfg)) {
         *saved = cfg.clone();
     } else {
         accounts.push(cfg.clone());
@@ -255,35 +268,51 @@ pub fn select_provider(provider: Provider) -> Result<(), String> {
     save_configs(&load_configs(), provider)
 }
 
-/// 新連線完整儲存後才移除舊憑據；配置儲存失敗時恢復原憑據。
-pub fn save_connection(cfg: &Config, password: &str, old: Option<&Config>) -> Result<(), String> {
-    let saved = load_configs().into_iter().find(|saved| saved.provider == cfg.provider);
-    let old = saved.as_ref().or(old.filter(|old| old.provider == cfg.provider));
-    let same_account = old.is_some_and(|old|
-        old.provider == cfg.provider && old.username.eq_ignore_ascii_case(&cfg.username));
-    let previous_password = secrets::load(cfg).ok();
-    secrets::save(cfg, password)?;
-    if let Err(error) = save_config(cfg) {
-        if let Some(password) = previous_password {
-            if let Err(restore) = secrets::save(cfg, &password) {
-                return Err(format!("{error}；恢復原憑據失敗：{restore}"));
-            }
-        } else {
-            secrets::delete(cfg);
-        }
-        return Err(error);
+/// 儲存連線：密碼留空時用信箱已儲存的同一個帳號密碼；與信箱相同時不另存一份。
+pub fn save_connection(cfg: &Config, password: &str) -> Result<(), String> {
+    let password = crate::mail::clean_secret(password);
+    let shared = secrets::shared_mail_password(cfg);
+    if password.is_empty() && shared.is_none() {
+        return Err("請先填密碼".into());
     }
-    if let Some(old) = old.filter(|_| !same_account) {
-        secrets::delete(old);
+    let own = !password.is_empty() && shared.as_deref() != Some(password.as_str());
+    let previous = secrets::load_own(cfg).ok();
+    if own {
+        secrets::save(cfg, &password)?;
+    } else {
+        secrets::delete(cfg);
+    }
+    if let Err(error) = save_config(cfg) {
+        let restored = match &previous {
+            Some(old) => secrets::save(cfg, old),
+            None => {
+                secrets::delete(cfg);
+                Ok(())
+            }
+        };
+        return Err(match restored {
+            Ok(()) => error,
+            Err(restore) => format!("{error}；恢復原密碼失敗：{restore}"),
+        });
     }
     Ok(())
 }
 
-pub fn forget_config() -> Result<(), String> {
-    let Some(active) = load_config() else { return Ok(()); };
+/// 斷開一個帳號：只移除它的配置，同平臺的其他帳號保留。
+pub fn forget_account(target: &Config) -> Result<(), String> {
     let mut accounts = load_configs();
-    accounts.retain(|cfg| cfg.provider != active.provider);
-    save_configs(&accounts, active.provider)
+    accounts.retain(|cfg| !same_account(cfg, target));
+    let current = selected_provider();
+    let active = if current != target.provider {
+        current
+    } else {
+        accounts
+            .iter()
+            .find(|cfg| cfg.provider == target.provider)
+            .or(accounts.first())
+            .map_or(target.provider, |cfg| cfg.provider)
+    };
+    save_configs(&accounts, active)
 }
 
 // ---------------------------------------------------------------- 憑據
@@ -297,10 +326,31 @@ pub mod secrets {
         entry.set_password(password).map_err(|e| format!("儲存密碼失敗：{e}"))
     }
 
-    pub fn load(cfg: &super::Config) -> Result<String, String> {
+    /// 只讀日曆自己儲存的密碼。
+    pub fn load_own(cfg: &super::Config) -> Result<String, String> {
         let entry = keyring::Entry::new(super::SERVICE, &name(cfg))
             .map_err(|e| format!("憑據管理器不可用：{e}"))?;
         entry.get_password().map_err(|_| "沒有儲存密碼".to_string())
+    }
+
+    /// 日曆沒有自己的密碼時，用信箱已儲存的同一個帳號密碼（Gmail、iCloud 的應用程式密碼相同）。
+    pub fn load(cfg: &super::Config) -> Result<String, String> {
+        load_own(cfg).or_else(|_| shared_mail_password(cfg).ok_or_else(|| "沒有儲存密碼".to_string()))
+    }
+
+    /// 信箱裡已儲存的同一個帳號密碼；只有 Gmail、iCloud 這類以信箱地址登入的平臺才共用。
+    pub fn shared_mail_password(cfg: &super::Config) -> Option<String> {
+        if !matches!(cfg.provider, super::Provider::Google | super::Provider::ICloud) {
+            return None;
+        }
+        let email = cfg.username.trim();
+        if !email.contains('@') {
+            return None;
+        }
+        crate::mail::secrets::load(email)
+            .ok()
+            .map(|password| crate::mail::clean_secret(&password))
+            .filter(|password| !password.is_empty())
     }
 
     pub fn delete(cfg: &super::Config) {
@@ -319,8 +369,14 @@ pub mod secrets {
     pub fn save(_cfg: &super::Config, _password: &str) -> Result<(), String> {
         Err("僅 Windows 支援憑據管理器".into())
     }
+    pub fn load_own(_cfg: &super::Config) -> Result<String, String> {
+        Err("僅 Windows 支援憑據管理器".into())
+    }
     pub fn load(_cfg: &super::Config) -> Result<String, String> {
         Err("僅 Windows 支援憑據管理器".into())
+    }
+    pub fn shared_mail_password(_cfg: &super::Config) -> Option<String> {
+        None
     }
     pub fn delete(_cfg: &super::Config) {}
 }
@@ -2100,5 +2156,68 @@ mod icloud_and_ics_tests {
         assert_eq!(events.iter().filter(|e| e.title == "週會 & 覆盤").count(), 3);
         assert!(events.iter().any(|e| e.title == "體檢" && e.all_day));
         assert!(events_from_ics("hello", lo, hi).is_err());
+    }
+}
+
+#[cfg(test)]
+mod account_tests {
+    use super::*;
+
+    fn isolated_data_dir<T>(run: impl FnOnce() -> T) -> T {
+        let _guard = crate::ui_tests::ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("daozai-calendar-accounts-{}-{nanos}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::env::set_var("DAOZAI_DATA_DIR", &dir);
+        let out = run();
+        std::env::remove_var("DAOZAI_DATA_DIR");
+        let _ = std::fs::remove_dir_all(&dir);
+        out
+    }
+
+    #[test]
+    fn pasted_password_loses_line_breaks_and_edges() {
+        assert_eq!(crate::mail::clean_secret("abcd efgh\r\n"), "abcd efgh");
+        assert_eq!(crate::mail::clean_secret(" ab\ncd \r\n"), "abcd");
+    }
+
+    #[test]
+    fn one_provider_can_hold_several_accounts_and_forget_removes_only_one() {
+        isolated_data_dir(|| {
+            let a = Config { provider: Provider::Google, username: "a@example.com".into(), href: None, server: None };
+            let b = Config { username: "b@example.com".into(), ..a.clone() };
+            save_config(&a).unwrap();
+            save_config(&b).unwrap();
+            assert_eq!(load_configs().len(), 2);
+            save_config(&Config { href: Some("/calendars/a/".into()), ..a.clone() }).unwrap();
+            assert_eq!(load_configs().len(), 2, "同一個帳號重新連線應覆蓋，不新增");
+            forget_account(&a).unwrap();
+            let left = load_configs();
+            assert_eq!(left.len(), 1);
+            assert_eq!(left[0].username, "b@example.com");
+        });
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn gmail_calendar_reuses_the_saved_mail_password_without_a_second_copy() {
+        isolated_data_dir(|| {
+            let email = format!("share-{}@example.com", std::process::id());
+            let account = Config { provider: Provider::Google, username: email.clone(), href: None, server: None };
+            crate::mail::secrets::save(&email, "abcd efgh ijkl mnop\r\n").unwrap();
+            assert_eq!(secrets::shared_mail_password(&account).as_deref(), Some("abcd efgh ijkl mnop"));
+            // 密碼留空：沿用信箱密碼，日曆不另存一份
+            save_connection(&account, "").unwrap();
+            assert!(secrets::load_own(&account).is_err(), "留空時日曆不應另存密碼");
+            assert_eq!(secrets::load(&account).unwrap(), "abcd efgh ijkl mnop");
+            // 填入不同的密碼：日曆自己保存，換行會被去掉
+            save_connection(&account, "other-pass\n").unwrap();
+            assert_eq!(secrets::load_own(&account).unwrap(), "other-pass");
+            secrets::delete(&account);
+            crate::mail::secrets::delete(&email);
+        });
     }
 }

@@ -772,7 +772,9 @@ impl eframe::App for Shell {
                 Cmd::CalendarSync=>match &self.cal {Some(cal)=>cal.sync_now(),None=>self.app.say(MODULE_OFF)},
                 Cmd::CalendarMonth(month)=>if let Some(cal)=&self.cal {cal.view_month(month);},
                 Cmd::CalendarForget=>{
-                    if let Err(error)=daozai::calendar::forget_config(){self.app.say(&error);continue;}
+                    if let Some(target)=self.app.selected_calendar_account(){
+                        if let Err(error)=daozai::calendar::forget_account(&target){self.app.say(&error);continue;}
+                    }
                     if let Some(old)=self.app.forget_calendar(){daozai::calendar::secrets::delete(&old);}
                     if let Some(cal)=&self.cal {
                         let configs=self.app.calendar_configs();
