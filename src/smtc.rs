@@ -78,6 +78,7 @@ impl NowPlaying {
             return MediaKind::Video;
         }
         let source=self.source.to_lowercase();
+        if YTMUSIC_WEB_APP_SOURCES.contains(&source.as_str()){return MediaKind::Music;}
         if (matches!(source.as_str(),"spotify"|"spotify.exe") || is_ytmusic(&source) || is_qqmusic(&source) || apple_music::is_source(&source)) && self.playback_type==MediaKind::Music{return MediaKind::Music;}
         if ["chrome","msedge","firefox","brave","opera"].iter().any(|name|source.contains(name)) {
             let album=self.album.trim().to_lowercase();
@@ -250,10 +251,15 @@ fn read_artwork(props:&windows::Media::Control::GlobalSystemMediaTransportContro
 /// YouTube Music 常見的 SourceAppUserModelId：Chrome / Edge / Brave 的 PWA 與分頁，以及原生或第三方客戶端。
 pub(crate) const YTMUSIC_SOURCE_IDS:&[&str]=&["chrome.exe","msedge.exe","brave.exe","ytm-rs.exe","youtube music desktop app","pear desktop"];
 
+/// YouTube Music 桌面版（Chrome 應用程式）在系統媒體會話中的 SourceAppUserModelId，已全部小寫。
+/// 會話名與開始功能表捷徑的 app-id（cinhimbnkkaeohfgghhklpknlkffjgod）不完全一致，兩種寫法都列入。
+/// 這類會話不帶「YouTube Music」專輯名，也常回報未知的播放類型，所以不能只靠瀏覽器的分頁規則判斷。
+pub(crate) const YTMUSIC_WEB_APP_SOURCES:&[&str]=&["chrome._crx_cinhimbnkkghhklpknlkffjgod","chrome._crx_cinhimbnkkaeohfgghhklpknlkffjgod"];
+
 /// 是否屬於 YouTube Music 的音源（含瀏覽器）。瀏覽器只憑來源名不足以判定歌曲，呼叫方還需看標題與歌手。
 pub(crate) fn is_ytmusic_source(source:&str)->bool {
     let s=source.to_ascii_lowercase();
-    YTMUSIC_SOURCE_IDS.contains(&s.as_str()) || is_ytmusic(&s)
+    YTMUSIC_SOURCE_IDS.contains(&s.as_str()) || YTMUSIC_WEB_APP_SOURCES.contains(&s.as_str()) || is_ytmusic(&s)
 }
 
 pub(crate) fn is_ytmusic(source:&str)->bool {
@@ -915,6 +921,18 @@ mod tests {
         assert_eq!(topic.kind(),MediaKind::Music);
         let plain=NowPlaying{source:"chrome.exe".into(),title:"Clip".into(),artist:"Creator".into(),playback_type:MediaKind::Music,..Default::default()};
         assert_eq!(plain.kind(),MediaKind::Unknown,"没有专辑信息的浏览器媒体不自动认作歌曲");
+    }
+
+    #[test]
+    fn ytmusic_desktop_web_app_is_music_without_album_or_media_type() {
+        let song=NowPlaying{source:"Chrome._crx_cinhimbnkkghhklpknlkffjgod".into(),title:"年輪—汪蘇瀧| OUR CHANNEL COVER #80".into(),artist:"我們OUR CHANNEL".into(),playing:true,..Default::default()};
+        assert!(is_ytmusic_source(&song.source));
+        assert_eq!(song.kind(),MediaKind::Music,"YouTube Music 桌面版沒有專輯與播放類型時仍應識別為歌曲");
+        assert!(is_ytmusic_source("chrome._crx_cinhimbnkkaeohfgghhklpknlkffjgod"));
+        let video=NowPlaying{playback_type:MediaKind::Video,..song.clone()};
+        assert_eq!(video.kind(),MediaKind::Video,"SMTC 明確回報影片時不改判為歌曲");
+        let other_app=NowPlaying{source:"Chrome._crx_cmkncekebbebpfilplodngbpllndjkfo".into(),..song.clone()};
+        assert_eq!(other_app.kind(),MediaKind::Unknown,"同一瀏覽器的其他應用程式不因此被當成歌曲");
     }
 
     #[test]
