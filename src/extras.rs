@@ -1886,10 +1886,6 @@ impl App {
                                     if !status.is_empty(){ui.add(egui::Label::new(egui::RichText::new(status).size(12.0)).wrap());}
                                     if !feed.month.warning.is_empty(){ui.add(egui::Label::new(egui::RichText::new(format!("本月部分日程未同步：{}",feed.month.warning)).size(12.0).color(settings_color(ctx,Color32::from_rgb(238,181,91),Color32::from_rgb(139,88,12)))).wrap());}
                                 }
-                                setting_row(ui,"自動同步","每 5 分鐘更新日程；關閉後可點「立即同步」",&mut self.settings.calendar_auto_sync);
-                                if !self.calendar.warning.is_empty(){ui.add(egui::Label::new(egui::RichText::new(format!("同步提示：{}",self.calendar.warning)).size(12.0).color(settings_color(ctx,Color32::from_rgb(238,181,91),Color32::from_rgb(139,88,12)))).wrap());}
-                                if !self.calendar.error.is_empty(){
-                                    ui.add(egui::Label::new(egui::RichText::new(&self.calendar.error).size(12.0).color(settings_color(ctx,Color32::from_rgb(240,96,96),Color32::from_rgb(184,34,34)))).wrap());
                                 // 帳號下有多個日曆時，預設全部同步，讓使用者自己取消勾選不要的。
                                 let choices=self.calendar.feeds.iter().find(|feed|feed.config==cfg).filter(|feed|feed.calendars.len()>1)
                                     .map(|feed|(feed.calendars.clone(),feed.skipped.clone()));
@@ -1911,6 +1907,10 @@ impl App {
                                     if let Some((href,on))=change{self.set_calendar_choice(&cfg,Some(&href),on);}
                                     ui.add_space(2.0);
                                 }
+                                setting_row(ui,"自動同步","每 5 分鐘更新日程；關閉後可點「立即同步」",&mut self.settings.calendar_auto_sync);
+                                if !self.calendar.warning.is_empty(){ui.add(egui::Label::new(egui::RichText::new(format!("同步提示：{}",self.calendar.warning)).size(12.0).color(settings_color(ctx,Color32::from_rgb(238,181,91),Color32::from_rgb(139,88,12)))).wrap());}
+                                if !self.calendar.error.is_empty(){
+                                    ui.add(egui::Label::new(egui::RichText::new(&self.calendar.error).size(12.0).color(settings_color(ctx,Color32::from_rgb(240,96,96),Color32::from_rgb(184,34,34)))).wrap());
                                 }
                             });
                         }

@@ -79,7 +79,8 @@ fn unticking_a_calendar_is_remembered_for_that_account_and_resyncs(){
 
     h.app.select_calendar_account(config.clone());h.app.settings_open=true;h.app.settings_tab=8;
     let shown=|h:&mut H,needle:&str|{
-        for _ in 0..3{let out=h.ctx.run(egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,egui::vec2(690.0,560.0))),..Default::default()},|ctx|{h.app.settings_ui(ctx,false);});h.shapes=out.shapes;}
+        // 畫面要高到整頁都放得下：egui 不繪製畫面外的元件，清單在頁面的哪個位置不該影響這個測試。
+        for _ in 0..3{let out=h.ctx.run(egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,egui::vec2(690.0,4000.0))),..Default::default()},|ctx|{h.app.settings_ui(ctx,false);});h.shapes=out.shapes;}
         h.shapes.iter().any(|shape|matches!(&shape.shape,egui::Shape::Text(text) if text.galley.text().contains(needle)))
     };
     assert!(shown(&mut h,"已選 3 / 3"),"設定頁要列出日曆，預設全選");
