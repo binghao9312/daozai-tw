@@ -165,7 +165,13 @@ impl Config {
         let user = self.username.trim();
         let shown: String = user.chars().take(28).collect();
         let more = if user.chars().count() > 28 { "…" } else { "" };
-        format!("{} · {shown}{more}", self.provider.label())
+        // 列表用短名稱：Google 的完整標籤含「(CalDAV / iCal)」，放在一行裡太長。
+        let name = match self.provider {
+            Provider::Google => "Google 日曆",
+            Provider::Custom => "CalDAV",
+            other => other.label(),
+        };
+        format!("{name} · {shown}{more}")
     }
 }
 
@@ -312,7 +318,80 @@ pub fn forget_account(target: &Config) -> Result<(), String> {
             .or(accounts.first())
             .map_or(target.provider, |cfg| cfg.provider)
     };
-    save_configs(&accounts, active)
+    save_configs(&accounts, active)?;
+    let _ = set_skipped_calendars(target, &[]);
+    Ok(())
+}
+
+// ---------------------------------------------------------------- 日曆選擇
+
+/// 一個帳號下可以同步的一個日曆：`href` 是地址，`name` 是服務給的顯示名稱（可能為空）。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CalendarInfo {
+    pub href: String,
+    pub name: String,
+}
+
+impl CalendarInfo {
+    /// 設定頁列表顯示用：沒有名稱時退回地址最後一段（Google 的日曆 ID 就是信箱或群組地址）。
+    pub fn title(&self) -> String {
+        let name = self.name.trim();
+        if !name.is_empty() { return name.to_string(); }
+        // Google 的日曆地址是 `.../{日曆 ID}/events/`，要取 ID 而不是最後的 events。
+        let last = url::Url::parse(&self.href).ok()
+            .map(|url| {
+                let parts: Vec<&str> = url.path_segments().into_iter().flatten().filter(|part| !part.is_empty()).collect();
+                match parts.as_slice() {
+                    [.., id, "events"] => id.to_string(),
+                    [.., last] => last.to_string(),
+                    [] => String::new(),
+                }
+            })
+            .unwrap_or_default();
+        let decoded = url::form_urlencoded::parse(last.as_bytes()).next().map(|(key, _)| key.into_owned()).unwrap_or(last);
+        if decoded.is_empty() { "未命名日曆".into() } else { decoded }
+    }
+}
+
+/// 使用者取消勾選的日曆地址，按帳號分開存。預設為空＝帳號下所有日曆都同步；
+/// 單獨存一個檔案而不放進 `Config`，重新連線、更新日曆地址都不會把選擇洗掉。
+fn skip_path() -> std::path::PathBuf {
+    crate::model::config_dir().join("calendar-skip.json")
+}
+
+fn account_key(cfg: &Config) -> String {
+    format!("{}:{}", cfg.provider.key(), cfg.username.trim().to_ascii_lowercase())
+}
+
+fn load_skip_map() -> serde_json::Map<String, serde_json::Value> {
+    match std::fs::read(skip_path()).ok().and_then(|raw| serde_json::from_slice::<serde_json::Value>(&raw).ok()) {
+        Some(serde_json::Value::Object(map)) => map,
+        _ => Default::default(),
+    }
+}
+
+/// 這個帳號被取消勾選、不同步的日曆地址。
+pub fn skipped_calendars(cfg: &Config) -> Vec<String> {
+    load_skip_map().get(&account_key(cfg)).and_then(|value| value.as_array())
+        .map(|list| list.iter().filter_map(|item| item.as_str().map(str::to_owned)).collect())
+        .unwrap_or_default()
+}
+
+/// 保存這個帳號不同步的日曆；傳空列表＝恢復為全部同步。
+pub fn set_skipped_calendars(cfg: &Config, skipped: &[String]) -> Result<(), String> {
+    let mut map = load_skip_map();
+    let key = account_key(cfg);
+    if skipped.is_empty() {
+        if map.remove(&key).is_none() { return Ok(()); }
+    } else {
+        map.insert(key, serde_json::json!(skipped));
+    }
+    let data = serde_json::to_vec(&map).map_err(|e| format!("配置序列化失敗：{e}"))?;
+    let path = skip_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("建立配置目錄失敗：{e}"))?;
+    }
+    crate::model::atomic_write(&path, &data).map_err(|e| format!("寫配置失敗：{e}"))
 }
 
 // ---------------------------------------------------------------- 憑據
@@ -702,10 +781,13 @@ pub struct ReadReport {
     pub limited:bool,
     pub issue:Option<String>,
     pub status:Option<u16>,
+    /// 發現到的全部日曆（含使用者取消勾選的），設定頁據此列出可選項。
+    pub found:Vec<CalendarInfo>,
 }
 impl ReadReport {
     fn problem(&mut self,message:impl Into<String>){if self.issue.is_none(){self.issue=Some(message.into());}}
     pub(crate) fn merge(&mut self,other:Self){
+        self.found.extend(other.found);
         self.calendars+=other.calendars;self.failed+=other.failed;self.received+=other.received;
         self.invalid+=other.invalid;self.outside+=other.outside;self.unsupported+=other.unsupported;self.cancelled+=other.cancelled;
         self.limited|=other.limited;if self.issue.is_none(){self.issue=other.issue;}self.status=self.status.or(other.status);
@@ -785,10 +867,14 @@ fn fetch_range(cfg: &Config, password: &str, lo: chrono::DateTime<chrono::Utc>, 
     // 逐個查詢，單個日曆失敗不影響其他日曆，全部失敗才報錯。
     let (calendars,mut report)=discover_calendars(&agent,cfg,password).map_err(|e|e.at_stage("查詢日曆"))?;
     let href=calendars.first().cloned().ok_or_else(||Failure::text("沒有找到可讀取的日曆"))?;
+    // 預設同步帳號下全部日曆；只跳過使用者在設定頁取消勾選的。
+    let skipped=skipped_calendars(cfg);
+    let chosen:Vec<&String>=calendars.iter().filter(|calendar|!skipped.contains(calendar)).collect();
+    if chosen.is_empty() {return Ok(Fetched{href,events:vec![],report});}
     let mut events=Vec::new();
     let mut first_error=None;
     let mut ok=false;
-    for collection in &calendars {
+    for collection in chosen {
         match fetch_collection(&agent,cfg,password,collection,lo,hi) {
             Ok(found)=>{ok=true;events.extend(found.events);report.merge(found.report);}
             Err(error)=>{report.failed+=1;report.status=report.status.or(error.status);let error=error.at_stage("讀取日程");report.problem(error.message.clone());first_error.get_or_insert(error);}
@@ -854,8 +940,14 @@ fn report_resource_refs(xml:&str,href:&str)->Result<String,Failure> {
 fn discover_calendars(agent: &ureq::Agent, cfg: &Config, password: &str) -> Result<(Vec<String>,ReadReport), Failure> {
     if cfg.provider == Provider::Google {
         let cal_id = cfg.username.trim();
-        let google_url = format!("https://apidata.googleusercontent.com/caldav/v2/{cal_id}/events");
-        return Ok((vec![google_url], ReadReport::default()));
+        let google_base = ensure_slash(cfg.base().trim());
+        // 先列出帳號下所有日曆（訂閱、共用的也算）；服務不讓列時，退回只讀主日曆。
+        if let Ok(Some(all)) = discover_at(agent, cfg, password, &format!("{google_base}{cal_id}/user"), "1") {
+            return Ok(all);
+        }
+        let google_url = format!("{google_base}{cal_id}/events");
+        let report = ReadReport { calendars: 1, found: vec![CalendarInfo { href: google_url.clone(), name: String::new() }], ..Default::default() };
+        return Ok((vec![google_url], report));
     }
     let base = ensure_slash(cfg.base().trim());
     let root=path_of(&base)=="/";
@@ -878,6 +970,7 @@ fn discover_at(agent:&ureq::Agent,cfg:&Config,password:&str,start:&str,depth:&st
     let mut queue=std::collections::VecDeque::from([(start.to_owned(),depth.to_owned())]);
     let mut visited=std::collections::HashSet::new();
     let mut found=Vec::new();let mut report=ReadReport::default();let mut first_error=None;
+    let mut titles:Vec<(String,String)>=Vec::new();
     for _ in 0..8 {
         let Some((next,depth))=queue.pop_front()else{break;};
         if !visited.insert(next.clone()){continue;}
@@ -898,6 +991,7 @@ fn discover_at(agent:&ureq::Agent,cfg:&Config,password:&str,start:&str,depth:&st
             }
         };
         visited.insert(base.clone());
+        titles.extend(calendar_titles(&xml,&base));
         for calendar in calendar_collections(&xml,&base){
             if found.contains(&calendar){continue;}
             if found.len()==12{report.limited=true;break;}
@@ -914,6 +1008,7 @@ fn discover_at(agent:&ureq::Agent,cfg:&Config,password:&str,start:&str,depth:&st
     }
     if !queue.is_empty(){report.limited=true;}
     report.calendars=found.len();
+    report.found=found.iter().map(|href|CalendarInfo{href:href.clone(),name:titles.iter().find(|(known,_)|known==href).map(|(_,name)|name.clone()).unwrap_or_default()}).collect();
     if found.is_empty(){if let Some(error)=first_error{Err(error.with_report(report))}else if report.limited{Err(Failure::text("日曆服務發現次數過多，請重新連線").with_report(report))}else{Ok(None)}}else{Ok(Some((found,report)))}
 }
 
@@ -961,6 +1056,22 @@ fn property_hrefs(xml:&str,property:&str,base:&str)->Vec<String>{
         let value=unescape_xml(value[1].trim());if value.is_empty(){continue;}
         if let Ok(url)=base.join(&value){let url=url.to_string();if !urls.contains(&url){urls.push(url);}if urls.len()>=9{return urls;}}
     }}urls
+}
+
+/// PROPFIND 回應裡各日曆集合的顯示名稱：`(完整地址, 名稱)`，沒有名稱的不列。
+fn calendar_titles(xml:&str,base:&str)->Vec<(String,String)>{
+    let block=regex::Regex::new(r"(?is)<(?:[a-z0-9]+:)?response\b[^>]*>(.*?)</(?:[a-z0-9]+:)?response>").unwrap();
+    let name=regex::Regex::new(r"(?is)<(?:[a-z0-9]+:)?displayname\b[^>]*>(.*?)</(?:[a-z0-9]+:)?displayname>").unwrap();
+    let Ok(base)=url::Url::parse(base)else{return Vec::new();};
+    let mut titles=Vec::new();
+    for cap in block.captures_iter(xml){
+        let Some((href,true,_))=responses(&cap[0]).into_iter().next()else{continue;};
+        let Some(text)=name.captures(&cap[1]).map(|name|unescape_xml(name[1].trim()))else{continue;};
+        let text=text.trim().trim_start_matches("<![CDATA[").trim_end_matches("]]>").trim().to_string();
+        if text.is_empty(){continue;}
+        if let Ok(url)=base.join(&href){titles.push((url.to_string(),text));}
+    }
+    titles
 }
 
 fn calendar_collections(xml:&str,base:&str)->Vec<String>{
@@ -1235,6 +1346,8 @@ pub enum Event {
     /// 一次成功同步。
     Synced { config: Config, events: Vec<crate::mail::Meeting>, at: String },
     MonthLoaded { config: Config, month: NaiveDate, result: Result<Vec<crate::mail::Meeting>, String> },
+    /// 帳號下發現到的全部日曆（含被取消勾選的），設定頁用來列出可選項。
+    Calendars { config: Config, list: Vec<CalendarInfo> },
     /// 資料可用但不完整；成功結果之後單獨更新狀態，不反覆彈窗。
     Warning {config:Config,month:Option<NaiveDate>,message:String},
     /// 一次失敗（介面只在連續失敗時顯示紅字）。
@@ -1350,6 +1463,7 @@ fn sync_once(
     match fetch(cfg, &password) {
         Ok(f) => {
             let warning=f.report.warning();
+            if !f.report.found.is_empty() {let _ = ev.send(Event::Calendars { config:cfg.clone(),list: f.report.found.clone() });}
             let _ = ev.send(Event::Synced { config:cfg.clone(),events: f.events, at: now_label() });
             let _ = ev.send(Event::Warning{config:cfg.clone(),month:None,message:warning});
         }
@@ -2219,5 +2333,141 @@ mod account_tests {
             secrets::delete(&account);
             crate::mail::secrets::delete(&email);
         });
+    }
+}
+
+#[cfg(test)]
+mod choice_tests {
+    use super::*;
+    use std::io::{Read, Write};
+
+    fn isolated_data_dir<T>(run: impl FnOnce() -> T) -> T {
+        let _guard = crate::ui_tests::ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos();
+        let dir = std::env::temp_dir().join(format!("daozai-calendar-choice-{}-{nanos}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::env::set_var("DAOZAI_DATA_DIR", &dir);
+        let out = run();
+        std::env::remove_var("DAOZAI_DATA_DIR");
+        let _ = std::fs::remove_dir_all(&dir);
+        out
+    }
+
+    fn read_request(stream: &mut std::net::TcpStream) -> String {
+        stream.set_nonblocking(false).unwrap();
+        stream.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+        let mut bytes = Vec::new();
+        loop {
+            let mut buffer = [0; 4096];
+            let n = stream.read(&mut buffer).unwrap();
+            if n == 0 { break; }
+            bytes.extend_from_slice(&buffer[..n]);
+            let text = String::from_utf8_lossy(&bytes);
+            if let Some(end) = text.find("\r\n\r\n") {
+                let length = text[..end].lines().find_map(|line| line.to_ascii_lowercase().strip_prefix("content-length:").and_then(|v| v.trim().parse::<usize>().ok())).unwrap_or(0);
+                if bytes.len() >= end + 4 + length { break; }
+            }
+        }
+        String::from_utf8(bytes).unwrap()
+    }
+
+    fn event_xml(path: &str, uid: &str, title: &str) -> String {
+        format!("<d:multistatus><d:response><d:href>{path}a.ics</d:href><c:calendar-data>BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:{uid}\nDTSTART:20261104T020000Z\nSUMMARY:{title}\nEND:VEVENT\nEND:VCALENDAR</c:calendar-data></d:response></d:multistatus>")
+    }
+
+    /// 一個帳號下三個日曆：工作、家庭、生日，各有一個日程。
+    fn mock_three_calendars() -> (String, std::sync::mpsc::Sender<()>, std::thread::JoinHandle<()>) {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let base = format!("http://{}/", listener.local_addr().unwrap());
+        let (stop, done) = channel::<()>();
+        let worker = std::thread::spawn(move || {
+            while done.try_recv().is_err() {
+                let Ok((mut socket, _)) = listener.accept() else { std::thread::sleep(Duration::from_millis(5)); continue; };
+                let request = read_request(&mut socket);
+                let body = if request.starts_with("PROPFIND ") {
+                    let calendar = |path: &str, name: &str| format!("<d:response><d:href>{path}</d:href><d:propstat><d:prop><d:displayname>{name}</d:displayname><d:resourcetype><d:collection/><c:calendar/></d:resourcetype></d:prop></d:propstat></d:response>");
+                    format!("<d:multistatus xmlns:d=\"DAV:\" xmlns:c=\"urn:ietf:params:xml:ns:caldav\">{}{}{}</d:multistatus>", calendar("/work/", "工作"), calendar("/family/", "家庭 &amp; 朋友"), calendar("/birthdays/", "<![CDATA[生日]]>"))
+                } else if request.starts_with("REPORT /work/ ") {
+                    event_xml("/work/", "work-event", "工作日程")
+                } else if request.starts_with("REPORT /family/ ") {
+                    event_xml("/family/", "family-event", "家庭日程")
+                } else if request.starts_with("REPORT /birthdays/ ") {
+                    event_xml("/birthdays/", "birthday-event", "生日日程")
+                } else { "<d:multistatus/>".into() };
+                write!(socket, "HTTP/1.1 207 Multi-Status\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+            }
+        });
+        (base, stop, worker)
+    }
+
+    fn titles(fetched: &Fetched) -> Vec<String> {
+        let mut titles: Vec<String> = fetched.events.iter().map(|event| event.title.clone()).collect();
+        titles.sort();
+        titles
+    }
+
+    #[test]
+    fn every_calendar_is_imported_by_default_and_the_user_can_leave_some_out() {
+        isolated_data_dir(|| {
+            let (base, stop, worker) = mock_three_calendars();
+            let cfg = Config { provider: Provider::Custom, username: "synthetic".into(), href: None, server: Some(base.clone()) };
+            let month = NaiveDate::from_ymd_opt(2026, 11, 1).unwrap();
+
+            let all = fetch_month(&cfg, "pw", month).unwrap();
+            assert_eq!(titles(&all), ["家庭日程", "工作日程", "生日日程"], "沒有勾選記錄時，帳號下所有日曆都要同步");
+            let names: Vec<String> = all.report.found.iter().map(CalendarInfo::title).collect();
+            assert_eq!(names, ["工作", "家庭 & 朋友", "生日"], "列表要顯示服務給的日曆名稱");
+
+            let family = format!("{base}family/");
+            set_skipped_calendars(&cfg, &[family.clone()]).unwrap();
+            let some = fetch_month(&cfg, "pw", month).unwrap();
+            assert_eq!(titles(&some), ["工作日程", "生日日程"], "取消勾選的日曆不再同步");
+            assert_eq!(some.report.found.len(), 3, "被取消勾選的日曆仍要出現在列表裡，才能再勾回來");
+
+            let every: Vec<String> = all.report.found.iter().map(|info| info.href.clone()).collect();
+            set_skipped_calendars(&cfg, &every).unwrap();
+            let none = fetch_month(&cfg, "pw", month).unwrap();
+            assert!(none.events.is_empty() && none.report.found.len() == 3, "全部取消勾選是空日程，不是連線失敗");
+
+            set_skipped_calendars(&cfg, &[]).unwrap();
+            assert_eq!(titles(&fetch_month(&cfg, "pw", month).unwrap()).len(), 3);
+            stop.send(()).unwrap();
+            worker.join().unwrap();
+        });
+    }
+
+    #[test]
+    fn calendar_choices_belong_to_one_account_and_go_away_with_it() {
+        isolated_data_dir(|| {
+            let a = Config { provider: Provider::Google, username: "A@Example.com".into(), href: None, server: None };
+            let same_a = Config { username: " a@example.com ".into(), ..a.clone() };
+            let b = Config { username: "b@example.com".into(), ..a.clone() };
+            let other_platform = Config { provider: Provider::ICloud, ..a.clone() };
+            assert!(skipped_calendars(&a).is_empty(), "從沒勾選過＝全部同步");
+            set_skipped_calendars(&a, &["https://x/1/".into(), "https://x/2/".into()]).unwrap();
+            assert_eq!(skipped_calendars(&same_a), ["https://x/1/", "https://x/2/"], "帳號不分大小寫與前後空白");
+            assert!(skipped_calendars(&b).is_empty() && skipped_calendars(&other_platform).is_empty());
+            save_config(&a).unwrap();
+            // 重新連線、更新日曆地址不能洗掉選擇
+            save_config(&Config { href: Some("https://x/1/".into()), ..a.clone() }).unwrap();
+            assert_eq!(skipped_calendars(&a).len(), 2);
+            forget_account(&a).unwrap();
+            assert!(skipped_calendars(&a).is_empty(), "斷開帳號後選擇一併清掉");
+        });
+    }
+
+    #[test]
+    fn calendar_titles_read_display_names_and_fall_back_to_the_address() {
+        let xml = r#"<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+<d:response><d:href>/cal/</d:href><d:propstat><d:prop><d:displayname>帳號根目錄</d:displayname><d:resourcetype><d:collection/></d:resourcetype></d:prop></d:propstat></d:response>
+<d:response><d:href>/cal/work/</d:href><d:propstat><d:prop><d:displayname> 工作 </d:displayname><d:resourcetype><d:collection/><c:calendar/></d:resourcetype></d:prop></d:propstat></d:response>
+<d:response><d:href>/cal/blank/</d:href><d:propstat><d:prop><d:displayname> </d:displayname><d:resourcetype><d:collection/><c:calendar/></d:resourcetype></d:prop></d:propstat></d:response>
+</d:multistatus>"#;
+        assert_eq!(calendar_titles(xml, "https://dav.example.com/cal/"), [("https://dav.example.com/cal/work/".to_string(), "工作".to_string())], "只取日曆集合的名稱，不取目錄和空名稱");
+        let google = CalendarInfo { href: "https://apidata.googleusercontent.com/caldav/v2/en.taiwan%23holiday%40group.v.calendar.google.com/events/".into(), name: String::new() };
+        assert_eq!(google.title(), "en.taiwan#holiday@group.v.calendar.google.com");
+        assert_eq!(CalendarInfo { href: "https://dav.example.com/cal/home/".into(), name: "  ".into() }.title(), "home");
+        assert_eq!(CalendarInfo { href: "https://dav.example.com/cal/home/".into(), name: " 家庭 ".into() }.title(), "家庭");
     }
 }

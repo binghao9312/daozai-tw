@@ -622,12 +622,18 @@ pub(crate) struct CalendarFeed {
     pub failures: u32,
     pub error: String,
     pub warning:String,
+    /// 帳號下發現到的全部日曆；同步成功後由日曆服務推來。
+    pub calendars: Vec<calendar::CalendarInfo>,
+    /// 使用者取消勾選的日曆地址；預設為空，也就是全部同步。
+    pub skipped: Vec<String>,
 }
 
 impl CalendarFeed {
     fn new(config: calendar::Config) -> Self {
+        let skipped = calendar::skipped_calendars(&config);
         Self { config, events: vec![], month: Default::default(), connected: false,
-            last_sync: String::new(), failures: 0, error: String::new(), warning:String::new() }
+            last_sync: String::new(), failures: 0, error: String::new(), warning:String::new(),
+            calendars: vec![], skipped }
     }
 }
 
@@ -1204,6 +1210,9 @@ impl App {
                     Err(message)=>view.error=message,
                 }
             }
+            calendar::Event::Calendars { config, list } => {
+                if let Some(feed)=self.calendar.feeds.iter_mut().find(|feed|feed.config==config) {feed.calendars=list;}
+            }
             calendar::Event::Warning{config,month,message}=>{
                 if let Some(month)=month{
                     if month!=self.calendar.view.month{return;}
@@ -1309,6 +1318,27 @@ impl App {
         self.calendar.note.clear();
         self.calendar.note_error = false;
         self.refresh_calendar_shared();
+    }
+
+    /// 勾選或取消勾選帳號下的一個日曆（`href` 為 `None` 時恢復為全部同步），
+    /// 落盤後立刻重新同步，日程列表和月視圖隨之更新。
+    pub(crate) fn set_calendar_choice(&mut self, cfg: &calendar::Config, href: Option<&str>, on: bool) {
+        let Some(feed) = self.calendar.feeds.iter_mut().find(|feed| feed.config == *cfg) else { return; };
+        let mut skipped = feed.skipped.clone();
+        match href {
+            Some(href) => { skipped.retain(|known| known != href); if !on { skipped.push(href.to_owned()); } }
+            None => skipped.clear(),
+        }
+        if let Err(error) = calendar::set_skipped_calendars(cfg, &skipped) {
+            self.calendar.note = error;
+            self.calendar.note_error = true;
+            return;
+        }
+        feed.skipped = skipped;
+        self.calendar.note = "正在同步…".into();
+        self.calendar.note_error = false;
+        self.pending.push(Cmd::CalendarSync);
+        self.request_calendar_month(true);
     }
 
     /// 表單的帳號是否已有信箱儲存的密碼；只在改動帳號或切換平臺時查詢。

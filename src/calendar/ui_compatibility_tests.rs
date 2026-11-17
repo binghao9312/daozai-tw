@@ -62,3 +62,40 @@ fn calendar_partial_sync_preview(){
         shoot_feature(&mut h,&mut raster,&destination,if empty{"calendar-partial-empty"}else{"calendar-partial-events"},100,Some(H::local(200.0,12.0)),&day);
     }
 }
+
+#[test]
+fn unticking_a_calendar_is_remembered_for_that_account_and_resyncs(){
+    let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
+    let nanos=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+    let dir=std::env::temp_dir().join(format!("daozai-calendar-pick-{}-{nanos}",std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();std::env::set_var("DAOZAI_DATA_DIR",&dir);
+    let mut h=H::new();
+    let config=Config{provider:Provider::Custom,username:"pick@example.com".into(),href:None,server:Some("https://dav.example.com/".into())};
+    crate::calendar::save_config(&config).unwrap();h.app.calendar=crate::app::CalendarState::load();
+    let list:Vec<_>=["work","family","birthdays"].iter().map(|id|crate::calendar::CalendarInfo{href:format!("https://dav.example.com/{id}/"),name:id.to_string()}).collect();
+    h.app.calendar_event(Event::Calendars{config:config.clone(),list:list.clone()});
+    assert_eq!(h.app.calendar.feeds[0].calendars,list);
+    assert!(h.app.calendar.feeds[0].skipped.is_empty(),"沒選過時預設全部同步");
+
+    h.app.select_calendar_account(config.clone());h.app.settings_open=true;h.app.settings_tab=8;
+    let shown=|h:&mut H,needle:&str|{
+        for _ in 0..3{let out=h.ctx.run(egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,egui::vec2(690.0,560.0))),..Default::default()},|ctx|{h.app.settings_ui(ctx,false);});h.shapes=out.shapes;}
+        h.shapes.iter().any(|shape|matches!(&shape.shape,egui::Shape::Text(text) if text.galley.text().contains(needle)))
+    };
+    assert!(shown(&mut h,"已選 3 / 3"),"設定頁要列出日曆，預設全選");
+
+    h.app.pending.clear();
+    h.app.set_calendar_choice(&config,Some(&list[1].href),false);
+    assert_eq!(h.app.calendar.feeds[0].skipped,vec![list[1].href.clone()]);
+    assert_eq!(crate::calendar::skipped_calendars(&config),vec![list[1].href.clone()],"取消勾選要存到磁碟");
+    assert!(h.app.pending.iter().any(|cmd|matches!(cmd,crate::app::Cmd::CalendarSync)),"取消勾選後要立刻重新同步");
+    assert_eq!(crate::app::CalendarState::load().feeds[0].skipped,vec![list[1].href.clone()],"重新啟動後仍記得");
+    assert!(shown(&mut h,"已選 2 / 3"));
+
+    h.app.set_calendar_choice(&config,Some(&list[1].href),true);
+    assert!(h.app.calendar.feeds[0].skipped.is_empty()&&crate::calendar::skipped_calendars(&config).is_empty(),"勾回去＝恢復全部同步");
+    h.app.set_calendar_choice(&config,Some(&list[0].href),false);h.app.set_calendar_choice(&config,Some(&list[2].href),false);
+    h.app.set_calendar_choice(&config,None,true);
+    assert!(crate::calendar::skipped_calendars(&config).is_empty(),"「全部選取」清掉所有取消勾選");
+    std::env::remove_var("DAOZAI_DATA_DIR");let _=std::fs::remove_dir_all(&dir);
+}

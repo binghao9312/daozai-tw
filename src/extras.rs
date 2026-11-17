@@ -1889,6 +1889,27 @@ impl App {
                                 if !self.calendar.warning.is_empty(){ui.add(egui::Label::new(egui::RichText::new(format!("同步提示：{}",self.calendar.warning)).size(12.0).color(settings_color(ctx,Color32::from_rgb(238,181,91),Color32::from_rgb(139,88,12)))).wrap());}
                                 if !self.calendar.error.is_empty(){
                                     ui.add(egui::Label::new(egui::RichText::new(&self.calendar.error).size(12.0).color(settings_color(ctx,Color32::from_rgb(240,96,96),Color32::from_rgb(184,34,34)))).wrap());
+                                // 帳號下有多個日曆時，預設全部同步，讓使用者自己取消勾選不要的。
+                                let choices=self.calendar.feeds.iter().find(|feed|feed.config==cfg).filter(|feed|feed.calendars.len()>1)
+                                    .map(|feed|(feed.calendars.clone(),feed.skipped.clone()));
+                                if let Some((calendars,skipped))=choices{
+                                    let muted=settings_color(ctx,Color32::from_gray(150),Color32::from_gray(105));
+                                    ui.add_space(4.0);
+                                    ui.label(egui::RichText::new(format!("要同步的日曆（已選 {} / {}）",calendars.iter().filter(|info|!skipped.contains(&info.href)).count(),calendars.len())).size(13.0).strong());
+                                    ui.label(egui::RichText::new("預設匯入帳號下所有日曆；取消勾選的日曆不會出現在日程裡。").size(11.0).color(muted));
+                                    let mut change=None;
+                                    for info in &calendars{
+                                        let mut on=!skipped.contains(&info.href);
+                                        let title:String=info.title().chars().take(40).collect();
+                                        if ui.checkbox(&mut on,egui::RichText::new(title).size(12.5)).changed(){change=Some((info.href.clone(),on));}
+                                    }
+                                    if calendars.iter().all(|info|skipped.contains(&info.href)){
+                                        ui.label(egui::RichText::new("目前沒有選取任何日曆，這個帳號不會同步日程。").size(11.5).color(settings_color(ctx,Color32::from_rgb(238,181,91),Color32::from_rgb(139,88,12))));
+                                    }
+                                    if !skipped.is_empty() && ui.small_button("全部選取").clicked(){self.set_calendar_choice(&cfg,None,true);}
+                                    if let Some((href,on))=change{self.set_calendar_choice(&cfg,Some(&href),on);}
+                                    ui.add_space(2.0);
+                                }
                                 }
                             });
                         }
