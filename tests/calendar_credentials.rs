@@ -13,10 +13,12 @@ fn failed_configuration_preserves_old_credentials() {
     let old = Config { provider: Provider::Feishu, username: format!("test-old-{id}"), href: None, server: None };
     let new = Config { username: format!("test-new-{id}"), ..old.clone() };
     calendar::secrets::save(&old, "旧密码").unwrap();
-    assert!(calendar::save_connection(&new, "新密码", Some(&old)).is_err());
+    // 設定檔寫不進去：失敗的新帳號不能留下密碼，也不能動到別的帳號。
+    assert!(calendar::save_connection(&new, "新密码").is_err());
     assert_eq!(calendar::secrets::load(&old).unwrap(), "旧密码");
     assert!(calendar::secrets::load(&new).is_err());
-    assert!(calendar::save_connection(&old, "更新后的密码", Some(&old)).is_err());
+    // 同一個帳號更新密碼失敗：要恢復舊密碼。
+    assert!(calendar::save_connection(&old, "更新后的密码").is_err());
     assert_eq!(calendar::secrets::load(&old).unwrap(), "旧密码");
     calendar::secrets::delete(&old);
     calendar::secrets::delete(&new);
@@ -32,10 +34,10 @@ fn calendar_platform_connections_are_independent() {
     std::env::set_var("DAOZAI_DATA_DIR", &path);
     let feishu = Config { provider: Provider::Feishu, username: format!("feishu-{id}"), href: None, server: None };
     let ding = Config { provider: Provider::DingTalk, username: format!("ding-{id}"), href: None, server: None };
-    calendar::save_connection(&feishu, "飞书测试密码", None).unwrap();
+    calendar::save_connection(&feishu, "飞书测试密码").unwrap();
     // 模拟升级前只保存一个平台的配置。
     std::fs::write(path.join("calendar.json"), calendar::encode_config(&feishu)).unwrap();
-    calendar::save_connection(&ding, "钉钉测试密码", Some(&feishu)).unwrap();
+    calendar::save_connection(&ding, "钉钉测试密码").unwrap();
     assert_eq!(calendar::secrets::load(&feishu).unwrap(), "飞书测试密码");
     assert_eq!(calendar::load_configs().len(), 2);
     assert_eq!(calendar::load_config(), Some(ding.clone()));
@@ -45,8 +47,9 @@ fn calendar_platform_connections_are_independent() {
     assert_eq!(calendar::load_config(), None);
     assert_eq!(calendar::load_configs().len(), 2);
     calendar::select_provider(Provider::Feishu).unwrap();
-    calendar::forget_config().unwrap();
-    assert_eq!(calendar::load_config(), None);
+    // 斷開一個帳號只移除它自己，另一個平臺的帳號保留並接手成為目前帳號。
+    calendar::forget_account(&feishu).unwrap();
+    assert_eq!(calendar::load_config(), Some(ding.clone()));
     assert_eq!(calendar::load_configs(), vec![ding.clone()]);
     calendar::secrets::delete(&feishu);
     calendar::secrets::delete(&ding);
