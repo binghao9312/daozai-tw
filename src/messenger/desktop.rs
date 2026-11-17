@@ -131,6 +131,12 @@ fn candidates(client:Messenger,paths:&[String])->Option<Vec<Target>>{unsafe{
         Some(Target{unread,started:process_started(*process)?})
     }).collect()
 }}
+/// Discord 的系統通知沒有帳號登記（accounts 為空），無法像 QQ、微信那樣依通知綁定行程。
+/// 只有當前恰好存在一個 Discord 主視窗時才綁定它；多個實例或找不到時不猜測，保留「無法確認」。
+pub(crate) fn toast_target()->Option<Target>{
+    let targets=candidates(Messenger::Discord,&paths(Messenger::Discord))?;
+    match targets.as_slice(){[one]=>Some(*one),_=>None}
+}
 /// 只接受原事件視窗或其明確的所屬主視窗，同程序的其他視窗不能借用。
 fn select_target(client:Messenger,window:isize,accounts:&[Target])->Unread{
     let Some(target)=accounts.iter().find(|target|target.unread.source==client && target.unread.window==window)else{return Unread::of(client);};

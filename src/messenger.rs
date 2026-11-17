@@ -153,10 +153,10 @@ pub struct Target {pub unread:Unread,pub(crate) started:u64}
 pub enum OpenError {Exited,Unidentified,Unavailable,Busy,Failed(String)}
 impl OpenError {
     pub fn message(&self,client:Messenger)->String{match self{
-        Self::Exited=>format!("{} 账号已退出",client.name()),
-        Self::Unidentified=>format!("暂时无法确认此 {} 消息的账号",client.name()),
-        Self::Unavailable=>format!("{} 窗口暂时无法打开",client.name()),
-        Self::Busy=>"正在打开消息客户端，请稍后".into(),
+        Self::Exited=>format!("{} 帳號已退出",client.name()),
+        Self::Unidentified=>format!("暫時無法確認此 {} 訊息的帳號",client.name()),
+        Self::Unavailable=>format!("{} 視窗暫時無法開啟",client.name()),
+        Self::Busy=>"正在開啟訊息客戶端，請稍後".into(),
         Self::Failed(message)=>message.clone(),
     }}
 }
@@ -329,8 +329,8 @@ mod tests {
     }
     #[test]
     fn errors_use_state_instead_of_translated_error_text(){
-        assert_eq!(OpenError::Exited.message(Messenger::Qq),"QQ 账号已退出");
-        assert_eq!(OpenError::Exited.message(Messenger::Wechat),"微信 账号已退出");
+        assert_eq!(OpenError::Exited.message(Messenger::Qq),"QQ 帳號已退出");
+        assert_eq!(OpenError::Exited.message(Messenger::Wechat),"微信 帳號已退出");
         assert_ne!(OpenError::Failed("账号已退出".into()),OpenError::Exited);
         assert!(!OpenError::Unavailable.message(Messenger::Qq).contains("已退出"));
     }

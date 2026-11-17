@@ -263,7 +263,11 @@ impl ToastAccounts {
         }
     }
     pub fn target(&mut self,client:Messenger,id:u32,created:i64)->Option<Target>{
-        self.entries.iter_mut().find(|entry|entry.client==client)?.history.target(id,created,client.adapter().native.ready)
+        match self.entries.iter_mut().find(|entry|entry.client==client){
+            Some(entry)=>entry.history.target(id,created,client.adapter().native.ready),
+            // 沒有帳號登記的客戶端（如 Discord）只在唯一主視窗時綁定，其餘情況保持無法確認。
+            None=>if client==Messenger::Discord {super::desktop::toast_target()} else {None},
+        }
     }
     pub fn retain(&mut self,exists:impl Fn(Messenger,u32,i64)->bool){
         for entry in &mut self.entries{let client=entry.client;entry.history.retain(|id,created|exists(client,id,created));}
@@ -621,16 +625,16 @@ mod tests {
         DestroyWindow(window).unwrap();
         assert_eq!(found.len(),1);assert_eq!(target.unread.window,window.0 as isize);assert!(tracked);
         assert!(!reused,"不同代进程不能沿用旧通知");assert!(!monitor.track(target).is_ok(),"原窗口销毁后不能改选其他窗口");
-        assert_eq!(restarted,Err("QQ 账号已退出".into()));assert!(icons.is_empty());
+        assert_eq!(restarted,Err("QQ 帳號已退出".into()));assert!(icons.is_empty());
         monitor.exited(&[]);assert!(monitor.targets.is_empty());
     }}
     #[test]
     fn unidentified_qq_reminders_never_choose_remaining_accounts(){
         let unread=crate::app::Unread::of(crate::app::Messenger::Qq);
         for pids in [Some(vec![100,200,300]),Some(vec![200,300]),Some(vec![300]),None]{
-            assert_eq!(validate_unread_with(unread,|_|pids.clone()).map_err(|error|error.message(unread.source)),Err("暂时无法确认此 QQ 消息的账号".into()));
+            assert_eq!(validate_unread_with(unread,|_|pids.clone()).map_err(|error|error.message(unread.source)),Err("暫時無法確認此 QQ 訊息的帳號".into()));
         }
-        assert_eq!(validate_unread_with(unread,|_|Some(Vec::new())).map_err(|error|error.message(unread.source)),Err("QQ 账号已退出".into()));
+        assert_eq!(validate_unread_with(unread,|_|Some(Vec::new())).map_err(|error|error.message(unread.source)),Err("QQ 帳號已退出".into()));
     }
     #[test]
     fn exited_accounts_report_their_status_even_when_other_accounts_remain(){
