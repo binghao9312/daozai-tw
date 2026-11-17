@@ -94,3 +94,23 @@ fn same_title_with_other_version_or_artist_is_a_different_song(){
     }
 }
 
+
+#[test]
+fn island_lyrics_explain_why_only_the_cover_and_title_show(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
+    h.app.settings.island_lyrics=true;
+    // 查詢中、有同步歌詞：不打擾。
+    h.app.ly=crate::app::LyricsState{loading:true,..Default::default()};assert_eq!(h.app.island_lyrics_hint(),None);
+    h.app.ly=crate::app::LyricsState{lyrics:Some(crate::lyrics::parse_lrc("[00:01]甲\n[00:05]乙")),..Default::default()};assert_eq!(h.app.island_lyrics_hint(),None);
+    // 只有文字歌詞：說明沒有時間軸。
+    h.app.ly=crate::app::LyricsState{lyrics:Some(crate::lyrics::from_plain("甲\n乙")),..Default::default()};
+    assert!(h.app.island_lyrics_hint().is_some_and(|text|text.contains("文字歌詞")&&text.contains("時間軸")));
+    // 找不到、播放器資訊不全、網路失敗：各說各的，且都說明收起時只顯示封面和歌名。
+    let hint=|h:&mut H,error|{h.app.ly=crate::app::LyricsState{error:Some(error),..Default::default()};h.app.island_lyrics_hint().unwrap()};
+    let not_found=hint(&mut h,crate::lyrics::FetchError::NotFound);assert!(not_found.contains("找不到")&&not_found.contains("封面和歌名"));
+    assert!(hint(&mut h,crate::lyrics::FetchError::IncompleteMetadata).contains("完整的歌名與歌手"));
+    assert!(hint(&mut h,crate::lyrics::FetchError::Unavailable("x".into())).contains("重試"));
+    // 島上歌詞沒開時沒有這個問題；還沒查過也不提示。
+    h.app.ly=crate::app::LyricsState::default();assert_eq!(h.app.island_lyrics_hint(),None);
+    h.app.ly=crate::app::LyricsState{lyrics:Some(crate::lyrics::from_plain("甲")),..Default::default()};h.app.settings.island_lyrics=false;assert_eq!(h.app.island_lyrics_hint(),None);
+}

@@ -49,21 +49,36 @@ struct SkipNegative(bool);
 impl SkipNegative {fn set(on:bool)->Self {Self(SKIP_NEGATIVE.with(|skip|skip.replace(on)))}}
 impl Drop for SkipNegative {fn drop(&mut self){SKIP_NEGATIVE.with(|skip|skip.set(self.0));}}
 
+/// 只有純文字的記錄：檔案內容就是歌詞文字。
+fn plain_path(path:&std::path::Path)->std::path::PathBuf {path.with_extension("plain")}
+
 fn read_negative(path:&std::path::Path)->Option<Result<Lyrics,FetchError>> {
     use std::io::Read;
     if SKIP_NEGATIVE.with(|skip|skip.get()){trace(||"手动重试:跳过无歌词记录".into());return None;}
-    let path=negative_path(path);
-    let file=std::fs::File::open(&path).ok()?;
-    let meta=file.metadata().ok()?;
-    if meta.len()>MAX_TEXT as u64 || meta.modified().ok()?.elapsed().map_or(true,|age|age>NEGATIVE_TTL){return None;}
-    let mut raw=String::new();file.take(MAX_TEXT as u64).read_to_string(&mut raw).ok()?;
-    let lyrics=from_plain(&raw);
-    Some(if lyrics.lines.is_empty(){Err(FetchError::NotFound)}else{Ok(lyrics)})
+    // `.plain` 認文字內容；`.none` 只認空檔案＝確認沒有任何歌詞。舊版把純文字也存在 `.none` 裡
+    // （當時精確比對拿到純文字就不再找同步版本），那批記錄不可信，忽略並重新查。
+    for (file,expect_text) in [(plain_path(path),true),(negative_path(path),false)] {
+        let Ok(file)=std::fs::File::open(&file) else{continue;};
+        let Ok(meta)=file.metadata() else{continue;};
+        if meta.len()>MAX_TEXT as u64 || meta.modified().ok().and_then(|at|at.elapsed().ok()).is_none_or(|age|age>NEGATIVE_TTL){continue;}
+        let mut raw=String::new();
+        if file.take(MAX_TEXT as u64).read_to_string(&mut raw).is_err(){continue;}
+        let lyrics=from_plain(&raw);
+        match (expect_text,lyrics.lines.is_empty()) {
+            (true,false)=>return Some(Ok(lyrics)),
+            (false,true)=>return Some(Err(FetchError::NotFound)),
+            _=>{}
+        }
+    }
+    None
 }
 fn write_negative(path:&std::path::Path,plain:Option<&Lyrics>) {
     if let Some(parent)=path.parent(){if std::fs::create_dir_all(parent).is_err(){return;}}
+    let plain=plain.filter(|lyrics|!lyrics.lines.is_empty());
     let raw=plain.map(|lyrics|lyrics.lines.iter().map(|line|line.text.as_str()).collect::<Vec<_>>().join("\n")).unwrap_or_default();
-    let _=crate::model::atomic_write(&negative_path(path),raw.as_bytes());
+    let (keep,stale)=if plain.is_some(){(plain_path(path),negative_path(path))}else{(negative_path(path),plain_path(path))};
+    let _=crate::model::atomic_write(&keep,raw.as_bytes());
+    let _=std::fs::remove_file(stale);
 }
 
 #[derive(Clone, Debug)]
@@ -390,6 +405,7 @@ fn fetch_from_lrclib(base:&str,track:&str,artist:&str,duration_secs:f64)->Result
     // 1. 優先精確查詢 /api/get
     let d = if duration_secs > 0.0 { format!("&duration={:.0}", duration_secs) } else { String::new() };
     let get_url = format!("{base}/api/get?track_name={}&artist_name={}{d}", urlencode(&clean_track), urlencode(&clean_art));
+    let mut exact_plain=None;
     if let Ok(val) = request_json(&get_url) {
         if let Some(synced) = val.get("syncedLyrics").and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty()) {
             let parsed = parse_lrc(synced);
@@ -397,8 +413,15 @@ fn fetch_from_lrclib(base:&str,track:&str,artist:&str,duration_secs:f64)->Result
         }
         if let Some(plain) = val.get("plainLyrics").and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty()) {
             let parsed = from_plain(plain);
-            if !parsed.lines.is_empty() { return Ok(parsed); }
+            if !parsed.lines.is_empty() { exact_plain=Some(parsed); }
         }
+    }
+    // 精確比對只有純文字（沒有時間軸，無法跟著播放捲動，島上歌詞也顯示不了）時，不能就此返回：
+    // 同一首歌常有另一筆掛著合作署名的同步版本，例如「歌名 (合作演出：某某)」。
+    // 找得到同名同歌手、時長幾乎相同的同步版本就升級；找不到才用這份純文字。
+    if let Some(plain)=exact_plain {
+        trace(||"精確比對只有純文字:找同步版本".into());
+        return Ok(synced_twin(base,&clean_track,&clean_art,duration_secs).unwrap_or(plain));
     }
 
     // 2. 模糊查詢 /api/search?q=
@@ -422,6 +445,23 @@ fn fetch_from_lrclib(base:&str,track:&str,artist:&str,duration_secs:f64)->Result
         !identity.1.is_empty() && song_identity(name,singer)==identity
     }).collect::<Vec<_>>();
     lyrics_from_items(&items,track,duration_secs)
+}
+
+/// 為已找到純文字的歌曲找同步版本。比一般搜尋嚴格得多，免得拿別首歌的歌詞去換正確的純文字：
+/// 歌名去掉結尾括號（合作署名、版本標註）後要相同、歌手要相同、時長只能差 3 秒（Live、Remix 等版本時長通常差更多），
+/// 而且必須知道時長。出錯或找不到都返回 `None`，由呼叫方沿用純文字。
+fn synced_twin(base:&str,track:&str,artist:&str,duration_secs:f64)->Option<Lyrics> {
+    if duration_secs<=0.0 {return None;}
+    let want=song_identity(&bare_title(track),artist);
+    if want.1.is_empty() {return None;}
+    let url=format!("{base}/api/search?q={}",urlencode(format!("{track} {artist}").trim()));
+    let items:Vec<serde_json::Value>=request_json(&url).ok()?.as_array()?.iter().filter(|item|{
+        let name=item.get("trackName").and_then(|v|v.as_str()).unwrap_or_default();
+        let singer=item.get("artistName").and_then(|v|v.as_str()).unwrap_or_default();
+        let length=item.get("duration").and_then(|v|v.as_f64()).unwrap_or(0.0);
+        length>0.0 && (length-duration_secs).abs()<=3.0 && song_identity(&bare_title(name),singer)==want
+    }).cloned().collect();
+    lyrics_from_items(&items,track,duration_secs).ok().filter(|lyrics|lyrics.synced)
 }
 
 fn request_json(url:&str)->Result<serde_json::Value,FetchError> {
@@ -769,6 +809,58 @@ mod tests {
         let lyrics=fetch_from_lrclib(&base,"Track","Artist",120.0).unwrap();
         worker.join().unwrap();
         assert!(lyrics.synced);assert_eq!(lyrics.lines[0].text,"found","时长不符的版本不采用");
+    }
+
+    fn exact_plain_then_search(search:&str,duration:f64,scripted:usize)->Result<Lyrics,FetchError> {
+        let get=r#"{"trackName":"大薯","artistName":"粗大Band","duration":177,"plainLyrics":"最近過得好嗎\n沒戀愛的感覺"}"#.to_string();
+        let mut responses=vec![("200 OK",get),("200 OK",search.to_string())];responses.truncate(scripted);
+        let (base,worker)=serve(responses);
+        let result=fetch_from_lrclib(&base,"大薯","粗大Band",duration);
+        worker.join().unwrap();result
+    }
+
+    #[test]
+    fn exact_plain_match_upgrades_to_the_synced_twin_with_a_credit_in_its_title() {
+        // 真實案例：精確比對的「大薯」只有純文字；同專輯同時長的「大薯 (合作演出：官靖剛)」才有時間軸。
+        let search=r#"[{"trackName":"大薯","artistName":"粗大Band","duration":177,"plainLyrics":"最近過得好嗎\n沒戀愛的感覺"},
+            {"trackName":"大薯 (合作演出：官靖剛)","artistName":"粗大Band","duration":177,"plainLyrics":"x","syncedLyrics":"[00:03.61] (但你在哪邊 何時會出現)\n[00:23.83] 最近過得好嗎 其實我也不知道"}]"#;
+        let lyrics=exact_plain_then_search(search,176.0,2).unwrap();
+        assert!(lyrics.synced,"有同步版本就不能停在純文字");
+        assert_eq!(lyrics.lines[1].text,"最近過得好嗎 其實我也不知道");assert!((lyrics.lines[1].t-23.83).abs()<0.01);
+    }
+
+    #[test]
+    fn exact_plain_match_is_kept_when_the_synced_candidate_is_not_the_same_recording() {
+        let search=r#"[{"trackName":"大薯 (Live)","artistName":"粗大Band","duration":215,"syncedLyrics":"[00:01.00]現場版"},
+            {"trackName":"大薯","artistName":"別的歌手","duration":177,"syncedLyrics":"[00:01.00]別人唱的"},
+            {"trackName":"大薯條","artistName":"粗大Band","duration":177,"syncedLyrics":"[00:01.00]另一首歌"},
+            {"trackName":"大薯 (Remix)","artistName":"粗大Band","duration":182,"syncedLyrics":"[00:01.00]混音版"}]"#;
+        let lyrics=exact_plain_then_search(search,176.0,2).unwrap();
+        assert!(!lyrics.synced,"不是同一個錄音的同步歌詞，寧可保留正確的純文字");
+        assert_eq!(lyrics.lines[0].text,"最近過得好嗎");
+    }
+
+    #[test]
+    fn exact_plain_match_without_a_known_duration_does_not_search_for_other_versions() {
+        // 沒有時長就無法確認版本：只發一次精確查詢，直接用純文字。
+        let lyrics=exact_plain_then_search("[]",0.0,1).unwrap();
+        assert!(!lyrics.synced);assert_eq!(lyrics.lines.len(),2);
+    }
+
+    #[test]
+    fn plain_only_records_are_cached_separately_and_legacy_ones_are_ignored() {
+        let path=std::env::temp_dir().join(format!("daozai-lrc-plain-{}-{:?}.lrc",std::process::id(),std::thread::current().id()));
+        let _=std::fs::remove_file(negative_path(&path));let _=std::fs::remove_file(plain_path(&path));
+        // 舊版把純文字也存在 .none 裡（當時沒找同步版本）：不可信，要重新查。
+        std::fs::write(negative_path(&path),"舊版純文字\n第二行").unwrap();
+        assert!(read_negative(&path).is_none());
+        write_negative(&path,Some(&from_plain("甲\n乙")));
+        assert_eq!(read_negative(&path).unwrap().unwrap().lines.len(),2);
+        assert!(!negative_path(&path).exists(),"舊的不可信記錄要一併清掉");
+        write_negative(&path,None);
+        assert_eq!(read_negative(&path).unwrap().unwrap_err(),FetchError::NotFound);
+        assert!(!plain_path(&path).exists());
+        let _=std::fs::remove_file(negative_path(&path));
     }
 
     #[test]

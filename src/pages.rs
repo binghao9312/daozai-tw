@@ -164,8 +164,11 @@ impl App {
         // 島上歌詞是橫向的，只在頂部停靠時提供。
         if has && !self.side() {
             let (button,button_card)=capsule(c,279.0,108.0,68.0,20.0,"m-island-lyrics",if self.settings.island_lyrics {Color32::from_gray(39)}else{Color32::from_gray(22)},Color32::from_gray(47));
-            button_card.text(313.0,122.0,"島上歌詞",10.0,W::Semibold,if self.settings.island_lyrics {theme::WHITE}else{theme::GRAY},H::Center);
-            if button.on_hover_text(if self.settings.island_lyrics {"關閉收起時的歌詞"}else{"收起時顯示當前歌詞"}).clicked() {
+            // 開著卻顯示不出歌詞時，字改成橙色並在提示裡說明原因，免得以為是開關沒生效。
+            let hint=self.island_lyrics_hint();
+            let ink=if hint.is_some() {Color32::from_rgb(255,166,77)}else if self.settings.island_lyrics {theme::WHITE}else{theme::GRAY};
+            button_card.text(313.0,122.0,"島上歌詞",10.0,W::Semibold,ink,H::Center);
+            if button.on_hover_text(hint.unwrap_or(if self.settings.island_lyrics {"關閉收起時的歌詞"}else{"收起時顯示當前歌詞"})).clicked() {
                 self.settings.island_lyrics=!self.settings.island_lyrics;
                 self.settings.save();
             }
@@ -223,6 +226,20 @@ impl App {
         popup.scaled(367.0,92.0,1.0-0.06*press).centered_text(367.0,92.0,if muted{"恢復"}else{"靜音"},9.5,W::Semibold,theme::WHITE,H::Center);
     }
 
+    /// 島上歌詞開著、但這首歌沒有同步歌詞（只有文字、沒找到、查不到）時，說明收起時為什麼只顯示封面和歌名。
+    /// 查詢中或已經有同步歌詞時返回 `None`。
+    pub(crate) fn island_lyrics_hint(&self)->Option<&'static str> {
+        if !self.settings.island_lyrics || self.ly.loading {return None;}
+        match (&self.ly.lyrics,&self.ly.error) {
+            (Some(lyrics),_) if lyrics.synced=>None,
+            (Some(_),_)=>Some("已開啟，但這首歌只有文字歌詞、沒有時間軸，收起時只顯示封面和歌名"),
+            (None,Some(crate::lyrics::FetchError::NotFound))=>Some("已開啟，但找不到這首歌的同步歌詞，收起時只顯示封面和歌名"),
+            (None,Some(crate::lyrics::FetchError::IncompleteMetadata))=>Some("已開啟，但播放器沒有提供完整的歌名與歌手，收起時只顯示封面和歌名"),
+            (None,Some(_))=>Some("已開啟，但暫時查不到歌詞（可在歌詞面板點選重試），收起時只顯示封面和歌名"),
+            (None,None)=>None,
+        }
+    }
+
     fn draw_music_lyrics(&mut self,c:&Card) {
         let col=c.clipped(243.0,28.0,136.0,74.0);
         c.seg((233.0,32.0),(233.0,98.0),1.0,Color32::from_gray(35));
@@ -249,7 +266,7 @@ impl App {
                 let y=64.0+distance*29.0-galley.size().y/(2.0*c.s);
                 row.painter.galley(row.pos(246.0,y),galley,ink);
             }
-            if !lyrics.synced {col.text(246.0,39.0,"文字歌詞",8.0,W::Regular,theme::GRAY,H::Left);}
+            if !lyrics.synced {col.text(246.0,39.0,"文字歌詞 · 無時間軸",8.0,W::Regular,theme::GRAY,H::Left);}
         } else {
             let status=if self.ly.loading {"正在查詢歌詞…"}else if let Some(error)=&self.ly.error {error.label()}else{"暫無歌詞"};
             let galley=col.painter.layout(status.into(),col.font(10.0,W::Regular),theme::GRAY,130.0*c.s);
