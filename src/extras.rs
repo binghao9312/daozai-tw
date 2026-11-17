@@ -1762,7 +1762,7 @@ impl App {
                                     self.mail.note=error;
                                 }else{
                                 match crate::mail::secrets::load(&account.credential_key()){
-                                    Ok(pass)=>{self.mail.testing=Some(account.email.clone());self.mail.note=format!("{}：正在測試連線…",account.email);self.pending.push(Cmd::MailTest(account,pass));}
+                                    Ok(pass)=>{self.mail.testing=Some(account.email.clone());self.mail.form_test=None;self.mail.note=format!("{}：正在測試連線…",account.email);self.pending.push(Cmd::MailTest(account,pass));}
                                     Err(e)=>self.mail.note=format!("{}：{e}",account.email),
                                 }
                                 }
@@ -1809,9 +1809,12 @@ impl App {
                                     else if let Err(error)=target.endpoint(){self.mail.note=error;}
                                     else if self.mail.form.password.is_empty(){self.mail.note="請先填授權碼（不是信箱登入密碼）".into();}
                                     else{
+                                        // 測試成功就直接儲存並開始監控（和日曆的「測試並儲存」一致），用測試當下的帳號與授權碼。
+                                        let password=self.mail.form.password.clone();
                                         self.mail.testing=Some(email.clone());
+                                        self.mail.form_test=Some((target.clone(),password.clone()));
                                         self.mail.note=format!("{email}：正在測試連線…");
-                                        self.pending.push(Cmd::MailTest(crate::mail::Account {custom: (self.mail.form.provider==crate::mail::Provider::Custom).then(||self.mail.form.custom.clone()), email:email.clone(),provider:self.mail.form.provider,enabled:true},self.mail.form.password.clone()));
+                                        self.pending.push(Cmd::MailTest(target,password));
                                     }
                                 }
                                 if ui.button("儲存並開始監控").clicked(){
@@ -1821,13 +1824,11 @@ impl App {
                                     else if let Err(error)=target.endpoint(){self.mail.note=error;}
                                     else if self.mail.form.password.is_empty(){self.mail.note="請先填授權碼（不是信箱登入密碼）".into();}
                                     else{
-                                        match crate::mail::secrets::save(&target.credential_key(),&self.mail.form.password){
+                                        let password=self.mail.form.password.clone();
+                                        match self.save_mail_account(target,&password){
                                             Ok(())=>{
-                                                let account=crate::mail::Account {custom: (self.mail.form.provider==crate::mail::Provider::Custom).then(||self.mail.form.custom.clone()), email:email.clone(),provider:self.mail.form.provider,enabled:true};
-                                                if let Some(slot)=self.mail.accounts.iter_mut().find(|a|a.email.eq_ignore_ascii_case(&email)){*slot=account;}else{self.mail.accounts.push(account);}
                                                 self.mail.form.password.clear();
                                                 self.mail.note=format!("{email}：已儲存，正在連線…");
-                                                self.mail_accounts_changed();
                                             }
                                             Err(e)=>self.mail.note=e,
                                         }

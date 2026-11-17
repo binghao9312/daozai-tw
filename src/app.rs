@@ -555,6 +555,9 @@ pub(crate) struct MailState {
     /// 設定頁裡「測試連線」的結果。
     pub note: String,
     pub testing: Option<String>,
+    /// 從「新增信箱」表單發起的測試：測試當下的帳號與授權碼。成功就直接儲存並開始監控，
+    /// 不必再按一次「儲存並開始監控」；測試期間改了表單也不會存錯。
+    pub form_test: Option<(mail::Account, String)>,
     pub form: MailForm,
     /// 面板裡點開的郵件（帳號 + uid，避免兩個帳號 uid 撞車）。
     pub open_uid: Option<(String, u32)>,
@@ -1110,20 +1113,49 @@ impl App {
             }
             mail::Event::Test { account, ok, note } => {
                 self.mail.testing = None;
-                let detail = if ok { "連線成功".to_string() } else { note };
+                let from_form = self.mail.form_test.take().filter(|(tested, _)| tested.email.eq_ignore_ascii_case(&account));
+                let mut detail = if ok { "連線成功".to_string() } else { note };
+                let mut saved = false;
+                if let (true, Some((tested, password))) = (ok, from_form) {
+                    match self.save_mail_account(tested, &password) {
+                        Ok(()) => {
+                            if self.mail.form.email.trim().eq_ignore_ascii_case(&account) && self.mail.form.password == password {
+                                self.mail.form.password.clear();
+                            }
+                            detail = "連線成功，已儲存並開始監控".into();
+                            saved = true;
+                        }
+                        Err(error) => detail = format!("連線成功，但儲存失敗：{error}"),
+                    }
+                }
                 let detail = if detail.chars().count() > 120 {
                     format!("{}…", detail.chars().take(120).collect::<String>())
                 } else {
                     detail
                 };
                 self.mail.note = format!("{account}：{detail}");
-                self.say(if ok {
+                self.say(if saved {
+                    format!("{account} 已連線並開始監控")
+                } else if ok {
                     format!("{account} 連線成功")
                 } else {
                     format!("{account} 連線失敗")
                 });
             }
         }
+    }
+
+    /// 授權碼存進系統憑據管理器、帳號加入清單並開始監控；
+    /// 「儲存並開始監控」和「從表單測試連線成功」共用。同一個信箱再存一次等於更新授權碼。
+    pub(crate) fn save_mail_account(&mut self, account: mail::Account, password: &str) -> Result<(), String> {
+        crate::mail::secrets::save(&account.credential_key(), password)?;
+        if let Some(slot) = self.mail.accounts.iter_mut().find(|a| a.email.eq_ignore_ascii_case(&account.email)) {
+            *slot = account;
+        } else {
+            self.mail.accounts.push(account);
+        }
+        self.mail_accounts_changed();
+        Ok(())
     }
 
     /// 設定視窗第 8 個標籤頁：郵件。

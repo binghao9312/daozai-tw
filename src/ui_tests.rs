@@ -6066,8 +6066,21 @@ fn mail_report_save_and_failure_paths() {
     h.app.mail_event(crate::mail::Event::Status{account:email.clone(),status:crate::mail::Status::Failed("模擬認證失敗".into())});frame(&mut h,vec![]);
     h.app.mail.form.password="synthetic-test-secret".into();click(&mut h,"測試連線");
     assert_eq!(h.app.mail.testing.as_deref(),Some(email.as_str()));
-    h.app.mail_event(crate::mail::Event::Test{account:email,ok:false,note:"模擬網路超時".into()});frame(&mut h,vec![]);
+    h.app.mail_event(crate::mail::Event::Test{account:email.clone(),ok:false,note:"模擬網路超時".into()});frame(&mut h,vec![]);
     assert!(h.app.mail.testing.is_none());assert!(h.app.mail.note.contains("模擬網路超時"));
+    // 從表單測試連線成功＝連線並儲存，不必再按一次「儲存並開始監控」；測試失敗則什麼都不存。
+    h.app.mail.accounts.clear();crate::mail::secrets::delete(&email);
+    h.app.mail.form.email=email.clone();h.app.mail.form.password="synthetic-test-secret".into();click(&mut h,"測試連線");
+    h.app.mail_event(crate::mail::Event::Test{account:email.clone(),ok:false,note:"模擬認證失敗".into()});frame(&mut h,vec![]);
+    assert!(h.app.mail.accounts.is_empty()&&h.app.mail.form_test.is_none()&&crate::mail::secrets::load(&email).is_err(),"測試失敗不能存帳號");
+    click(&mut h,"測試連線");
+    h.app.mail.form.password="改過的授權碼".into();
+    h.app.mail_event(crate::mail::Event::Test{account:email.clone(),ok:true,note:String::new()});frame(&mut h,vec![]);
+    assert_eq!(h.app.mail.accounts.len(),1,"測試成功要直接加入信箱清單");assert!(h.app.mail.note.contains("已儲存"),"{}",h.app.mail.note);
+    assert_eq!(crate::mail::secrets::load(&email).unwrap(),"synthetic-test-secret","要存測試當下的授權碼，不是測試期間改過的欄位");
+    assert_eq!(h.app.mail.form.password,"改過的授權碼","表單已被改過就不清掉");
+    h.app.mail_event(crate::mail::Event::Test{account:email,ok:true,note:String::new()});
+    assert!(h.app.mail.note.contains("連線成功")&&!h.app.mail.note.contains("已儲存"),"沒有從表單發起的測試不重複儲存");
 }
 
 #[test]
