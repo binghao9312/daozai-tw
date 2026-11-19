@@ -124,13 +124,53 @@ pub fn parse_gmail_list(raw: &str) -> Result<Vec<String>, String> {
         .collect())
 }
 
-fn is_seen_from_labels(json: &serde_json::Value) -> bool {
-    !json
-        .get("labelIds")
+pub fn gmail_inbox_query(filter_mode: u8) -> Option<&'static str> {
+    match filter_mode {
+        0 => Some("-category:promotions -category:social -category:forums"),
+        1 => Some("is:important -category:promotions -category:social -category:forums"),
+        _ => None,
+    }
+}
+
+pub fn should_notify_gmail(
+    labels: &[String],
+    has_code: bool,
+    has_meeting: bool,
+    filter_mode: u8,
+) -> bool {
+    if filter_mode >= 2 {
+        return true;
+    }
+    if labels.iter().any(|l| {
+        matches!(
+            l.as_str(),
+            "CATEGORY_PROMOTIONS" | "CATEGORY_SOCIAL" | "CATEGORY_FORUMS"
+        )
+    }) {
+        return false;
+    }
+    if has_code || has_meeting {
+        return true;
+    }
+    match filter_mode {
+        1 => labels.iter().any(|l| l == "IMPORTANT"),
+        _ => labels
+            .iter()
+            .any(|l| matches!(l.as_str(), "IMPORTANT" | "CATEGORY_PERSONAL")),
+    }
+}
+
+fn labels_from_json(json: &serde_json::Value) -> Vec<String> {
+    json.get("labelIds")
         .and_then(|v| v.as_array())
         .into_iter()
         .flatten()
-        .any(|label| label.as_str() == Some("UNREAD"))
+        .filter_map(|label| label.as_str().map(str::to_owned))
+        .collect()
+}
+
+fn is_seen_from_labels(json: &serde_json::Value) -> bool {
+    !labels_from_json(json).iter().any(|label| label == "UNREAD")
 }
 
 pub fn parse_gmail_minimal_seen(raw: &str) -> Result<bool, String> {
@@ -138,7 +178,10 @@ pub fn parse_gmail_minimal_seen(raw: &str) -> Result<bool, String> {
     Ok(is_seen_from_labels(&json))
 }
 
-pub fn parse_gmail_message(raw: &str, account_email: &str) -> Result<Option<(crate::mail::Item, bool)>, String> {
+pub fn parse_gmail_message_with_labels(
+    raw: &str,
+    account_email: &str,
+) -> Result<Option<(crate::mail::Item, bool, Vec<String>)>, String> {
     let json = parse_json_object(raw)?;
     let Some(id) = json.get("id").and_then(|v| v.as_str()).map(str::trim).filter(|s| !s.is_empty()) else {
         return Ok(None);
@@ -158,7 +201,8 @@ pub fn parse_gmail_message(raw: &str, account_email: &str) -> Result<Option<(cra
         .and_then(|s| chrono::DateTime::from_timestamp(s, 0))
         .map(|dt| dt.with_timezone(&chrono::Local).format("%m-%d %H:%M").to_string())
         .unwrap_or_default();
-    let seen = is_seen_from_labels(&json);
+    let labels = labels_from_json(&json);
+    let seen = !labels.iter().any(|l| l == "UNREAD");
     let item = crate::mail::Item {
         account: account_email.to_string(),
         from: if parsed.from.is_empty() {
@@ -180,10 +224,24 @@ pub fn parse_gmail_message(raw: &str, account_email: &str) -> Result<Option<(cra
         meeting: crate::mail::meeting_of(&parsed.calendar),
         uid: gmail_uid(id),
     };
-    Ok(Some((item, seen)))
+    Ok(Some((item, seen, labels)))
 }
 
-pub fn parse_calendar_list(raw: &str) -> Result<Vec<crate::calendar::CalendarInfo>, String> {
+pub fn parse_gmail_message(raw: &str, account_email: &str) -> Result<Option<(crate::mail::Item, bool)>, String> {
+    Ok(parse_gmail_message_with_labels(raw, account_email)?.map(|(item, seen, _)| (item, seen)))
+}
+
+fn next_page_token(json: &serde_json::Value) -> Option<String> {
+    json.get("nextPageToken")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+}
+
+fn parse_calendar_list_page_entries(
+    raw: &str,
+) -> Result<(Vec<(bool, crate::calendar::CalendarInfo)>, Option<String>), String> {
     let json = parse_json_object(raw)?;
     let mut entries: Vec<(bool, crate::calendar::CalendarInfo)> = Vec::new();
     for item in json.get("items").and_then(|v| v.as_array()).into_iter().flatten() {
@@ -213,8 +271,19 @@ pub fn parse_calendar_list(raw: &str) -> Result<Vec<crate::calendar::CalendarInf
             },
         ));
     }
+    Ok((entries, next_page_token(&json)))
+}
+
+pub fn parse_calendar_list_page(
+    raw: &str,
+) -> Result<(Vec<crate::calendar::CalendarInfo>, Option<String>), String> {
+    let (mut entries, next) = parse_calendar_list_page_entries(raw)?;
     entries.sort_by_key(|(primary, _)| !*primary);
-    Ok(entries.into_iter().map(|(_, info)| info).collect())
+    Ok((entries.into_iter().map(|(_, info)| info).collect(), next))
+}
+
+pub fn parse_calendar_list(raw: &str) -> Result<Vec<crate::calendar::CalendarInfo>, String> {
+    Ok(parse_calendar_list_page(raw)?.0)
 }
 
 fn parse_event_date(value: Option<&serde_json::Value>) -> Option<(bool, chrono::DateTime<chrono::Local>)> {
@@ -234,12 +303,13 @@ fn parse_event_date(value: Option<&serde_json::Value>) -> Option<(bool, chrono::
     None
 }
 
-pub fn parse_calendar_events(
+pub fn parse_calendar_events_page(
     raw: &str,
     lo: chrono::DateTime<chrono::Utc>,
     hi: chrono::DateTime<chrono::Utc>,
-) -> Result<crate::calendar::ParsedEvents, String> {
+) -> Result<(crate::calendar::ParsedEvents, Option<String>), String> {
     let json = parse_json_object(raw)?;
+    let next = next_page_token(&json);
     let mut report = crate::calendar::ReadReport::default();
     let mut events = Vec::new();
     let mut seen = HashSet::new();
@@ -313,7 +383,15 @@ pub fn parse_calendar_events(
         }
     }
     events.sort_by_key(|m| m.start);
-    Ok(crate::calendar::ParsedEvents { events, report })
+    Ok((crate::calendar::ParsedEvents { events, report }, next))
+}
+
+pub fn parse_calendar_events(
+    raw: &str,
+    lo: chrono::DateTime<chrono::Utc>,
+    hi: chrono::DateTime<chrono::Utc>,
+) -> Result<crate::calendar::ParsedEvents, String> {
+    Ok(parse_calendar_events_page(raw, lo, hi)?.0)
 }
 
 fn executable_from_dir(dir: &Path) -> Option<Executable> {
@@ -627,18 +705,28 @@ pub fn probe_mail(_email: &str) -> Result<(), String> {
     if !status.has_gmail {
         return Err("目前的 gws 授權缺少 Gmail 讀取權限，請重新登入授權".into());
     }
-    let _ = list_messages("INBOX", false, 1)?;
+    let _ = list_messages("INBOX", false, None, 1)?;
     Ok(())
 }
 
-pub fn list_messages(label: &str, include_spam_trash: bool, max_results: u32) -> Result<Vec<String>, String> {
-    let params = serde_json::json!({
+pub fn list_messages(
+    label: &str,
+    include_spam_trash: bool,
+    query: Option<&str>,
+    max_results: u32,
+) -> Result<Vec<String>, String> {
+    let mut params = serde_json::json!({
         "userId": "me",
         "labelIds": [label],
         "includeSpamTrash": include_spam_trash,
         "maxResults": max_results,
-    })
-    .to_string();
+    });
+    if let Some(q) = query.map(str::trim).filter(|s| !s.is_empty()) {
+        if let Some(obj) = params.as_object_mut() {
+            obj.insert("q".into(), serde_json::Value::String(q.to_string()));
+        }
+    }
+    let params = params.to_string();
     let raw = run_json(
         &["gmail", "users", "messages", "list", "--params", &params],
         Duration::from_secs(30),
@@ -646,7 +734,10 @@ pub fn list_messages(label: &str, include_spam_trash: bool, max_results: u32) ->
     parse_gmail_list(&raw)
 }
 
-pub fn fetch_mail_item(account_email: &str, id: &str) -> Result<Option<(crate::mail::Item, bool)>, String> {
+pub fn fetch_mail_item_with_labels(
+    account_email: &str,
+    id: &str,
+) -> Result<Option<(crate::mail::Item, bool, Vec<String>)>, String> {
     let params = serde_json::json!({
         "userId": "me",
         "id": id,
@@ -657,7 +748,11 @@ pub fn fetch_mail_item(account_email: &str, id: &str) -> Result<Option<(crate::m
         &["gmail", "users", "messages", "get", "--params", &params],
         Duration::from_secs(30),
     )?;
-    parse_gmail_message(&raw, account_email)
+    parse_gmail_message_with_labels(&raw, account_email)
+}
+
+pub fn fetch_mail_item(account_email: &str, id: &str) -> Result<Option<(crate::mail::Item, bool)>, String> {
+    Ok(fetch_mail_item_with_labels(account_email, id)?.map(|(item, seen, _)| (item, seen)))
 }
 
 pub fn fetch_mail_seen(id: &str) -> Result<bool, String> {
@@ -675,17 +770,20 @@ pub fn fetch_mail_seen(id: &str) -> Result<bool, String> {
 }
 
 #[cfg(windows)]
-pub fn manage_mail(request: &crate::mail_manage::Request) -> Result<crate::mail_manage::Snapshot, String> {
+pub fn manage_mail(
+    request: &crate::mail_manage::Request,
+    filter_mode: u8,
+) -> Result<crate::mail_manage::Snapshot, String> {
     use crate::mail_manage::{Action, Folder, Snapshot};
     const GWS_VALIDITY: u32 = 1;
     if request.action != Action::Load {
         return Err("Google Workspace CLI 目前為唯讀模式，請關閉「同步郵件操作到信箱」以在本機整理，或在 Gmail 網頁版操作".into());
     }
-    let (label, include_spam_trash) = match request.folder {
-        Folder::Inbox => ("INBOX", false),
-        Folder::Trash => ("TRASH", true),
+    let (label, include_spam_trash, query) = match request.folder {
+        Folder::Inbox => ("INBOX", false, gmail_inbox_query(filter_mode)),
+        Folder::Trash => ("TRASH", true, None),
     };
-    let ids = list_messages(label, include_spam_trash, 20)?;
+    let ids = list_messages(label, include_spam_trash, query, 20)?;
     let mut entries = Vec::new();
     let mut items = Vec::new();
     let mut seen_uids = HashSet::new();
@@ -714,11 +812,50 @@ pub fn fetch_calendar_range(
     lo: chrono::DateTime<chrono::Utc>,
     hi: chrono::DateTime<chrono::Utc>,
 ) -> Result<crate::calendar::Fetched, String> {
-    let list_raw = run_json(
-        &["calendar", "calendarList", "list", "--params", "{\"maxResults\":100}"],
-        Duration::from_secs(30),
-    )?;
-    let calendars = parse_calendar_list(&list_raw)?;
+    let mut all_entries: Vec<(bool, crate::calendar::CalendarInfo)> = Vec::new();
+    let mut seen_cal_ids = HashSet::new();
+    let mut seen_list_tokens = HashSet::new();
+    let mut list_token: Option<String> = None;
+    let mut list_issue: Option<String> = None;
+
+    for page_idx in 0..5 {
+        let mut params = serde_json::json!({ "maxResults": 100 });
+        if let Some(tok) = &list_token {
+            if let Some(obj) = params.as_object_mut() {
+                obj.insert("pageToken".into(), serde_json::Value::String(tok.clone()));
+            }
+        }
+        let params = params.to_string();
+        let res = run_json(
+            &["calendar", "calendarList", "list", "--params", &params],
+            Duration::from_secs(30),
+        )
+        .and_then(|raw| parse_calendar_list_page_entries(&raw));
+        match res {
+            Ok((entries, next)) => {
+                for (primary, info) in entries {
+                    if seen_cal_ids.insert(info.href.clone()) {
+                        all_entries.push((primary, info));
+                    }
+                }
+                match next {
+                    Some(tok) if seen_list_tokens.insert(tok.clone()) => list_token = Some(tok),
+                    _ => break,
+                }
+            }
+            Err(err) => {
+                if page_idx == 0 && all_entries.is_empty() {
+                    return Err(err);
+                }
+                list_issue.get_or_insert(err);
+                break;
+            }
+        }
+    }
+
+    all_entries.sort_by_key(|(primary, _)| !*primary);
+    let calendars: Vec<crate::calendar::CalendarInfo> =
+        all_entries.into_iter().map(|(_, info)| info).collect();
     let Some(first_href) = calendars.first().map(|c| c.href.clone()) else {
         return Err("沒有找到可讀取的 Google 日曆".into());
     };
@@ -728,6 +865,10 @@ pub fn fetch_calendar_range(
         found: calendars.clone(),
         ..Default::default()
     };
+    if let Some(err) = list_issue {
+        report.failed += 1;
+        report.problem(err);
+    }
     let chosen: Vec<_> = calendars
         .iter()
         .filter(|info| !skipped.contains(&info.href))
@@ -747,34 +888,58 @@ pub fn fetch_calendar_range(
     let mut first_error = None;
 
     for info in chosen {
-        let params = serde_json::json!({
-            "calendarId": info.href,
-            "timeMin": time_min,
-            "timeMax": time_max,
-            "singleEvents": true,
-            "orderBy": "startTime",
-            "maxResults": 250,
-        })
-        .to_string();
-        match run_json(
-            &["calendar", "events", "list", "--params", &params],
-            Duration::from_secs(30),
-        )
-        .and_then(|raw| parse_calendar_events(&raw, lo, hi))
-        {
-            Ok(parsed) => {
-                any_ok = true;
-                events.extend(parsed.events);
-                report.merge(parsed.report);
-            }
-            Err(err) => {
-                report.failed += 1;
-                if report.issue.is_none() {
-                    report.issue = Some(err.clone());
+        let mut cal_ok = false;
+        let mut cal_events_count = 0usize;
+        let mut ev_token: Option<String> = None;
+        let mut seen_ev_tokens = HashSet::new();
+        for page_idx in 0..5 {
+            let mut params = serde_json::json!({
+                "calendarId": info.href,
+                "timeMin": time_min,
+                "timeMax": time_max,
+                "singleEvents": true,
+                "orderBy": "startTime",
+                "maxResults": 250,
+            });
+            if let Some(tok) = &ev_token {
+                if let Some(obj) = params.as_object_mut() {
+                    obj.insert("pageToken".into(), serde_json::Value::String(tok.clone()));
                 }
-                first_error.get_or_insert(err);
+            }
+            let params = params.to_string();
+            match run_json(
+                &["calendar", "events", "list", "--params", &params],
+                Duration::from_secs(30),
+            )
+            .and_then(|raw| parse_calendar_events_page(&raw, lo, hi))
+            {
+                Ok((parsed, next)) => {
+                    cal_ok = true;
+                    cal_events_count += parsed.events.len();
+                    events.extend(parsed.events);
+                    report.merge(parsed.report);
+                    if cal_events_count >= 5000 {
+                        report.limited = true;
+                        break;
+                    }
+                    match next {
+                        Some(tok) if seen_ev_tokens.insert(tok.clone()) => ev_token = Some(tok),
+                        _ => break,
+                    }
+                }
+                Err(err) => {
+                    report.failed += 1;
+                    if report.issue.is_none() {
+                        report.issue = Some(err.clone());
+                    }
+                    if page_idx == 0 {
+                        first_error.get_or_insert(err);
+                    }
+                    break;
+                }
             }
         }
+        any_ok |= cal_ok;
     }
 
     if !any_ok {
@@ -805,6 +970,7 @@ pub fn mail_worker(
     account: crate::mail::Account,
     stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
     interval: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    filter: std::sync::Arc<std::sync::atomic::AtomicU8>,
     ev: Sender<crate::mail::Event>,
 ) {
     use std::sync::atomic::Ordering;
@@ -824,6 +990,7 @@ pub fn mail_worker(
     let mut seen_set: HashSet<String> = HashSet::new();
     let mut initialized = false;
     let mut failures: u32 = 0;
+    let mut active_filter = filter.load(Ordering::Relaxed);
 
     loop {
         if stop.load(Ordering::Relaxed) {
@@ -885,7 +1052,8 @@ pub fn mail_worker(
         }
 
         if !initialized {
-            match list_messages("INBOX", false, 10) {
+            let current_filter = filter.load(Ordering::Relaxed);
+            match list_messages("INBOX", false, gmail_inbox_query(current_filter), 10) {
                 Ok(mut ids) => {
                     ids.reverse();
                     for id in ids {
@@ -898,6 +1066,7 @@ pub fn mail_worker(
                         remember_id(&mut seen_order, &mut seen_set, &id);
                     }
                     initialized = true;
+                    active_filter = current_filter;
                     failures = 0;
                     let _ = ev.send(crate::mail::Event::Status {
                         account: account.email.clone(),
@@ -929,21 +1098,33 @@ pub fn mail_worker(
             if sleep_stop(secs) {
                 return;
             }
-            match list_messages("INBOX", false, 10) {
+            let current_filter = filter.load(Ordering::Relaxed);
+            let filter_changed = current_filter != active_filter;
+            match list_messages("INBOX", false, gmail_inbox_query(current_filter), 10) {
                 Ok(ids) => {
                     failures = 0;
+                    active_filter = current_filter;
                     let mut unseen: Vec<String> = ids
                         .into_iter()
                         .filter(|id| !seen_set.contains(id))
-                        .take(5)
+                        .take(if filter_changed { 10 } else { 5 })
                         .collect();
                     unseen.reverse();
                     for id in unseen {
                         if stop.load(Ordering::Relaxed) {
                             return;
                         }
-                        if let Ok(Some((item, _))) = fetch_mail_item(&account.email, &id) {
-                            let _ = ev.send(crate::mail::Event::Mail { item, new: true });
+                        if let Ok(Some((item, _, labels))) =
+                            fetch_mail_item_with_labels(&account.email, &id)
+                        {
+                            let notify = !filter_changed
+                                && should_notify_gmail(
+                                    &labels,
+                                    item.code.is_some(),
+                                    item.meeting.is_some(),
+                                    current_filter,
+                                );
+                            let _ = ev.send(crate::mail::Event::Mail { item, new: notify });
                         }
                         remember_id(&mut seen_order, &mut seen_set, &id);
                     }
@@ -1197,5 +1378,97 @@ mod tests {
         assert_eq!(parsed.events[1].title, "Holiday");
         assert!(parsed.events[1].all_day);
         assert!(parsed.events[1].at.contains("全天"));
+    }
+
+    #[test]
+    fn gmail_filter_query_and_notification_match_gmail_categories() {
+        assert_eq!(
+            gmail_inbox_query(0),
+            Some("-category:promotions -category:social -category:forums")
+        );
+        assert_eq!(
+            gmail_inbox_query(1),
+            Some("is:important -category:promotions -category:social -category:forums")
+        );
+        assert_eq!(gmail_inbox_query(2), None);
+
+        let promo = vec!["INBOX".into(), "CATEGORY_PROMOTIONS".into()];
+        let social = vec!["INBOX".into(), "CATEGORY_SOCIAL".into()];
+        let forums = vec!["INBOX".into(), "CATEGORY_FORUMS".into()];
+        let personal = vec!["INBOX".into(), "CATEGORY_PERSONAL".into()];
+        let updates = vec!["INBOX".into(), "CATEGORY_UPDATES".into()];
+        let important = vec!["INBOX".into(), "IMPORTANT".into(), "CATEGORY_UPDATES".into()];
+
+        assert!(!should_notify_gmail(&promo, false, false, 0));
+        assert!(!should_notify_gmail(&social, false, false, 0));
+        assert!(!should_notify_gmail(&forums, false, false, 0));
+        assert!(!should_notify_gmail(&promo, true, true, 0));
+        assert!(should_notify_gmail(&promo, false, false, 2));
+
+        assert!(should_notify_gmail(&personal, false, false, 0));
+        assert!(!should_notify_gmail(&personal, false, false, 1));
+        assert!(should_notify_gmail(&important, false, false, 0));
+        assert!(should_notify_gmail(&important, false, false, 1));
+        assert!(!should_notify_gmail(&updates, false, false, 0));
+        assert!(should_notify_gmail(&updates, true, false, 0));
+        assert!(should_notify_gmail(&updates, false, true, 1));
+    }
+
+    #[test]
+    fn parse_gmail_message_with_labels_extracts_label_ids() {
+        let mime = "From: Bank <no-reply@bank.example>\r\nSubject: Notice\r\nContent-Type: text/plain\r\n\r\nCode 123456";
+        let b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(mime.as_bytes());
+        let msg_raw = serde_json::json!({
+            "id": "msg-labels",
+            "internalDate": "1763539200000",
+            "labelIds": ["INBOX", "UNREAD", "IMPORTANT", "CATEGORY_PERSONAL"],
+            "raw": b64,
+        })
+        .to_string();
+        let (item, seen, labels) = parse_gmail_message_with_labels(&msg_raw, "alice@gmail.com")
+            .unwrap()
+            .unwrap();
+        assert!(!seen);
+        assert_eq!(item.code.as_deref(), Some("123456"));
+        assert_eq!(
+            labels,
+            vec!["INBOX", "UNREAD", "IMPORTANT", "CATEGORY_PERSONAL"]
+        );
+    }
+
+    #[test]
+    fn calendar_list_and_events_pages_extract_next_page_token() {
+        let list_raw = r#"{
+          "items": [
+            {"id": "work@group.calendar.google.com", "summary": "Work"}
+          ],
+          "nextPageToken": "page-2"
+        }"#;
+        let (list, token) = parse_calendar_list_page(list_raw).unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].name, "Work");
+        assert_eq!(token.as_deref(), Some("page-2"));
+
+        let lo = chrono::DateTime::parse_from_rfc3339("2026-11-18T00:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let hi = chrono::DateTime::parse_from_rfc3339("2026-11-22T00:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let ev_raw = r#"{
+          "items": [
+            {
+              "id": "ev-p1",
+              "summary": "Sync",
+              "start": {"dateTime": "2026-11-19T10:00:00+08:00"},
+              "end": {"dateTime": "2026-11-19T10:30:00+08:00"}
+            }
+          ],
+          "nextPageToken": "ev-next"
+        }"#;
+        let (parsed, ev_token) = parse_calendar_events_page(ev_raw, lo, hi).unwrap();
+        assert_eq!(parsed.events.len(), 1);
+        assert_eq!(parsed.events[0].title, "Sync");
+        assert_eq!(ev_token.as_deref(), Some("ev-next"));
     }
 }

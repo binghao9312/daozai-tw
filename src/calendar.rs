@@ -186,17 +186,153 @@ impl Config {
     }
 }
 
-/// 同一平臺的同一個帳號（使用者名稱不分大小寫）；同一平臺可以連線多個帳號。
+/// 判斷字串是否為 iCal (`.ics`) 訂閱網址。
+pub fn is_ics_url(raw: &str) -> bool {
+    let lower = raw.trim().to_ascii_lowercase();
+    !lower.is_empty()
+        && (lower.contains(".ics") || lower.contains("/ical/") || lower.starts_with("webcal://"))
+}
+
+/// 若該日曆配置屬於 `.ics` 訂閱，回傳規範化後的 HTTP(S) 網址；否則回傳 `None`。
+pub fn ics_url_of(cfg: &Config) -> Option<String> {
+    let raw = cfg
+        .server
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| is_ics_url(s))
+        .or_else(|| {
+            let user = cfg.username.trim();
+            is_ics_url(user).then_some(user)
+        })?;
+    normalize_server(raw).or_else(|| {
+        let trimmed = raw.trim();
+        if trimmed.len() >= 9 && trimmed[..9].eq_ignore_ascii_case("webcal://") {
+            Some(format!("https://{}", &trimmed[9..]))
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
+}
+
+pub fn is_ics_config(cfg: &Config) -> bool {
+    ics_url_of(cfg).is_some()
+}
+
+fn percent_decode_segment(raw: &str) -> String {
+    let escaped = raw.replace('+', "%2B");
+    url::form_urlencoded::parse(escaped.as_bytes())
+        .next()
+        .map(|(k, _)| k.into_owned())
+        .unwrap_or_else(|| raw.to_string())
+        .trim()
+        .to_string()
+}
+
+/// 使用者未自訂名稱時，從 `.ics` 訂閱網址推斷一個可讀的預設名稱。
+pub fn ics_default_name(raw_url: &str) -> String {
+    let trimmed = raw_url.trim();
+    let normalized = normalize_server(trimmed).unwrap_or_else(|| {
+        if trimmed.len() >= 9 && trimmed[..9].eq_ignore_ascii_case("webcal://") {
+            format!("https://{}", &trimmed[9..])
+        } else {
+            trimmed.to_string()
+        }
+    });
+    if let Ok(url) = url::Url::parse(&normalized) {
+        let parts: Vec<&str> = url
+            .path_segments()
+            .into_iter()
+            .flatten()
+            .filter(|part| !part.is_empty())
+            .collect();
+        if let Some(pos) = parts.iter().position(|p| p.eq_ignore_ascii_case("ical")) {
+            if let Some(id) = parts.get(pos + 1) {
+                let decoded = percent_decode_segment(id);
+                if !decoded.is_empty()
+                    && !matches!(decoded.to_ascii_lowercase().as_str(), "public" | "basic" | "basic.ics")
+                {
+                    return decoded;
+                }
+            }
+        }
+        let strip_ics = |seg: &str| -> String {
+            let trimmed_seg = if seg.len() > 4 && seg[seg.len() - 4..].eq_ignore_ascii_case(".ics") {
+                &seg[..seg.len() - 4]
+            } else {
+                seg
+            };
+            percent_decode_segment(trimmed_seg)
+        };
+        if let Some(last) = parts.last() {
+            let name = strip_ics(last);
+            if !name.is_empty() && !name.eq_ignore_ascii_case("basic") {
+                return name;
+            }
+            if parts.len() >= 2 {
+                let prev = strip_ics(parts[parts.len() - 2]);
+                if !prev.is_empty() && !prev.eq_ignore_ascii_case("public") {
+                    return prev;
+                }
+            }
+        }
+        if let Some(host) = url.host_str().filter(|h| !h.is_empty()) {
+            return host.to_string();
+        }
+    }
+    "iCal 訂閱".into()
+}
+
+/// 從 iCalendar 頂層屬性讀取 `X-WR-CALNAME` 作為日曆顯示名稱。
+pub fn ics_calendar_name(ics: &str) -> Option<String> {
+    let mut in_event = false;
+    for line in ical_lines(ics) {
+        if line == "BEGIN:VEVENT" {
+            in_event = true;
+            continue;
+        }
+        if line == "END:VEVENT" {
+            in_event = false;
+            continue;
+        }
+        if in_event {
+            continue;
+        }
+        if let Some((head, value)) = line.split_once(':') {
+            if head.split(';').next() == Some("X-WR-CALNAME") {
+                let name = crate::mail::ics_text(value);
+                if !name.is_empty() {
+                    return Some(name);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// 同一平臺的同一個帳號（`.ics` 訂閱依網址區分，CalDAV 依使用者名稱區分）；同一平臺可同時連線多個帳號或多個 `.ics`。
 pub fn same_account(a: &Config, b: &Config) -> bool {
-    a.provider == b.provider && a.username.trim().eq_ignore_ascii_case(b.username.trim())
+    if a.provider != b.provider {
+        return false;
+    }
+    match (ics_url_of(a), ics_url_of(b)) {
+        (Some(ua), Some(ub)) => ua.eq_ignore_ascii_case(&ub),
+        (None, None) => a.username.trim().eq_ignore_ascii_case(b.username.trim()),
+        _ => false,
+    }
 }
 
 /// 自定義 CalDAV 地址：去掉空白，補全 https://；只接受 https（本機迴環地址允許 http）。
 pub fn normalize_server(raw: &str) -> Option<String> {
     let raw = raw.trim();
     if raw.is_empty() { return None; }
-    let raw = if raw.contains("://") { raw.to_string() } else { format!("https://{raw}") };
-    let raw = raw.replacen("webcal://", "https://", 1).replacen("caldav://", "https://", 1).replacen("caldavs://", "https://", 1);
+    let raw = if raw.len() >= 9 && raw[..9].eq_ignore_ascii_case("webcal://") {
+        format!("https://{}", &raw[9..])
+    } else if raw.contains("://") {
+        raw.to_string()
+    } else {
+        format!("https://{raw}")
+    };
+    let raw = raw.replacen("caldav://", "https://", 1).replacen("caldavs://", "https://", 1);
     let url = url::Url::parse(&raw).ok()?;
     let local = url.host_str().is_some_and(|host| host == "localhost" || host.parse::<std::net::IpAddr>().is_ok_and(|ip| ip.is_loopback()));
     if url.host_str().is_none_or(str::is_empty) || !url.username().is_empty() || url.password().is_some() { return None; }
@@ -285,9 +421,9 @@ pub fn select_provider(provider: Provider) -> Result<(), String> {
     save_configs(&load_configs(), provider)
 }
 
-/// 儲存連線：密碼留空時用信箱已儲存的同一個帳號密碼；與信箱相同時不另存一份。
+/// 儲存連線：gws 與 `.ics` 訂閱免密碼；其餘留空時用信箱已儲存的同一個帳號密碼。
 pub fn save_connection(cfg: &Config, password: &str) -> Result<(), String> {
-    if cfg.provider == Provider::GoogleWorkspace {
+    if cfg.provider == Provider::GoogleWorkspace || is_ics_config(cfg) {
         return save_config(cfg);
     }
     let password = crate::mail::clean_secret(password);
@@ -374,6 +510,11 @@ fn skip_path() -> std::path::PathBuf {
 }
 
 fn account_key(cfg: &Config) -> String {
+    if let Some(url) = ics_url_of(cfg) {
+        let digest = ring::digest::digest(&ring::digest::SHA256, url.to_ascii_lowercase().as_bytes());
+        let hex: String = digest.as_ref().iter().take(8).map(|b| format!("{b:02x}")).collect();
+        return format!("{}:ics:{hex}", cfg.provider.key());
+    }
     format!("{}:{}", cfg.provider.key(), cfg.username.trim().to_ascii_lowercase())
 }
 
@@ -447,6 +588,9 @@ pub mod secrets {
     }
 
     pub fn delete(cfg: &super::Config) {
+        if cfg.provider == super::Provider::GoogleWorkspace || super::is_ics_config(cfg) {
+            return;
+        }
         if let Ok(entry) = keyring::Entry::new(super::SERVICE, &name(cfg)) {
             let _ = entry.delete_credential();
         }
@@ -861,18 +1005,28 @@ fn fetch_range(cfg: &Config, password: &str, lo: chrono::DateTime<chrono::Utc>, 
         return crate::gws::fetch_calendar_range(cfg, lo, hi).map_err(Failure::text);
     }
     if cfg.provider.exchange() { return exchange::fetch(cfg, password, lo, hi); }
-    let server_candidate = cfg.server.as_deref().unwrap_or("");
-    let is_ics = server_candidate.contains(".ics") || server_candidate.contains("/ical/") || server_candidate.starts_with("webcal://") || cfg.username.contains(".ics");
-    if is_ics {
-        let url_target = if !server_candidate.is_empty() { server_candidate } else { &cfg.username };
+    if let Some(http_url) = ics_url_of(cfg) {
         let agent = agent()?;
-        let http_url = url_target.replacen("webcal://", "https://", 1);
         let resp = agent.get(&http_url).timeout(Duration::from_secs(15)).call()
             .map_err(|e| Failure::text(format!("下載 iCal (.ics) 失敗：{e}")))?;
         let text = resp.into_string()
             .map_err(|e| Failure::text(format!("讀取 iCal (.ics) 內容失敗：{e}")))?;
-        let parsed = inspect_ics(&text, lo, hi)
-            .map_err(|e| Failure::text(e))?;
+        let mut parsed = inspect_ics(&text, lo, hi).map_err(Failure::text)?;
+        let name = ics_calendar_name(&text)
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| cfg.username.trim().to_string());
+        parsed.report.calendars = 1;
+        parsed.report.found = vec![CalendarInfo {
+            href: http_url.clone(),
+            name,
+        }];
+        if skipped_calendars(cfg).contains(&http_url) {
+            return Ok(Fetched {
+                href: http_url,
+                events: vec![],
+                report: parsed.report,
+            });
+        }
         return Ok(Fetched {
             href: http_url,
             events: parsed.events,
@@ -1467,7 +1621,7 @@ fn sync_once(
     month: Option<NaiveDate>,
     ev: &Sender<Event>,
 ) {
-    let password = if cfg.provider == Provider::GoogleWorkspace {
+    let password = if cfg.provider == Provider::GoogleWorkspace || is_ics_config(cfg) {
         String::new()
     } else {
         match secrets::load(cfg) {
@@ -2501,6 +2655,47 @@ mod choice_tests {
             let loaded = load_configs();
             assert_eq!(loaded, vec![cfg.clone()]);
             assert_eq!(cfg.display_name(), "Google 日曆 (gws) · alice@gmail.com");
+        });
+    }
+
+    #[test]
+    fn ics_helpers_distinguish_multiple_urls_and_extract_names() {
+        isolated_data_dir(|| {
+            assert!(is_ics_url("https://calendar.google.com/calendar/ical/team%40group.calendar.google.com/public/basic.ics"));
+            assert!(is_ics_url("WEBCAL://example.com/team.ics"));
+            assert!(!is_ics_url("https://apidata.googleusercontent.com/caldav/v2/"));
+
+            assert_eq!(
+                ics_default_name("https://calendar.google.com/calendar/ical/team%40group.calendar.google.com/private-abc/basic.ics"),
+                "team@group.calendar.google.com"
+            );
+            assert_eq!(
+                ics_default_name("https://example.com/calendars/holidays.ics"),
+                "holidays"
+            );
+            let cal_name = ics_calendar_name("BEGIN:VCALENDAR\r\nX-WR-CALNAME:研發\\,排程\r\nBEGIN:VEVENT\r\nSUMMARY:Ignore\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
+            assert_eq!(cal_name.as_deref(), Some("研發,排程"));
+
+            let a = Config {
+                provider: Provider::Google,
+                username: "alice@gmail.com".into(),
+                href: None,
+                server: Some("https://calendar.google.com/calendar/ical/a/public/basic.ics".into()),
+            };
+            let b = Config {
+                provider: Provider::Google,
+                username: "alice@gmail.com".into(),
+                href: None,
+                server: Some("https://calendar.google.com/calendar/ical/b/public/basic.ics".into()),
+            };
+            assert!(is_ics_config(&a) && is_ics_config(&b));
+            assert!(!same_account(&a, &b));
+            assert_ne!(account_key(&a), account_key(&b));
+
+            save_connection(&a, "").unwrap();
+            save_connection(&b, "").unwrap();
+            let loaded = load_configs();
+            assert_eq!(loaded.len(), 2);
         });
     }
 }

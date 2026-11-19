@@ -8877,3 +8877,73 @@ fn gws_connected_event_auto_binds_gmail_and_calendar_and_respects_auto_bind_flag
     assert!(h.app.calendar.feeds.is_empty());
     assert!(matches!(h.app.gws.phase, crate::gws::Phase::Connected(_)));
 }
+
+#[test]
+fn mail_filter_defaults_to_important_and_persists() {
+    let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut h = H::new();
+    assert_eq!(h.app.settings.mail_filter, 0);
+    for mode in [1u8, 2u8, 0u8] {
+        h.app.settings.mail_filter = mode;
+        h.app.settings.save();
+        assert_eq!(crate::model::Settings::load().mail_filter, mode);
+    }
+}
+
+#[test]
+fn multiple_ics_calendars_save_without_password_and_coexist_in_feeds() {
+    let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut h = H::new();
+    assert!(h.app.calendar.feeds.is_empty());
+
+    let ics1 = crate::calendar::Config {
+        provider: crate::calendar::Provider::Google,
+        username: "Work".into(),
+        href: Some("https://calendar.google.com/calendar/ical/work/public/basic.ics".into()),
+        server: Some("https://calendar.google.com/calendar/ical/work/public/basic.ics".into()),
+    };
+    let ics2 = crate::calendar::Config {
+        provider: crate::calendar::Provider::Google,
+        username: "Family".into(),
+        href: Some("https://calendar.google.com/calendar/ical/family/public/basic.ics".into()),
+        server: Some("https://calendar.google.com/calendar/ical/family/public/basic.ics".into()),
+    };
+
+    for cfg in [ics1.clone(), ics2.clone()] {
+        h.app.calendar.test_password.clear();
+        h.app.calendar_event(crate::calendar::Event::Test {
+            ok: true,
+            message: "連線成功".into(),
+            count: 0,
+            config: Some(cfg),
+        });
+    }
+
+    assert_eq!(h.app.calendar.feeds.len(), 2);
+    assert_eq!(crate::calendar::load_configs(), vec![ics1.clone(), ics2]);
+
+    h.app.calendar_event(crate::calendar::Event::Calendars {
+        config: ics1.clone(),
+        list: vec![crate::calendar::CalendarInfo {
+            href: ics1.server.clone().unwrap(),
+            name: "Work".into(),
+        }],
+    });
+    h.app.select_calendar_account(ics1);
+    h.app.settings_open = true;
+    h.app.settings_tab = 8;
+    for _ in 0..3 {
+        let out = h.ctx.run(
+            egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(690.0, 4000.0))),
+                ..Default::default()
+            },
+            |ctx| h.app.settings_ui(ctx, false),
+        );
+        h.shapes = out.shapes;
+    }
+    assert!(
+        h.shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Text(t) if t.galley.text().contains("已選 1 / 1"))),
+        "單個日曆也應顯示勾選清單，方便停用或核對名稱"
+    );
+}

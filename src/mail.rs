@@ -367,6 +367,8 @@ pub struct Parsed {
     /// text/calendar 正文（.ics 原文，沒有則空）。
     pub calendar: String,
     pub emphasized: Vec<String>,
+    /// 依據常見郵件清單與群發標頭判定是否為廣告／電子報／自動通知。
+    pub promotional: bool,
 }
 
 fn header(mail: &mailparse::ParsedMail, name: &str) -> String {
@@ -375,6 +377,19 @@ fn header(mail: &mailparse::ParsedMail, name: &str) -> String {
         .find(|h| h.get_key().eq_ignore_ascii_case(name))
         .map(|h| h.get_value().trim().to_string())
         .unwrap_or_default()
+}
+
+fn is_promotional(mail: &mailparse::ParsedMail) -> bool {
+    if !header(mail, "List-Unsubscribe").is_empty() || !header(mail, "List-Id").is_empty() {
+        return true;
+    }
+    let precedence = header(mail, "Precedence").to_ascii_lowercase();
+    if matches!(precedence.as_str(), "bulk" | "list" | "junk") {
+        return true;
+    }
+    let auto = header(mail, "Auto-Submitted").to_ascii_lowercase();
+    let auto_val = auto.split(';').next().unwrap_or("").trim();
+    auto_val.starts_with("auto-generated") || auto_val.starts_with("auto-replied")
 }
 
 fn display_addr(raw: &str) -> String {
@@ -425,8 +440,10 @@ pub fn parse_message(raw: &[u8]) -> Parsed {
             html: String::new(),
             calendar: String::new(),
             emphasized: Vec::new(),
+            promotional: false,
         };
     };
+    let promotional = is_promotional(&mail);
     let subject = header(&mail, "Subject");
     let from = display_addr(&header(&mail, "From"));
     let (mut plain, mut html, mut calendar) = (String::new(), String::new(), String::new());
@@ -436,7 +453,7 @@ pub fn parse_message(raw: &[u8]) -> Parsed {
     } else {
         Vec::new()
     };
-    Parsed { from, subject, text: plain, html, calendar, emphasized }
+    Parsed { from, subject, text: plain, html, calendar, emphasized, promotional }
 }
 
 /// 優先純文字；HTML 原文另外保留給閱讀介面排版。
@@ -578,7 +595,7 @@ fn event_of(fields: &[(String, String)]) -> Option<Meeting> {
 }
 
 /// iCalendar 文字轉義：`\n` / `\,` / `\;` / `\\`。
-fn ics_text(v: &str) -> String {
+pub(crate) fn ics_text(v: &str) -> String {
     let mut out = String::with_capacity(v.len());
     let mut it = v.chars();
     while let Some(c) = it.next() {
@@ -802,13 +819,13 @@ pub(crate) mod net {
 #[cfg(windows)]
 mod service {
     use super::*;
-    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
     use std::sync::mpsc::{channel, Receiver, Sender};
     use std::sync::Arc;
     use std::time::{Duration,Instant};
 
     enum Cmd {
-        Sync(Vec<Account>, u32),
+        Sync(Vec<Account>, u32, u8),
         Test(Account, String),
     }
 
@@ -823,15 +840,17 @@ mod service {
         pub fn start() -> Self {
             let (ev_tx, ev_rx) = channel();
             let (cmd_tx, cmd_rx) = channel();
+            let filter = Arc::new(AtomicU8::new(0));
+            let sup_filter = filter.clone();
             let _ = std::thread::Builder::new()
                 .name("daozai-mail".into())
-                .spawn(move || supervisor(cmd_rx, ev_tx));
-            let (manage,done)=crate::mail_manage::start();
+                .spawn(move || supervisor(cmd_rx, ev_tx, sup_filter));
+            let (manage,done)=crate::mail_manage::start(filter);
             Self { cmd: cmd_tx, ev: ev_rx,manage,done }
         }
 
-        pub fn sync(&self, accounts: &[Account], interval_secs: u32) {
-            let _ = self.cmd.send(Cmd::Sync(accounts.to_vec(), interval_secs));
+        pub fn sync(&self, accounts: &[Account], interval_secs: u32, filter_mode: u8) {
+            let _ = self.cmd.send(Cmd::Sync(accounts.to_vec(), interval_secs, filter_mode.min(2)));
         }
 
         pub fn test(&self, account: Account, password: String) {
@@ -845,13 +864,14 @@ mod service {
         }
     }
 
-    fn supervisor(cmd_rx: Receiver<Cmd>, ev: Sender<Event>) {
+    fn supervisor(cmd_rx: Receiver<Cmd>, ev: Sender<Event>, filter: Arc<AtomicU8>) {
         let mut workers: HashMap<String, (Arc<AtomicBool>, std::thread::JoinHandle<()>,Account)> = HashMap::new();
         let interval = Arc::new(AtomicU64::new(120));
         while let Ok(cmd) = cmd_rx.recv() {
             match cmd {
-                Cmd::Sync(accounts, secs) => {
+                Cmd::Sync(accounts, secs, filter_mode) => {
                     interval.store(secs.clamp(30, 900) as u64, Ordering::Relaxed);
+                    filter.store(filter_mode.min(2), Ordering::Relaxed);
                     let wanted: HashMap<String, Account> = accounts
                         .into_iter()
                         .filter(|a| a.enabled)
@@ -875,11 +895,12 @@ mod service {
                         let flag = stop.clone();
                         let ev = ev.clone();
                         let iv = interval.clone();
+                        let flt = filter.clone();
                         let name = "daozai-mail".to_string();
                         let running_account=account.clone();
                         if let Ok(handle) = std::thread::Builder::new()
                             .name(name)
-                            .spawn(move || worker(account, flag, iv, ev))
+                            .spawn(move || worker(account, flag, iv, flt, ev))
                         {
                             workers.insert(k, (stop, handle,running_account));
                         }
@@ -990,9 +1011,9 @@ mod service {
         }
     }
 
-    fn worker(account: Account, stop: Arc<AtomicBool>, interval: Arc<AtomicU64>, ev: Sender<Event>) {
+    fn worker(account: Account, stop: Arc<AtomicBool>, interval: Arc<AtomicU64>, filter: Arc<AtomicU8>, ev: Sender<Event>) {
         if account.provider == Provider::GoogleWorkspace {
-            crate::gws::mail_worker(account, stop, interval, ev);
+            crate::gws::mail_worker(account, stop, interval, filter, ev);
             return;
         }
         if let Err(error)=account.endpoint(){
@@ -1049,7 +1070,7 @@ mod service {
             if mailbox.uid_validity.is_none() || mailbox.uid_validity!=last_validity{last_uid=None;}
             last_validity=mailbox.uid_validity;
             let connected_at=std::time::Instant::now();
-            match monitor(&mut session,&account,&mut last_uid,&stop,&interval,&ev) {
+            match monitor_with_filter(&mut session,&account,&mut last_uid,&stop,&interval,&filter,&ev) {
                 Ok(())=>return,
                 Err(note)=>{let _=ev.send(Event::Status{account:account.email.clone(),status:Status::Failed(note)});}
             }
@@ -1060,12 +1081,20 @@ mod service {
         }
     }
 
+    #[cfg(test)]
     fn monitor<S:std::io::Read+std::io::Write+imap::extensions::idle::SetReadTimeout>(
         session:&mut imap::Session<S>,account:&Account,last_uid:&mut Option<u32>,
         stop:&AtomicBool,interval:&AtomicU64,ev:&Sender<Event>,
     )->Result<(),String> {
+        monitor_with_filter(session, account, last_uid, stop, interval, &AtomicU8::new(0), ev)
+    }
+
+    fn monitor_with_filter<S:std::io::Read+std::io::Write+imap::extensions::idle::SetReadTimeout>(
+        session:&mut imap::Session<S>,account:&Account,last_uid:&mut Option<u32>,
+        stop:&AtomicBool,interval:&AtomicU64,filter:&AtomicU8,ev:&Sender<Event>,
+    )->Result<(),String> {
         match last_uid {
-            Some(last)=>fetch_new(session,account,last,ev).map_err(|_|"讀取新郵件失敗，正在重連")?,
+            Some(last)=>fetch_new_with_filter(session,account,last,filter.load(Ordering::Relaxed),ev).map_err(|_|"讀取新郵件失敗，正在重連")?,
             None=>{*last_uid=Some(recent(session,account,ev).map_err(|_|"讀取最近郵件失敗，正在重連")?);}
         }
         let mut allow_noop=true;
@@ -1087,11 +1116,11 @@ mod service {
                     .map_err(|_|"郵件連線中斷，正在重連")?;
             }
             if stop.load(Ordering::Relaxed){let _=session.logout();return Ok(());}
-            fetch_new(session,account,last_uid.as_mut().unwrap(),ev).map_err(|_|"讀取新郵件失敗，正在重連")?;
+            fetch_new_with_filter(session,account,last_uid.as_mut().unwrap(),filter.load(Ordering::Relaxed),ev).map_err(|_|"讀取新郵件失敗，正在重連")?;
             if idle_supported && *last_uid==previous && cycle_started.elapsed()<Duration::from_secs(5) {
                 if sleep_stop(stop,5){let _=session.logout();return Ok(());}
                 // 冷卻後補讀新郵件，並消費等待期間到達的通知，再進入下一輪推送等待。
-                fetch_new(session,account,last_uid.as_mut().unwrap(),ev).map_err(|_|"讀取新郵件失敗，正在重連")?;
+                fetch_new_with_filter(session,account,last_uid.as_mut().unwrap(),filter.load(Ordering::Relaxed),ev).map_err(|_|"讀取新郵件失敗，正在重連")?;
             }
         }
     }
@@ -1375,7 +1404,7 @@ mod service {
     fn qq_live_notification_worker() {
         let accounts=load_accounts().into_iter().filter(|a|a.provider==Provider::Qq&&a.enabled).collect::<Vec<_>>();
         assert!(!accounts.is_empty());
-        let service=Service::start();service.sync(&accounts,120);
+        let service=Service::start();service.sync(&accounts,120,0);
         let start=std::time::Instant::now();
         while start.elapsed()<Duration::from_secs(160) {
             if let Ok(event)=service.ev.recv_timeout(Duration::from_secs(1)) {
@@ -1384,14 +1413,14 @@ mod service {
                     Event::Mail{new,item}=>{
                         println!("worker_mail new={new} test_message={}",item.subject.starts_with("島仔"));
                         if new && item.subject=="島仔後臺監聽實測" {
-                            service.sync(&[],120);return;
+                            service.sync(&[],120,0);return;
                         }
                     },
                     _=>{}
                 }
             }
         }
-        service.sync(&[],120);panic!("160 秒內未收到新郵件事件");
+        service.sync(&[],120,0);panic!("160 秒內未收到新郵件事件");
     }
 
     #[test]
@@ -1463,10 +1492,21 @@ mod service {
         session.logout().expect("退出失敗");
     }
 
+    #[cfg(test)]
     fn fetch_new<S:std::io::Read+std::io::Write>(
         session: &mut imap::Session<S>,
         account: &Account,
         last: &mut u32,
+        ev: &Sender<Event>,
+    ) -> Result<(), ()> {
+        fetch_new_with_filter(session, account, last, 0, ev)
+    }
+
+    fn fetch_new_with_filter<S:std::io::Read+std::io::Write>(
+        session: &mut imap::Session<S>,
+        account: &Account,
+        last: &mut u32,
+        filter_mode: u8,
         ev: &Sender<Event>,
     ) -> Result<(), ()> {
         let set = session
@@ -1476,8 +1516,12 @@ mod service {
         uids.sort_unstable();
         uids.truncate(5);
         for uid in uids {
-            if let Some(item)=super::fetch::item(session,uid,account)? {
-                let _=ev.send(Event::Mail{item,new:true});
+            if let Some((item, promotional)) = super::fetch::item_with_meta(session, uid, account)? {
+                let notify = filter_mode >= 2
+                    || !promotional
+                    || item.code.is_some()
+                    || item.meeting.is_some();
+                let _ = ev.send(Event::Mail { item, new: notify });
             }
             *last = (*last).max(uid);
         }
@@ -1495,7 +1539,7 @@ mod service {
         pub fn start() -> Self {
             Self
         }
-        pub fn sync(&self, _accounts: &[Account], _interval_secs: u32) {}
+        pub fn sync(&self, _accounts: &[Account], _interval_secs: u32, _filter_mode: u8) {}
         pub fn test(&self, _account: Account, _password: String) {}
         pub fn manage(&self,_request:crate::mail_manage::Request){}
         pub fn try_recv(&self) -> Option<Event> {
@@ -1716,6 +1760,24 @@ END:VCALENDAR\r\n";
         let m = meeting_of(&parsed.calendar).unwrap();
         assert_eq!(m.title, "產品評審會");
         assert_eq!(summary_of(&parsed), "會議邀請見附件");
+    }
+
+    #[test]
+    fn parse_message_detects_promotional_headers() {
+        let normal = parse_message(b"From: Alice <alice@example.com>\r\nSubject: Project update\r\nContent-Type: text/plain\r\n\r\nHello");
+        assert!(!normal.promotional);
+
+        let promo = parse_message(b"From: Store <deals@shop.example>\r\nSubject: Sale\r\nList-Unsubscribe: <https://shop.example/unsub>\r\nContent-Type: text/plain\r\n\r\n50% off");
+        assert!(promo.promotional);
+
+        let list_id = parse_message(b"From: News <news@example.com>\r\nSubject: Digest\r\nList-Id: <weekly.example.com>\r\nContent-Type: text/plain\r\n\r\nNews");
+        assert!(list_id.promotional);
+
+        let bulk = parse_message(b"From: Bot <no-reply@example.com>\r\nSubject: Newsletter\r\nPrecedence: bulk\r\nContent-Type: text/plain\r\n\r\nHi");
+        assert!(bulk.promotional);
+
+        let auto_gen = parse_message(b"From: Bot <no-reply@example.com>\r\nSubject: Receipt\r\nAuto-Submitted: auto-generated\r\nContent-Type: text/plain\r\n\r\nOk");
+        assert!(auto_gen.promotional);
     }
 }
 

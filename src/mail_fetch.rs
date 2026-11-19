@@ -33,7 +33,7 @@ fn make_item(parsed:Parsed,fetch:&imap::types::Fetch,account:&Account)->Item{
 fn rejected(error:&imap::Error)->bool{matches!(error,imap::Error::No(_)|imap::Error::Bad(_))}
 
 // 部分舊伺服器沒有 BODYSTRUCTURE 或 MIME 分段支援，繼續使用原有完整讀取路徑。
-fn legacy<S:Read+Write>(session:&mut imap::Session<S>,uid:u32,account:&Account)->Result<Option<Item>,()>{
+fn legacy<S:Read+Write>(session:&mut imap::Session<S>,uid:u32,account:&Account)->Result<Option<(Item,bool)>,()>{
     let fetched=match session.uid_fetch(uid.to_string(),"(UID INTERNALDATE BODY.PEEK[HEADER] BODY.PEEK[TEXT])"){
         Ok(fetched)=>fetched,Err(error) if rejected(&error)=>return Ok(None),Err(_)=>return Err(()),
     };
@@ -41,10 +41,15 @@ fn legacy<S:Read+Write>(session:&mut imap::Session<S>,uid:u32,account:&Account)-
     let Some(header)=fetch.header() else{return Ok(None)};
     let mut raw=header.to_vec();raw.extend_from_slice(b"\r\n");
     if let Some(text)=fetch.text(){raw.extend_from_slice(text);}
-    Ok(Some(make_item(parse_message(&raw),fetch,account)))
+    let parsed=parse_message(&raw);let promotional=parsed.promotional;
+    Ok(Some((make_item(parsed,fetch,account),promotional)))
 }
 
 pub(crate) fn item<S:Read+Write>(session:&mut imap::Session<S>,uid:u32,account:&Account)->Result<Option<Item>,()>{
+    Ok(item_with_meta(session,uid,account)?.map(|(item,_)|item))
+}
+
+pub(crate) fn item_with_meta<S:Read+Write>(session:&mut imap::Session<S>,uid:u32,account:&Account)->Result<Option<(Item,bool)>,()>{
     let fetched=match session.uid_fetch(uid.to_string(),"(UID INTERNALDATE BODYSTRUCTURE BODY.PEEK[HEADER])"){
         Ok(fetched)=>fetched,Err(error) if rejected(&error)=>return legacy(session,uid,account),Err(_)=>return Err(()),
     };
@@ -53,6 +58,7 @@ pub(crate) fn item<S:Read+Write>(session:&mut imap::Session<S>,uid:u32,account:&
     let mut selected=Vec::new();parts(body,&mut Vec::new(),&mut selected);
     let Some(header)=fetch.header() else{return legacy(session,uid,account)};
     let mut parsed=parse_message(header);
+    let promotional=parsed.promotional;
     for path in selected {
         let section=path.iter().map(u32::to_string).collect::<Vec<_>>().join(".");
         let result=session.uid_fetch(uid.to_string(),format!("(UID BODY.PEEK[{section}.MIME] BODY.PEEK[{section}])"));
@@ -70,7 +76,7 @@ pub(crate) fn item<S:Read+Write>(session:&mut imap::Session<S>,uid:u32,account:&
         parsed.emphasized.extend(part.emphasized);
     }
     if !parsed.text.trim().is_empty(){parsed.emphasized.clear();}
-    Ok(Some(make_item(parsed,fetch,account)))
+    Ok(Some((make_item(parsed,fetch,account),promotional)))
 }
 
 #[cfg(test)]
@@ -179,7 +185,7 @@ mod tests {
         let mut uids=session.uid_search("ALL").unwrap().into_iter().collect::<Vec<_>>();uids.sort_unstable();
         let mut count=0;
         for uid in uids.into_iter().rev().take(20){
-            let old=legacy(&mut session,uid,&account).expect("舊路徑讀取失敗").unwrap();
+            let (old,_)=legacy(&mut session,uid,&account).expect("舊路徑讀取失敗").unwrap();
             let new=item(&mut session,uid,&account).expect("分段讀取失敗").unwrap();
             assert!(old.subject==new.subject && old.from==new.from && old.time==new.time,"元訊息不一致");
             assert!(old.summary==new.summary,"正文不一致，舊長度={}，新長度={}",old.summary.len(),new.summary.len());

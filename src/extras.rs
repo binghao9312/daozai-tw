@@ -144,6 +144,7 @@ fn notice_icon(c:&Card,x:f32,y:f32,a:&Alert) {
         "會議提醒"=>{
             let label=a.meeting.as_ref().map(|(_,source)|source.as_str()).unwrap_or("");
             let source=if label=="本機日程"{crate::calendar_ui::Source::Local}else if label.starts_with("郵件"){crate::calendar_ui::Source::Mail("")}
+                else if label==crate::calendar::Provider::GoogleWorkspace.label(){crate::calendar_ui::Source::Calendar(Some(crate::calendar::Provider::GoogleWorkspace))}
                 else{crate::calendar_ui::Source::Calendar(crate::calendar::Provider::ALL.into_iter().find(|provider|provider.label()==label))};
             crate::calendar_ui::source_icon(c,source,x-14.0,y-14.0,28.0);
         },
@@ -1709,6 +1710,17 @@ impl App {
                         settings_card(ui,|ui|{
                             setting_row(ui,"新郵件提醒","新郵件到達時顯示提醒；島上歌詞模式顯示右側圖示",&mut self.settings.mail_enabled);
                             ui.separator();
+                            let mut filter_changed=false;
+                            settings_control_row_right(ui,"新郵件分類",|ui|{
+                                filter_changed=settings_segmented(ui,&mut self.settings.mail_filter,&[(0,"重要與主要"),(1,"僅重要"),(2,"全部")],72.0);
+                            });
+                            if filter_changed {
+                                self.mail.manage.data.clear();
+                                self.mail.manage.next_refresh=0.0;
+                                self.pending.push(Cmd::MailSync);
+                            }
+                            ui.label(egui::RichText::new("依 Gmail 內建分類自動排除廣告（促銷）、社交與論壇信件，僅彈出重要／主要信件、驗證碼與會議邀請。").size(11.5).color(settings_color(ctx,Color32::from_gray(195),Color32::from_gray(60))));
+                            ui.separator();
                             let sync_before=self.settings.mail_sync_operations;
                             ui.add_enabled_ui(self.mail.manage.pending.is_empty(),|ui|{
                                 setting_row(ui,"同步郵件操作到信箱","開啟後同步已讀、刪除和恢復；關閉時僅整理島仔中的記錄",&mut self.settings.mail_sync_operations);
@@ -1893,8 +1905,8 @@ impl App {
                                     if !status.is_empty(){ui.add(egui::Label::new(egui::RichText::new(status).size(12.0)).wrap());}
                                     if !feed.month.warning.is_empty(){ui.add(egui::Label::new(egui::RichText::new(format!("本月部分日程未同步：{}",feed.month.warning)).size(12.0).color(settings_color(ctx,Color32::from_rgb(238,181,91),Color32::from_rgb(139,88,12)))).wrap());}
                                 }
-                                // 帳號下有多個日曆時，預設全部同步，讓使用者自己取消勾選不要的。
-                                let choices=self.calendar.feeds.iter().find(|feed|feed.config==cfg).filter(|feed|feed.calendars.len()>1)
+                                // 帳號下有發現到日曆時，預設全部同步，讓使用者自己取消勾選不要的。
+                                let choices=self.calendar.feeds.iter().find(|feed|feed.config==cfg).filter(|feed|!feed.calendars.is_empty())
                                     .map(|feed|(feed.calendars.clone(),feed.skipped.clone()));
                                 if let Some((calendars,skipped))=choices{
                                     let muted=settings_color(ctx,Color32::from_gray(150),Color32::from_gray(105));
@@ -1964,13 +1976,15 @@ impl App {
                         });
                         settings_label(ui,"連線帳號");
                         settings_card(ui,|ui|{
+                            let form_is_ics=crate::calendar::is_ics_url(&self.calendar.form.server) || crate::calendar::is_ics_url(&self.calendar.form.username);
                             ui.scope(|ui|{
                                 ui.visuals_mut().extreme_bg_color=settings_color(ctx,Color32::from_rgb(25,25,28),Color32::from_rgb(244,246,249));
                             let input_width=(ui.available_width()-50.0-48.0-2.0*ui.spacing().item_spacing.x).max(80.0);
                                 ui.horizontal(|ui|{
                                     ui.allocate_ui_with_layout(egui::vec2(50.0,30.0),egui::Layout::left_to_right(egui::Align::Center),|ui|{ui.set_min_size(egui::vec2(50.0,30.0));ui.label(egui::RichText::new("使用者名稱").size(13.0).color(settings_color(ctx,Color32::from_gray(210),Color32::from_gray(55))));});
+                                    let user_hint=if form_is_ics{"選填日曆名稱（留空自動命名）"}else{"輸入使用者名稱或貼上帳號訊息"};
                                     let user=ui.add_sized([input_width,30.0],egui::TextEdit::singleline(&mut self.calendar.form.username).vertical_align(egui::Align::Center)
-                                        .hint_text(egui::RichText::new("輸入使用者名稱或貼上帳號訊息").color(settings_color(ctx,Color32::from_gray(155),Color32::from_gray(100)))));
+                                        .hint_text(egui::RichText::new(user_hint).color(settings_color(ctx,Color32::from_gray(155),Color32::from_gray(100)))));
                                     if user.changed(){
                                         let pasted=self.calendar.form.username.clone();
                                         if let Some((u,p))=crate::calendar::parse_paste(&pasted){
@@ -1985,13 +1999,14 @@ impl App {
                                 ui.add_space(5.0);
                                 ui.horizontal(|ui|{
                                     ui.allocate_ui_with_layout(egui::vec2(50.0,30.0),egui::Layout::left_to_right(egui::Align::Center),|ui|{ui.set_min_size(egui::vec2(50.0,30.0));ui.label(egui::RichText::new("密碼").size(13.0).color(settings_color(ctx,Color32::from_gray(210),Color32::from_gray(55))));});
+                                    let pass_hint=if form_is_ics{"訂閱 .ics 網址免填密碼"}else if self.calendar.form.mail_shared{"留空即使用信箱的密碼"}else{"輸入平臺生成的密碼"};
                                     ui.add_sized([input_width,30.0],egui::TextEdit::singleline(&mut self.calendar.form.password).vertical_align(egui::Align::Center)
-                                        .password(!self.calendar.form.show).hint_text(egui::RichText::new(if self.calendar.form.mail_shared{"留空即使用信箱的密碼"}else{"輸入平臺生成的密碼"}).color(settings_color(ctx,Color32::from_gray(155),Color32::from_gray(100)))));
+                                        .password(!self.calendar.form.show).hint_text(egui::RichText::new(pass_hint).color(settings_color(ctx,Color32::from_gray(155),Color32::from_gray(100)))));
                                     if ui.add_sized([48.0,30.0],egui::Button::new(if self.calendar.form.show{"隱藏"}else{"顯示"})).clicked(){self.calendar.form.show=!self.calendar.form.show;}
                                 });
                                 // 密碼從網頁或文件貼上時常帶換行，這裡直接去掉，不讓它進到連線與儲存。
                                 if self.calendar.form.password.contains(['\r','\n']){self.calendar.form.password.retain(|c|c!='\r'&&c!='\n');}
-                                if self.calendar.form.mail_shared{
+                                if self.calendar.form.mail_shared && !form_is_ics{
                                     ui.add_space(3.0);
                                     ui.label(egui::RichText::new("信箱已儲存這個帳號的密碼，留空即可直接連線，不必重新輸入。").size(11.5).color(settings_color(ctx,Color32::from_gray(180),Color32::from_gray(75))));
                                 }
@@ -2014,20 +2029,54 @@ impl App {
                             if ui.add_enabled_ui(!busy,|ui|ui.add_sized([130.0,32.0],btn)).inner.clicked(){
                                 let user=self.calendar.form.username.trim().to_string();
                                 let custom=self.calendar.form.provider.custom_server();
-                                let server=crate::calendar::normalize_server(&self.calendar.form.server);
-                                let typed=crate::mail::clean_secret(&self.calendar.form.password);
-                                let shared=crate::calendar::secrets::shared_mail_password(&crate::calendar::Config{provider:self.calendar.form.provider,username:user.clone(),href:None,server:None});
-                                if custom && server.is_none(){self.calendar.note="請填寫以 https:// 開頭的 CalDAV 伺服器地址".into();self.calendar.note_error=true;}
-                                else if user.is_empty(){self.calendar.note="請先填使用者名稱".into();self.calendar.note_error=true;}
-                                else if typed.is_empty() && shared.is_none(){self.calendar.note="請先填密碼".into();self.calendar.note_error=true;}
-                                else{
-                                    let password=if typed.is_empty(){shared.unwrap_or_default()}else{typed};
-                                    let cfg=crate::calendar::Config{provider:self.calendar.form.provider,username:user,href:None,server:if custom{server}else{None}};
-                                    self.calendar.testing=true;
-                                    self.calendar.test_password=password.clone();
-                                    self.calendar.note="正在連線日曆…".into();
-                                    self.calendar.note_error=false;
-                                    self.pending.push(Cmd::CalendarTest(cfg,password));
+                                let server_raw=self.calendar.form.server.trim();
+                                let server=crate::calendar::normalize_server(server_raw);
+                                let is_ics=crate::calendar::is_ics_url(server_raw) || crate::calendar::is_ics_url(&user);
+                                if is_ics {
+                                    let ics_url=if crate::calendar::is_ics_url(server_raw){server}else{crate::calendar::normalize_server(&user)};
+                                    if let Some(url)=ics_url {
+                                        let name=if user.is_empty() || crate::calendar::is_ics_url(&user) {
+                                            crate::calendar::ics_default_name(&url)
+                                        } else {
+                                            user
+                                        };
+                                        let cfg=crate::calendar::Config{provider:self.calendar.form.provider,username:name,href:None,server:Some(url)};
+                                        self.calendar.testing=true;
+                                        self.calendar.test_password.clear();
+                                        self.calendar.note="正在連線日曆…".into();
+                                        self.calendar.note_error=false;
+                                        self.pending.push(Cmd::CalendarTest(cfg,String::new()));
+                                    } else {
+                                        self.calendar.note="請填寫以 https:// 或 webcal:// 開頭的 .ics 日曆網址".into();
+                                        self.calendar.note_error=true;
+                                    }
+                                } else {
+                                    let typed=crate::mail::clean_secret(&self.calendar.form.password);
+                                    let shared=crate::calendar::secrets::shared_mail_password(&crate::calendar::Config{provider:self.calendar.form.provider,username:user.clone(),href:None,server:None});
+                                    let google=self.calendar.form.provider==crate::calendar::Provider::Google;
+                                    let bad_server=if google { !server_raw.is_empty() && server.is_none() } else { custom && server.is_none() };
+                                    if bad_server {
+                                        self.calendar.note=if google {
+                                            "請填寫以 https:// 或 webcal:// 開頭的日曆網址，或留空使用 CalDAV".into()
+                                        } else {
+                                            "請填寫以 https:// 開頭的 CalDAV 伺服器地址".into()
+                                        };
+                                        self.calendar.note_error=true;
+                                    } else if user.is_empty() {
+                                        self.calendar.note="請先填使用者名稱".into();
+                                        self.calendar.note_error=true;
+                                    } else if typed.is_empty() && shared.is_none() {
+                                        self.calendar.note="請先填密碼".into();
+                                        self.calendar.note_error=true;
+                                    } else {
+                                        let password=if typed.is_empty(){shared.unwrap_or_default()}else{typed};
+                                        let cfg=crate::calendar::Config{provider:self.calendar.form.provider,username:user,href:None,server:if custom{server}else{None}};
+                                        self.calendar.testing=true;
+                                        self.calendar.test_password=password.clone();
+                                        self.calendar.note="正在連線日曆…".into();
+                                        self.calendar.note_error=false;
+                                        self.pending.push(Cmd::CalendarTest(cfg,password));
+                                    }
                                 }
 
                             }

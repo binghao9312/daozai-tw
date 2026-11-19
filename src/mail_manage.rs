@@ -96,8 +96,8 @@ mod protocol{
         }
         Ok(Snapshot{validity,entries,items})
     }
-    pub(super) fn run(request:&Request)->Result<Snapshot,String>{
-        if request.account.provider==crate::mail::Provider::GoogleWorkspace{return crate::gws::manage_mail(request);}
+    pub(super) fn run(request:&Request,filter_mode:u8)->Result<Snapshot,String>{
+        if request.account.provider==crate::mail::Provider::GoogleWorkspace{return crate::gws::manage_mail(request,filter_mode);}
         let password=crate::mail::secrets::load(&request.account.credential_key())?;
         let mut session=crate::mail::net::connect(&request.account,&password)?;
         let result=execute(&mut session,request);let _=session.logout();result
@@ -165,7 +165,7 @@ mod protocol{
         }
     }
 }
-#[cfg(windows)]pub fn start()->(std::sync::mpsc::Sender<Request>,std::sync::mpsc::Receiver<Completed>){
+#[cfg(windows)]pub fn start(filter:std::sync::Arc<std::sync::atomic::AtomicU8>)->(std::sync::mpsc::Sender<Request>,std::sync::mpsc::Receiver<Completed>){
     let(tx,rx)=std::sync::mpsc::channel::<Request>();let(done,out)=std::sync::mpsc::channel();
-    std::thread::spawn(move||while let Ok(request)=rx.recv(){let result=protocol::run(&request);let _=done.send(Completed{request,result});});(tx,out)
+    std::thread::spawn(move||while let Ok(request)=rx.recv(){let result=protocol::run(&request,filter.load(std::sync::atomic::Ordering::Relaxed));let _=done.send(Completed{request,result});});(tx,out)
 }

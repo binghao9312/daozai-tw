@@ -81,7 +81,7 @@ struct Shell {
     /// v0.5.5：郵件收信服務（工作執行緒），以及上次同步給它的帳號/開關快照。
     /// 信箱模組開啟時才存在；關閉後收信與整理執行緒隨之退出。
     mail: Option<daozai::mail::Service>,
-    mail_sig: Option<(bool, u32, Vec<daozai::mail::Account>)>,
+    mail_sig: Option<(bool, u32, u8, Vec<daozai::mail::Account>)>,
     /// v0.5.6：日程（CalDAV）服務與上次下發的配置。
     /// 日程模組開啟時才存在。
     cal: Option<daozai::calendar::Service>,
@@ -171,7 +171,10 @@ impl Shell {
             if !app.settings.gws_onboarded && !(has_gws_mail && has_gws_cal) {
                 app.settings.gws_onboarded = true;
                 app.settings.save();
-                app.gws.phase = daozai::gws::Phase::Checking;
+                app.gws_event(daozai::gws::Event {
+                    phase: daozai::gws::Phase::Checking,
+                    auto_bind: false,
+                });
                 gws.check(true, true);
             } else {
                 gws.check(false, false);
@@ -575,14 +578,14 @@ impl eframe::App for Shell {
         while let Some(ev) = self.gws.try_recv() {
             self.app.gws_event(ev);
         }
-        // v0.5.5 郵件：開關 / 間隔 / 帳號清單變了就重新對齊收信執行緒，再把事件交給介面。
+        // v0.5.5 郵件：開關 / 間隔 / 過濾 / 帳號清單變了就重新對齊收信執行緒，再把事件交給介面。
         // 每幀只比較不復制，確有變化時才複製帳號清單。
         if let Some(mail)=&self.mail {
-            let (mail_enabled,mail_interval)=(self.app.mail_active(),self.app.settings.mail_interval);
-            if !self.mail_sig.as_ref().is_some_and(|known|(known.0,known.1)==(mail_enabled,mail_interval) && known.2.as_slice()==self.app.mail_accounts()){
-                let sig=(mail_enabled,mail_interval,self.app.mail_accounts().to_vec());
-                let accounts:&[daozai::mail::Account]=if sig.0{ &sig.2 }else{ &[] };
-                mail.sync(accounts,sig.1);
+            let (mail_enabled,mail_interval,mail_filter)=(self.app.mail_active(),self.app.settings.mail_interval,self.app.settings.mail_filter);
+            if !self.mail_sig.as_ref().is_some_and(|known|(known.0,known.1,known.2)==(mail_enabled,mail_interval,mail_filter) && known.3.as_slice()==self.app.mail_accounts()){
+                let sig=(mail_enabled,mail_interval,mail_filter,self.app.mail_accounts().to_vec());
+                let accounts:&[daozai::mail::Account]=if sig.0{ &sig.3 }else{ &[] };
+                mail.sync(accounts,sig.1,sig.2);
                 self.mail_sig=Some(sig);
             }
             while let Some(ev)=mail.try_recv(){self.app.mail_event(ev);}
@@ -790,9 +793,11 @@ impl eframe::App for Shell {
                 // 模組關閉時設定項已置灰；萬一仍有命令到達，只提示，不為它臨時啟動服務。
                 Cmd::MailSync=>if let Some(mail)=&self.mail {
                     let enabled=self.app.mail_active();
+                    let interval=self.app.settings.mail_interval;
+                    let filter=self.app.settings.mail_filter;
                     let accounts=if enabled{self.app.mail_accounts().to_vec()}else{Vec::new()};
-                    mail.sync(&accounts,self.app.settings.mail_interval);
-                    self.mail_sig=Some((enabled,self.app.settings.mail_interval,self.app.mail_accounts().to_vec()));
+                    mail.sync(&accounts,interval,filter);
+                    self.mail_sig=Some((enabled,interval,filter,self.app.mail_accounts().to_vec()));
                 },
                 Cmd::MailTest(account,password)=>match &self.mail {Some(mail)=>mail.test(account,password),None=>self.app.say(MODULE_OFF)},
                 Cmd::MailManage(request)=>match &self.mail {Some(mail)=>mail.manage(request),None=>self.app.say(MODULE_OFF)},
