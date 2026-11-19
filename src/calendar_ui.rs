@@ -50,7 +50,7 @@ impl Source<'_> {
     }
     fn color(self)->Color32 {
         match self {
-            Self::Calendar(Some(calendar::Provider::Google))=>Color32::from_rgb(66,133,244),
+            Self::Calendar(Some(calendar::Provider::Google | calendar::Provider::GoogleWorkspace))=>Color32::from_rgb(66,133,244),
             Self::Calendar(Some(calendar::Provider::WeCom))=>Color32::from_rgb(105,208,157),
             Self::Calendar(Some(calendar::Provider::DingTalk))=>Color32::from_rgb(77,192,242),
             Self::Calendar(Some(calendar::Provider::ICloud))=>Color32::from_rgb(255,105,97),
@@ -110,7 +110,7 @@ pub(crate) fn source_icon(c:&Card,source:Source<'_>,x:f32,y:f32,size:f32) {
         rect.shrink(rect.width()*0.1)
     }else{rect};
     let icon=match source {
-        Source::Calendar(Some(calendar::Provider::Google))=>egui::include_image!("../assets/calendar/google.svg"),
+        Source::Calendar(Some(calendar::Provider::Google | calendar::Provider::GoogleWorkspace))=>egui::include_image!("../assets/calendar/google.svg"),
         Source::Calendar(Some(calendar::Provider::DingTalk))=>egui::include_image!("../assets/calendar/dingtalk.svg"),
         Source::Calendar(Some(calendar::Provider::WeCom))=>egui::include_image!("../assets/calendar/wecom.svg"),
         Source::Mail(_)=>egui::include_image!("../assets/calendar/mail.svg"),

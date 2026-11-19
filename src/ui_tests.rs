@@ -8818,3 +8818,62 @@ fn every_module_settings_tab_maps_to_its_page(){
     }
     pages.sort();assert_eq!(pages,(0..crate::app::PAGE_NAMES.len()).collect::<Vec<_>>(),"每個功能頁面各有一個設定分頁");
 }
+
+#[test]
+fn gws_connected_event_auto_binds_gmail_and_calendar_and_respects_auto_bind_flag() {
+    let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut h = H::new();
+    assert!(!h.app.settings.gws_onboarded);
+    h.app.settings.gws_onboarded = true;
+    h.app.settings.save();
+    assert!(crate::model::Settings::load().gws_onboarded);
+
+    let status = crate::gws::AuthStatus {
+        installed: true,
+        client_config_exists: true,
+        token_valid: true,
+        user: "alice@gmail.com".into(),
+        scopes: vec![
+            "https://www.googleapis.com/auth/gmail.readonly".into(),
+            "https://www.googleapis.com/auth/calendar.readonly".into(),
+        ],
+        has_gmail: true,
+        has_calendar: true,
+    };
+    h.app.pending.clear();
+    h.app.gws_event(crate::gws::Event {
+        phase: crate::gws::Phase::Connected(status.clone()),
+        auto_bind: true,
+    });
+
+    assert_eq!(h.app.mail.accounts.len(), 1);
+    assert_eq!(h.app.mail.accounts[0].provider, crate::mail::Provider::GoogleWorkspace);
+    assert_eq!(h.app.mail.accounts[0].email, "alice@gmail.com");
+    assert!(h.app.pending.iter().any(|c| matches!(c, Cmd::MailSync)));
+
+    assert_eq!(h.app.calendar.feeds.len(), 1);
+    assert_eq!(h.app.calendar.feeds[0].config.provider, crate::calendar::Provider::GoogleWorkspace);
+    assert_eq!(h.app.calendar.feeds[0].config.username, "alice@gmail.com");
+    assert!(h.app.pending.iter().any(|c| matches!(c, Cmd::CalendarSync)));
+    assert_eq!(crate::mail::load_accounts().len(), 1);
+    assert_eq!(crate::calendar::load_configs().len(), 1);
+
+    h.app.mail.accounts.clear();
+    h.app.mail_accounts_changed();
+    let _ = h.app.forget_calendar();
+    let _ = crate::calendar::forget_account(&crate::calendar::Config {
+        provider: crate::calendar::Provider::GoogleWorkspace,
+        username: "alice@gmail.com".into(),
+        href: None,
+        server: None,
+    });
+    h.app.pending.clear();
+
+    h.app.gws_event(crate::gws::Event {
+        phase: crate::gws::Phase::Connected(status),
+        auto_bind: false,
+    });
+    assert!(h.app.mail.accounts.is_empty());
+    assert!(h.app.calendar.feeds.is_empty());
+    assert!(matches!(h.app.gws.phase, crate::gws::Phase::Connected(_)));
+}

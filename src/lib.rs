@@ -28,6 +28,7 @@ pub mod input;
 pub mod lyrics;
 mod s2t;
 pub mod mail;
+pub mod gws;
 pub mod mail_format;
 mod mail_reader;
 pub mod mail_manage;

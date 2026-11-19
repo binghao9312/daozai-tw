@@ -25,6 +25,7 @@ pub enum Provider {
     Exmail,
     ICloud,
     Gmail,
+    GoogleWorkspace,
     Microsoft,
     Custom,
 }
@@ -50,6 +51,7 @@ impl Provider {
             Provider::Exmail => "exmail",
             Provider::ICloud => "icloud",
             Provider::Gmail => "gmail",
+            Provider::GoogleWorkspace => "gws",
             Provider::Microsoft => "microsoft",
             Provider::Custom => "custom",
         }
@@ -63,6 +65,7 @@ impl Provider {
             Provider::Exmail => "騰訊企業郵",
             Provider::ICloud => "iCloud 信箱",
             Provider::Gmail => "Gmail",
+            Provider::GoogleWorkspace => "Google Workspace (gws)",
             Provider::Microsoft => "Outlook / Hotmail（暫不支援）",
             Provider::Custom => "自定義 IMAP",
         }
@@ -76,6 +79,7 @@ impl Provider {
             Provider::Exmail => "imap.exmail.qq.com",
             Provider::ICloud => "imap.mail.me.com",
             Provider::Gmail => "imap.gmail.com",
+            Provider::GoogleWorkspace => "",
             Provider::Microsoft => "outlook.office365.com",
             Provider::Custom => "",
         }
@@ -100,6 +104,7 @@ impl Provider {
             Provider::Exmail => "1. 登入騰訊企業郵網頁版，在「設定」→「收發信設定」檢查 IMAP/SMTP 服務。\n2. 常見網頁版在「設定」→「信箱繫結」→「客戶端專用密碼」→「生成新密碼」獲取密碼；啟用安全登入後須使用專用密碼。\n3. 企業版本和管理員策略可能不同。找不到入口或服務被禁用時，請讓企業管理員確認客戶端接入方式，不要照搬 QQ 信箱的路徑。",
             Provider::ICloud => "1. 登入 Apple 賬戶頁面，進入「登入和安全」→「App 專用密碼」。\n2. 選擇「生成 App 專用密碼」，按提示填寫名稱並完成驗證；賬戶需已開啟雙重認證。\n3. 信箱欄填寫完整的 iCloud 信箱地址，下方填寫剛生成的 App 專用密碼，不是 Apple 賬戶密碼。",
             Provider::Gmail => "1. 登入 Google 賬戶，進入「安全性與登入」→「您的 Google 帳號登入選項」→「開啟兩步驗證」，按提示完成設定。\n2. 開啟下方「應用專用密碼」頁面，輸入應用名稱（例如：島仔）並建立，複製生成的 16 位應用專用密碼。\n3. 信箱欄填完整 Gmail 地址，下方填應用專用密碼，不是 Google 登入密碼。若沒有建立入口，請檢查組織帳號限制、高階保護或僅使用安全金鑰的驗證設定。",
+            Provider::GoogleWorkspace => "透過本機 Google Workspace CLI（gws）OAuth 登入，無需應用程式密碼。",
         }
     }
 
@@ -111,6 +116,7 @@ impl Provider {
             Provider::Exmail => ("開啟騰訊企業郵網頁版", "https://exmail.qq.com/"),
             Provider::ICloud => ("開啟 Apple 賬戶", "https://account.apple.com/"),
             Provider::Gmail => ("開啟應用專用密碼", "https://myaccount.google.com/apppasswords"),
+            Provider::GoogleWorkspace => ("", ""),
             Provider::Microsoft => ("開啟 Outlook 網頁版", "https://outlook.live.com/mail/"),
             Provider::Custom => ("", ""),
         }
@@ -123,6 +129,7 @@ impl Provider {
             "exmail" => Provider::Exmail,
             "icloud" => Provider::ICloud,
             "gmail" => Provider::Gmail,
+            "gws" => Provider::GoogleWorkspace,
             "microsoft" => Provider::Microsoft,
             "custom" => Provider::Custom,
             "qq" => Provider::Qq,
@@ -151,6 +158,9 @@ impl Account {
         let domain=email.rsplit_once('@').map(|(_,domain)|domain).unwrap_or("");
         if self.provider==Provider::Microsoft||matches!(domain,"outlook.com"|"hotmail.com"|"live.com"|"msn.com"){
             return Err(MICROSOFT_UNSUPPORTED.into());
+        }
+        if self.provider==Provider::GoogleWorkspace {
+            return Ok(("gws".into(),0,self.email.clone()));
         }
         if self.provider!=Provider::Custom {return Ok((self.provider.host().into(),self.provider.port(),self.email.clone()));}
         let c=self.custom.as_ref().ok_or("請填寫自定義 IMAP 連線配置")?;
@@ -880,7 +890,11 @@ mod service {
                     let _ = std::thread::Builder::new()
                         .name("daozai-mail-test".into())
                         .spawn(move || {
-                            let result = net::probe(&account, &password);
+                            let result = if account.provider == Provider::GoogleWorkspace {
+                                crate::gws::probe_mail(&account.email)
+                            } else {
+                                net::probe(&account, &password)
+                            };
                             let _ = ev.send(Event::Test {
                                 account: account.email,
                                 ok: result.is_ok(),
@@ -977,6 +991,10 @@ mod service {
     }
 
     fn worker(account: Account, stop: Arc<AtomicBool>, interval: Arc<AtomicU64>, ev: Sender<Event>) {
+        if account.provider == Provider::GoogleWorkspace {
+            crate::gws::mail_worker(account, stop, interval, ev);
+            return;
+        }
         if let Err(error)=account.endpoint(){
             let _=ev.send(Event::Status{account:account.email,status:Status::Failed(error)});return;
         }
@@ -1736,5 +1754,11 @@ mod custom_endpoint_tests {
  #[test] fn custom_config_roundtrips_without_a_secret(){
   let a=account();let raw=encode_accounts(&[a.clone()]);assert_eq!(decode_accounts(&raw),vec![a]);
   let text=String::from_utf8(raw).unwrap();assert!(!text.contains("password"));assert!(!text.contains("secret"));
+ }
+ #[test] fn gws_provider_roundtrips_and_endpoints_without_imap(){
+  assert_eq!(Provider::parse("gws"), Provider::GoogleWorkspace);
+  let account=Account{email:"user@gmail.com".into(),provider:Provider::GoogleWorkspace,custom:None,enabled:true};
+  assert_eq!(account.endpoint().unwrap(),("gws".into(),0,"user@gmail.com".into()));
+  assert_eq!(decode_accounts(&encode_accounts(&[account.clone()])),vec![account]);
  }
 }

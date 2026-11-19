@@ -30,6 +30,8 @@ const WINDOW_SECS: i64 = 24 * 3600;
 pub enum Provider {
     #[default]
     Google,
+    /// Google Workspace CLI (`gws`) OAuth 只讀日曆。
+    GoogleWorkspace,
     /// 蘋果 iCloud 日曆：Apple ID + App 專用密碼。
     ICloud,
     /// 任意 CalDAV 服務（Nextcloud、群暉、Fastmail、Radicale 等）或 iCal (.ics) 私密網址。
@@ -47,6 +49,7 @@ impl Provider {
     pub fn key(self) -> &'static str {
         match self {
             Provider::Google => "google",
+            Provider::GoogleWorkspace => "gws",
             Provider::Feishu => "feishu",
             Provider::DingTalk => "dingtalk",
             Provider::WeCom => "wecom",
@@ -59,6 +62,7 @@ impl Provider {
     pub fn label(self) -> &'static str {
         match self {
             Provider::Google => "Google 日曆 (CalDAV / iCal)",
+            Provider::GoogleWorkspace => "Google Workspace (gws)",
             Provider::Feishu => "飛書",
             Provider::DingTalk => "釘釘",
             Provider::WeCom => "企業微信",
@@ -76,7 +80,7 @@ impl Provider {
             Provider::DingTalk => "https://calendar.dingtalk.com",
             Provider::WeCom => "https://wecom.work",
             Provider::ICloud => "https://caldav.icloud.com/",
-            Provider::Custom | Provider::Exchange => "",
+            Provider::GoogleWorkspace | Provider::Custom | Provider::Exchange => "",
         }
     }
 
@@ -96,7 +100,7 @@ impl Provider {
     }
 
     /// 一個帳號下有多個日曆（iCloud 的「家庭」「工作」等）時全部同步。
-    pub fn all_calendars(self) -> bool { matches!(self, Provider::Google | Provider::ICloud | Provider::Custom) }
+    pub fn all_calendars(self) -> bool { matches!(self, Provider::Google | Provider::GoogleWorkspace | Provider::ICloud | Provider::Custom) }
 
     /// 「在哪拿？」三步引導，直接對應客戶端選單。
     pub fn guide(self) -> [&'static str; 3] {
@@ -105,6 +109,11 @@ impl Provider {
                 "在 Google 日曆網頁版中，前往「設定」→ 點選欲同步的日曆名稱",
                 "複製「以 iCal 格式顯示的私密網址」（.ics）貼到伺服器欄位",
                 "或伺服器留空，使用者名稱填 Gmail，密碼填 Google「應用程式密碼」",
+            ],
+            Provider::GoogleWorkspace => [
+                "透過本機 Google Workspace CLI（gws）OAuth 登入，無需應用程式密碼",
+                "在設定頁按「登入並綁定 Gmail + 日曆」完成瀏覽器授權",
+                "登入後會自動讀取帳號下全部 Google 日曆",
             ],
             Provider::ICloud => [
                 "用瀏覽器開啟 account.apple.com，登入 Apple 帳號",
@@ -132,6 +141,7 @@ impl Provider {
     pub fn parse(key: &str) -> Self {
         match key {
             "google" => Provider::Google,
+            "gws" => Provider::GoogleWorkspace,
             "dingtalk" => Provider::DingTalk,
             "wecom" => Provider::WeCom,
             "feishu" => Provider::Feishu,
@@ -168,6 +178,7 @@ impl Config {
         // 列表用短名稱：Google 的完整標籤含「(CalDAV / iCal)」，放在一行裡太長。
         let name = match self.provider {
             Provider::Google => "Google 日曆",
+            Provider::GoogleWorkspace => "Google 日曆 (gws)",
             Provider::Custom => "CalDAV",
             other => other.label(),
         };
@@ -276,6 +287,9 @@ pub fn select_provider(provider: Provider) -> Result<(), String> {
 
 /// 儲存連線：密碼留空時用信箱已儲存的同一個帳號密碼；與信箱相同時不另存一份。
 pub fn save_connection(cfg: &Config, password: &str) -> Result<(), String> {
+    if cfg.provider == Provider::GoogleWorkspace {
+        return save_config(cfg);
+    }
     let password = crate::mail::clean_secret(password);
     let shared = secrets::shared_mail_password(cfg);
     if password.is_empty() && shared.is_none() {
@@ -785,7 +799,7 @@ pub struct ReadReport {
     pub found:Vec<CalendarInfo>,
 }
 impl ReadReport {
-    fn problem(&mut self,message:impl Into<String>){if self.issue.is_none(){self.issue=Some(message.into());}}
+    pub(crate) fn problem(&mut self,message:impl Into<String>){if self.issue.is_none(){self.issue=Some(message.into());}}
     pub(crate) fn merge(&mut self,other:Self){
         self.found.extend(other.found);
         self.calendars+=other.calendars;self.failed+=other.failed;self.received+=other.received;
@@ -843,6 +857,9 @@ pub fn fetch_month(cfg: &Config, password: &str, month: NaiveDate) -> Result<Fet
 }
 
 fn fetch_range(cfg: &Config, password: &str, lo: chrono::DateTime<chrono::Utc>, hi: chrono::DateTime<chrono::Utc>) -> Result<Fetched, Failure> {
+    if cfg.provider == Provider::GoogleWorkspace {
+        return crate::gws::fetch_calendar_range(cfg, lo, hi).map_err(Failure::text);
+    }
     if cfg.provider.exchange() { return exchange::fetch(cfg, password, lo, hi); }
     let server_candidate = cfg.server.as_deref().unwrap_or("");
     let is_ics = server_candidate.contains(".ics") || server_candidate.contains("/ical/") || server_candidate.starts_with("webcal://") || cfg.username.contains(".ics");
@@ -1450,14 +1467,18 @@ fn sync_once(
     month: Option<NaiveDate>,
     ev: &Sender<Event>,
 ) {
-    let password = match secrets::load(cfg) {
-        Ok(p) => p,
-        Err(e) => {
-            // 沒配置憑據：靜默，只記日誌。
-            eprintln!("[calendar] 憑據不可用：{e}");
-            let _ = ev.send(Event::Failed { config:cfg.clone(),message: e.clone() });
-            if let Some(month) = month { let _ = ev.send(Event::MonthLoaded { config: cfg.clone(), month, result: Err(e) }); }
-            return;
+    let password = if cfg.provider == Provider::GoogleWorkspace {
+        String::new()
+    } else {
+        match secrets::load(cfg) {
+            Ok(p) => p,
+            Err(e) => {
+                // 沒配置憑據：靜默，只記日誌。
+                eprintln!("[calendar] 憑據不可用：{e}");
+                let _ = ev.send(Event::Failed { config:cfg.clone(),message: e.clone() });
+                if let Some(month) = month { let _ = ev.send(Event::MonthLoaded { config: cfg.clone(), month, result: Err(e) }); }
+                return;
+            }
         }
     };
     match fetch(cfg, &password) {
@@ -2469,5 +2490,17 @@ mod choice_tests {
         assert_eq!(google.title(), "en.taiwan#holiday@group.v.calendar.google.com");
         assert_eq!(CalendarInfo { href: "https://dav.example.com/cal/home/".into(), name: "  ".into() }.title(), "home");
         assert_eq!(CalendarInfo { href: "https://dav.example.com/cal/home/".into(), name: " 家庭 ".into() }.title(), "家庭");
+    }
+
+    #[test]
+    fn gws_calendar_saves_without_keyring_and_roundtrips() {
+        isolated_data_dir(|| {
+            assert_eq!(Provider::parse("gws"), Provider::GoogleWorkspace);
+            let cfg = Config { provider: Provider::GoogleWorkspace, username: "alice@gmail.com".into(), href: None, server: None };
+            save_connection(&cfg, "").unwrap();
+            let loaded = load_configs();
+            assert_eq!(loaded, vec![cfg.clone()]);
+            assert_eq!(cfg.display_name(), "Google 日曆 (gws) · alice@gmail.com");
+        });
     }
 }

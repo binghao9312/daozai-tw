@@ -97,6 +97,7 @@ mod protocol{
         Ok(Snapshot{validity,entries,items})
     }
     pub(super) fn run(request:&Request)->Result<Snapshot,String>{
+        if request.account.provider==crate::mail::Provider::GoogleWorkspace{return crate::gws::manage_mail(request);}
         let password=crate::mail::secrets::load(&request.account.credential_key())?;
         let mut session=crate::mail::net::connect(&request.account,&password)?;
         let result=execute(&mut session,request);let _=session.logout();result

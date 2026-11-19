@@ -88,6 +88,7 @@ struct Shell {
     cal_sig: Option<(Vec<daozai::calendar::Config>, bool)>,
     /// 置物架模組開啟且記錄剪貼簿時才監聽系統剪貼簿。
     clipboard_watch: Option<daozai::clipboard::Watcher>,
+    gws: daozai::gws::Service,
     quota: daozai::quota::Service,
     quota_sig: Option<(bool,Vec<daozai::quota::Account>)>,
     quota_at: PollClock,
@@ -153,6 +154,29 @@ impl Shell {
         if std::env::var("DAOZAI_CAL_DEMO").is_ok(){app.calendar_demo();}
         #[cfg(feature="record")]
         if let Ok(mode)=std::env::var("DAOZAI_QUOTA_DEMO"){app.quota_demo(&mode);}
+        #[cfg(feature="record")]
+        let gws_demo = quota_demo || std::env::var("DAOZAI_MAIL_DEMO").is_ok() || std::env::var("DAOZAI_CAL_DEMO").is_ok();
+        #[cfg(not(feature="record"))]
+        let gws_demo = false;
+        let gws = daozai::gws::Service::start(cc.egui_ctx.clone());
+        if !gws_demo {
+            let has_gws_mail = app
+                .mail_accounts()
+                .iter()
+                .any(|a| a.provider == daozai::mail::Provider::GoogleWorkspace);
+            let has_gws_cal = app
+                .calendar_configs()
+                .iter()
+                .any(|c| c.provider == daozai::calendar::Provider::GoogleWorkspace);
+            if !app.settings.gws_onboarded && !(has_gws_mail && has_gws_cal) {
+                app.settings.gws_onboarded = true;
+                app.settings.save();
+                app.gws.phase = daozai::gws::Phase::Checking;
+                gws.check(true, true);
+            } else {
+                gws.check(false, false);
+            }
+        }
         diagnostics::startup("初始化媒體和系統匣");
         let media = smtc::shared();
         let media_enabled=smtc::spawn_poller(media.clone(),cc.egui_ctx.clone());
@@ -229,6 +253,7 @@ impl Shell {
             cal: None,
             cal_sig: None,
             clipboard_watch: None,
+            gws,
             quota: daozai::quota::Service::start(), quota_sig: None, quota_at: PollClock::default(),
         }
     }
@@ -547,6 +572,9 @@ impl eframe::App for Shell {
         }
         let env = self.env(ctx);
         self.reconcile_modules(ctx);
+        while let Some(ev) = self.gws.try_recv() {
+            self.app.gws_event(ev);
+        }
         // v0.5.5 郵件：開關 / 間隔 / 帳號清單變了就重新對齊收信執行緒，再把事件交給介面。
         // 每幀只比較不復制，確有變化時才複製帳號清單。
         if let Some(mail)=&self.mail {
@@ -782,6 +810,9 @@ impl eframe::App for Shell {
                         self.cal_sig=Some((configs,self.app.settings.calendar_auto_sync));
                     }
                 },
+                Cmd::GwsCheck => self.gws.check(false, true),
+                Cmd::GwsLogin => self.gws.login(),
+                Cmd::GwsSetup => self.gws.setup(),
                 Cmd::Focus => ctx.send_viewport_cmd(egui::ViewportCommand::Focus),
             }
         }

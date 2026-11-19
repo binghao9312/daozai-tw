@@ -208,6 +208,12 @@ pub enum Cmd {
     CalendarForget,
     /// 選擇 .ics 檔案匯入本機日程。
     CalendarImport,
+    /// 檢查 Google Workspace CLI（gws）登入狀態並視情況自動綁定。
+    GwsCheck,
+    /// 開啟瀏覽器登入 Google Workspace CLI（gws）。
+    GwsLogin,
+    /// 開啟終端機執行 `gws auth setup --login`。
+    GwsSetup,
     /// 重啟島仔（切換渲染方式後生效）。
     RestartApp,
 }
@@ -587,6 +593,12 @@ impl MailState {
     }
 }
 
+#[derive(Default)]
+pub(crate) struct GwsUiState {
+    pub phase: crate::gws::Phase,
+    pub note: String,
+}
+
 /// v0.5.6：日程（CalDAV）的介面狀態。密碼只在表單裡暫存，儲存後立刻清掉。
 #[derive(Default)]
 pub(crate) struct CalendarState {
@@ -881,6 +893,7 @@ pub struct App {
     mail_lines_cache: Vec<(std::sync::Arc<str>, std::sync::Arc<str>, u32, std::sync::Arc<Vec<crate::mail_format::Line>>)>,
     /// v0.5.6：日曆（CalDAV）配置、未來 24 小時事件與設定表單。
     pub(crate) calendar: CalendarState,
+    pub(crate) gws: GwsUiState,
     pub(crate) quota: crate::quota_ui::State,
     /// 天氣頁的當前資料與後臺拉取狀態。
     pub(crate) weather: crate::weather::State,
@@ -1014,6 +1027,7 @@ impl App {
             mail: MailState { accounts: mail::load_accounts(), ..Default::default() },
             mail_lines_cache: Vec::new(),
             calendar: CalendarState::load(),
+            gws: GwsUiState::default(),
             quota: crate::quota_ui::State::load(),
             weather,
             weather_source,
@@ -1162,6 +1176,111 @@ impl App {
     pub fn open_mail_settings(&mut self) {
         self.settings_tab = 7;
         self.open_settings();
+    }
+
+    fn bind_gws_accounts(&mut self, status: &crate::gws::AuthStatus) -> (bool, bool) {
+        let email = status.user.trim().to_string();
+        if email.is_empty() {
+            return (false, false);
+        }
+        let mut mail_bound = false;
+        if status.has_gmail {
+            if let Some(slot) = self
+                .mail
+                .accounts
+                .iter_mut()
+                .find(|a| a.email.eq_ignore_ascii_case(&email))
+            {
+                if slot.provider != mail::Provider::GoogleWorkspace {
+                    slot.provider = mail::Provider::GoogleWorkspace;
+                    slot.custom = None;
+                    slot.enabled = true;
+                    self.mail_accounts_changed();
+                    mail_bound = true;
+                }
+            } else {
+                self.mail.accounts.push(mail::Account {
+                    email: email.clone(),
+                    provider: mail::Provider::GoogleWorkspace,
+                    custom: None,
+                    enabled: true,
+                });
+                self.mail_accounts_changed();
+                mail_bound = true;
+            }
+        }
+        let mut cal_bound = false;
+        if status.has_calendar {
+            let exists = self.calendar.feeds.iter().any(|feed| {
+                feed.config.provider == calendar::Provider::GoogleWorkspace
+                    && feed.config.username.trim().eq_ignore_ascii_case(&email)
+            });
+            if !exists {
+                let cfg = calendar::Config {
+                    provider: calendar::Provider::GoogleWorkspace,
+                    username: email,
+                    href: None,
+                    server: None,
+                };
+                if calendar::save_connection(&cfg, "").is_ok() {
+                    self.calendar.feeds.push(CalendarFeed::new(cfg.clone()));
+                    if self.calendar.config.is_none() {
+                        self.calendar.config = Some(cfg);
+                    }
+                    self.pending.push(Cmd::CalendarSync);
+                    self.request_calendar_month(true);
+                    cal_bound = true;
+                }
+            }
+        }
+        (mail_bound, cal_bound)
+    }
+
+    pub fn gws_event(&mut self, ev: crate::gws::Event) {
+        use crate::gws::Phase;
+        match &ev.phase {
+            Phase::Idle => {}
+            Phase::Checking => {
+                self.gws.note = "正在檢查 Google Workspace CLI 登入狀態…".into();
+            }
+            Phase::LoggingIn => {
+                self.gws.note = "正在開啟瀏覽器進行 Google Workspace CLI 登入授權…".into();
+            }
+            Phase::Connected(status) => {
+                let mut parts = Vec::new();
+                if status.has_gmail {
+                    parts.push("Gmail");
+                }
+                if status.has_calendar {
+                    parts.push("Google 日曆");
+                }
+                let scope_text = if parts.is_empty() {
+                    "未授權郵件或日曆權限".to_string()
+                } else {
+                    parts.join("、")
+                };
+                self.gws.note = format!("已登入 {}（{}）", status.user, scope_text);
+                if ev.auto_bind {
+                    let (mail_bound, cal_bound) = self.bind_gws_accounts(status);
+                    if mail_bound || cal_bound {
+                        self.say(format!("已透過 Google Workspace CLI 連線 {}", status.user));
+                    }
+                }
+            }
+            Phase::NotLoggedIn => {
+                self.gws.note = "偵測到 gws CLI，尚未登入。點下方按鈕開啟瀏覽器完成授權。".into();
+            }
+            Phase::NeedsSetup => {
+                self.gws.note = "尚未設定 gws 的 Google OAuth 用戶端，請先執行 gws auth setup。".into();
+            }
+            Phase::NotInstalled => {
+                self.gws.note = "本機未安裝 Google Workspace CLI（gws）；仍可使用下方應用程式密碼或 CalDAV 連線。".into();
+            }
+            Phase::Failed(err) => {
+                self.gws.note = format!("Google Workspace CLI 檢查失敗：{err}");
+            }
+        }
+        self.gws.phase = ev.phase;
     }
 
     /// v0.5.6：日曆服務推來的事件。失敗不彈窗，只累計次數（連續兩次才顯示紅字）。

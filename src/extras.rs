@@ -1748,18 +1748,24 @@ impl App {
                             }
                             if changed{self.mail_accounts_changed();}
                             if let Some(i)=remove{
-                                let email=self.mail.accounts[i].email.clone();
-                                let credential=self.mail.accounts[i].credential_key();
-                                self.mail.accounts.remove(i);
-                                crate::mail::secrets::delete(&credential);
+                                let account=self.mail.accounts.remove(i);
+                                let email=account.email.clone();
                                 self.mail.status.remove(&email.to_ascii_lowercase());
-                                self.mail.note=format!("{email}：已移除，憑據已從系統憑據管理器刪除");
+                                if account.provider==crate::mail::Provider::GoogleWorkspace{
+                                    self.mail.note=format!("{email}：已移除（本機 gws CLI 登入狀態未變更）");
+                                }else{
+                                    let credential=account.credential_key();
+                                    crate::mail::secrets::delete(&credential);
+                                    self.mail.note=format!("{email}：已移除，憑據已從系統憑據管理器刪除");
+                                }
                                 self.mail_accounts_changed();
                             }
                             if let Some(i)=test{
                                 let account=self.mail.accounts[i].clone();
                                 if let Err(error)=account.endpoint(){
                                     self.mail.note=error;
+                                }else if account.provider==crate::mail::Provider::GoogleWorkspace{
+                                    self.mail.testing=Some(account.email.clone());self.mail.form_test=None;self.mail.note=format!("{}：正在測試連線…",account.email);self.pending.push(Cmd::MailTest(account,String::new()));
                                 }else{
                                 match crate::mail::secrets::load(&account.credential_key()){
                                     Ok(pass)=>{self.mail.testing=Some(account.email.clone());self.mail.form_test=None;self.mail.note=format!("{}：正在測試連線…",account.email);self.pending.push(Cmd::MailTest(account,pass));}
@@ -1841,6 +1847,7 @@ impl App {
                             ui.label(egui::RichText::new("圖片中的驗證碼請在信箱檢視。").size(12.0).color(settings_color(ctx,Color32::from_gray(180),Color32::from_gray(75))));
                             if !self.mail.note.is_empty(){ui.add_space(3.0);ui.add(egui::Label::new(egui::RichText::new(&self.mail.note).size(12.0).color(settings_color(ctx,Color32::from_gray(180),Color32::from_gray(75)))).wrap());}
                         });
+                        self.gws_settings_card(ui);
                     }
                     8=>{
                         ui.spacing_mut().item_spacing.y=4.0;
@@ -2055,6 +2062,7 @@ impl App {
                             ui.add_space(5.0);
                             ui.label(egui::RichText::new("與郵件中的會議邀請共用提醒，同一場會議只提醒一次。").size(11.0).color(settings_color(ctx,Color32::from_gray(180),Color32::from_gray(75))));
                         });
+                        self.gws_settings_card(ui);
                     }
                     _=>{
                         settings_label(ui,"島仔 Daozai");
@@ -2084,5 +2092,84 @@ impl App {
             ctx.set_style(original_style);
         });
         if !self.settings_open{self.window_layout().close();self.weather_source.close();}
+    }
+
+    fn gws_settings_card(&mut self, ui: &mut egui::Ui) {
+        use crate::gws::Phase;
+        let ctx = &ui.ctx().clone();
+        settings_label(ui, "Google Workspace CLI（免應用程式密碼）");
+        settings_card(ui, |ui| {
+            let busy = matches!(self.gws.phase, Phase::Checking | Phase::LoggingIn);
+            let (status_text, status_color) = match &self.gws.phase {
+                Phase::Idle => (
+                    "尚未檢查本機 gws 登入狀態".to_string(),
+                    settings_color(ctx, Color32::from_gray(180), Color32::from_gray(75)),
+                ),
+                Phase::Checking => (
+                    "● 正在檢查 gws CLI 登入狀態…".to_string(),
+                    settings_color(ctx, Color32::from_rgb(240, 180, 110), Color32::from_rgb(145, 89, 12)),
+                ),
+                Phase::LoggingIn => (
+                    "● 正在開啟瀏覽器完成 Google Workspace 授權…".to_string(),
+                    settings_color(ctx, Color32::from_rgb(240, 180, 110), Color32::from_rgb(145, 89, 12)),
+                ),
+                Phase::Connected(st) => (
+                    format!("● 已登入 {}", st.user),
+                    settings_color(ctx, Color32::from_rgb(120, 220, 160), Color32::from_rgb(24, 121, 64)),
+                ),
+                Phase::NotLoggedIn => (
+                    "● 尚未登入 gws CLI".to_string(),
+                    settings_color(ctx, Color32::from_rgb(240, 180, 110), Color32::from_rgb(145, 89, 12)),
+                ),
+                Phase::NeedsSetup => (
+                    "● 尚未設定 Google OAuth 用戶端".to_string(),
+                    settings_color(ctx, Color32::from_rgb(240, 180, 110), Color32::from_rgb(145, 89, 12)),
+                ),
+                Phase::NotInstalled => (
+                    "● 本機未安裝 gws CLI".to_string(),
+                    settings_color(ctx, Color32::from_gray(180), Color32::from_gray(75)),
+                ),
+                Phase::Failed(_) => (
+                    "● 連線檢查失敗".to_string(),
+                    settings_color(ctx, Color32::from_rgb(240, 96, 96), Color32::from_rgb(184, 34, 34)),
+                ),
+            };
+            ui.label(egui::RichText::new(status_text).size(13.0).strong().color(status_color));
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new("透過本機 `gws` OAuth 讀取 Gmail 與 Google 日曆，免填應用程式密碼。")
+                        .size(12.0)
+                        .color(settings_color(ctx, Color32::from_gray(180), Color32::from_gray(75))),
+                )
+                .wrap(),
+            );
+            ui.add_space(4.0);
+            ui.horizontal_wrapped(|ui| {
+                if ui.add_enabled(!busy, egui::Button::new("登入並綁定 Gmail + 日曆")).clicked() {
+                    self.gws.phase = Phase::LoggingIn;
+                    self.gws.note = "正在啟動 Google Workspace CLI 授權…".into();
+                    self.pending.push(Cmd::GwsLogin);
+                }
+                if ui.add_enabled(!busy, egui::Button::new("重新檢查")).clicked() {
+                    self.gws.phase = Phase::Checking;
+                    self.gws.note = "正在檢查 Google Workspace CLI 登入狀態…".into();
+                    self.pending.push(Cmd::GwsCheck);
+                }
+                if matches!(self.gws.phase, Phase::NeedsSetup) && ui.button("執行 gws auth setup").clicked() {
+                    self.pending.push(Cmd::GwsSetup);
+                }
+            });
+            if !self.gws.note.is_empty() {
+                ui.add_space(3.0);
+                ui.add(
+                    egui::Label::new(
+                        egui::RichText::new(&self.gws.note)
+                            .size(12.0)
+                            .color(settings_color(ctx, Color32::from_gray(190), Color32::from_gray(70))),
+                    )
+                    .wrap(),
+                );
+            }
+        });
     }
 }
