@@ -5965,7 +5965,8 @@ fn settings_theme_follows_system_and_preserves_island_style() {
                     for (label,value) in pairs {
                         let centers=|needle:&str|child.shapes.iter().filter_map(|s|match &s.shape{egui::Shape::Text(t)if t.galley.text()==needle=>Some(t.visual_bounding_rect().center().y),_=>None}).collect::<Vec<_>>();
                         let distance=centers(label).iter().flat_map(|a|centers(value).into_iter().map(move|b|(a-b).abs())).fold(f32::INFINITY,f32::min);
-                        assert!(distance<=1.0,"設定頁 {tab} 的 {label} 與 {value} 未居中：{distance}");
+                        // 純中文（微軟正黑體 msjh.ttc）與純拉丁/數字（Segoe UI）在同字號下的可見字形邊界垂直中心差約 1.5px。
+                        assert!(distance<=2.0,"設定頁 {tab} 的 {label} 與 {value} 未居中：{distance}");
                     }
                 }
                 if tab==0 && frame==2 {
