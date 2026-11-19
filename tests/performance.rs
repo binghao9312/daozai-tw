@@ -39,7 +39,7 @@ fn background_service_sample(){
         "mail"=>{
             let accounts=daozai::mail::load_accounts().into_iter().filter(|a|a.enabled).take(1).collect::<Vec<_>>();
             assert_eq!(accounts.len(),1,"需要一个已配置邮箱");
-            let worker=daozai::mail::Service::start();worker.sync(&accounts,120);mail=Some(worker);
+            let worker=daozai::mail::Service::start();worker.sync(&accounts,120,0);mail=Some(worker);
         },
         "calendar"=>{let configs=daozai::calendar::load_configs();println!("configured_accounts={}",configs.len());let worker=daozai::calendar::Service::start();worker.configure(configs,true);calendar=Some(worker);},
         "quota"=>{let config=daozai::quota::Config::load();let accounts=config.accounts.iter().filter(|a|config.enabled && a.enabled).cloned().collect::<Vec<_>>();println!("configured_accounts={}",accounts.len());let mut worker=daozai::quota::Service::start();worker.refresh(accounts);quota=Some((worker,config));},
