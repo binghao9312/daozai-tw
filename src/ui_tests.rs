@@ -8849,12 +8849,12 @@ fn gws_connected_event_auto_binds_gmail_and_calendar_and_respects_auto_bind_flag
     assert_eq!(h.app.mail.accounts.len(), 1);
     assert_eq!(h.app.mail.accounts[0].provider, crate::mail::Provider::GoogleWorkspace);
     assert_eq!(h.app.mail.accounts[0].email, "alice@gmail.com");
-    assert!(h.app.pending.iter().any(|c| matches!(c, Cmd::MailSync)));
+    assert!(h.app.pending.iter().any(|c| matches!(c, crate::app::Cmd::MailSync)));
 
     assert_eq!(h.app.calendar.feeds.len(), 1);
     assert_eq!(h.app.calendar.feeds[0].config.provider, crate::calendar::Provider::GoogleWorkspace);
     assert_eq!(h.app.calendar.feeds[0].config.username, "alice@gmail.com");
-    assert!(h.app.pending.iter().any(|c| matches!(c, Cmd::CalendarSync)));
+    assert!(h.app.pending.iter().any(|c| matches!(c, crate::app::Cmd::CalendarSync)));
     assert_eq!(crate::mail::load_accounts().len(), 1);
     assert_eq!(crate::calendar::load_configs().len(), 1);
 
