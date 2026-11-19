@@ -208,8 +208,24 @@ pub fn clean_ytmusic_artist(artist:&str)->String {
     artist.trim_end_matches(" - Topic").trim().to_string()
 }
 
-/// 主力來源：YouTube Music + LRCLIB 動態歌詞與本地快取
-pub fn fetch_for_source(_source:&str,track:&str,artist:&str,duration:f64,_song_id:Option<u64>)->Result<Lyrics,FetchError> {
+/// 歌詞庫常見簡體歌詞，臺灣版統一顯示繁體（本地快取和網路查到的都一樣）。只在整份歌詞明顯是簡體時才轉；
+/// 含日文假名或韓文的不轉，日文漢字、韓文歌詞不能被當成中文；已經是繁體的也不碰。
+fn traditionalized(mut lyrics:Lyrics)->Lyrics {
+    // 先用不花錢的條件擋掉空歌詞和日文、韓文，再建轉換表（用完即釋放，不常駐記憶體）。
+    if lyrics.lines.is_empty() || lyrics.lines.iter().any(|line|line.text.chars().any(is_native_script)) {return lyrics;}
+    let converter=crate::s2t::Converter::new();
+    if converter.mostly_simplified(lyrics.lines.iter().map(|line|line.text.as_str())) {
+        for line in &mut lyrics.lines {line.text=converter.to_traditional(&line.text);}
+    }
+    lyrics
+}
+
+/// 主力來源：YouTube Music + LRCLIB 動態歌詞與本地快取；統一以繁體返回。
+pub fn fetch_for_source(source:&str,track:&str,artist:&str,duration:f64,song_id:Option<u64>)->Result<Lyrics,FetchError> {
+    fetch_for_source_raw(source,track,artist,duration,song_id).map(traditionalized)
+}
+
+fn fetch_for_source_raw(_source:&str,track:&str,artist:&str,duration:f64,_song_id:Option<u64>)->Result<Lyrics,FetchError> {
     let clean_track = clean_ytmusic_title(track);
     let clean_art = clean_ytmusic_artist(artist);
     if clean_track.trim().is_empty() { return Err(FetchError::NotFound); }
@@ -809,6 +825,42 @@ mod tests {
         let lyrics=fetch_from_lrclib(&base,"Track","Artist",120.0).unwrap();
         worker.join().unwrap();
         assert!(lyrics.synced);assert_eq!(lyrics.lines[0].text,"found","时长不符的版本不采用");
+    }
+
+    fn texts(lyrics:&Lyrics)->Vec<&str> {lyrics.lines.iter().map(|line|line.text.as_str()).collect()}
+
+    #[test]
+    fn simplified_lyrics_are_shown_in_traditional_but_other_scripts_are_untouched() {
+        // 真實案例：YouTube Music 顯示繁體，LRCLIB 的錄音室版歌詞是簡體。
+        let converted=traditionalized(parse_lrc("[00:03.61]我对着流星\n[00:08.00]\n[00:23.83]祈祷时专心\n[00:30.00]为爱飞行 脱离地心引力的热情"));
+        assert!(converted.synced);
+        assert_eq!(texts(&converted),["我對著流星","","祈禱時專心","為愛飛行 脫離地心引力的熱情"]);
+        assert!((converted.lines[2].t-23.83).abs()<0.01,"時間軸不能動");
+        // 純文字歌詞也轉，且仍然是純文字。
+        let plain=traditionalized(from_plain("我对着流星\n祈祷时专心\n为爱飞行"));
+        assert!(!plain.synced);assert_eq!(texts(&plain),["我對著流星","祈禱時專心","為愛飛行"]);
+        // 已經是繁體：不碰（皇后、公里在繁體裡本來就是對的）。
+        let traditional=parse_lrc("[00:01.00]我對著流星\n[00:05.00]皇后 公里 為愛飛行\n[00:09.00]脫離地心引力的熱情");
+        let before=texts(&traditional).join("|");assert_eq!(texts(&traditionalized(traditional)).join("|"),before);
+        // 日文（假名＋漢字）和韓文：不能被當成中文轉成繁體。
+        let japanese=parse_lrc("[00:01.00]ありがとう 国を愛して\n[00:05.00]ここにいる 万里の道\n[00:09.00]为了あなた 说 对 们");
+        let before=texts(&japanese).join("|");assert_eq!(texts(&traditionalized(japanese)).join("|"),before);
+        let korean=parse_lrc("[00:01.00]사랑해 万里\n[00:05.00]对 说 们 这 为");
+        let before=texts(&korean).join("|");assert_eq!(texts(&traditionalized(korean)).join("|"),before);
+        assert!(traditionalized(Lyrics::default()).lines.is_empty());
+    }
+
+    #[test]
+    fn cached_simplified_lyrics_come_back_in_traditional_and_the_cache_file_is_unchanged() {
+        let _guard=crate::ui_tests::ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
+        let dir=std::env::temp_dir().join(format!("daozai-lyrics-s2t-{}",std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();std::env::set_var("DAOZAI_DATA_DIR",&dir);
+        let path=cache_path("簡繁測試曲","測試歌手",200.0);
+        write_cache(&path,&parse_lrc("[00:01.00]我对着流星\n[00:05.00]为爱飞行\n[00:09.00]祈祷时专心"));
+        let lyrics=fetch_for_source("","簡繁測試曲","測試歌手",200.0,None).unwrap();
+        assert_eq!(texts(&lyrics),["我對著流星","為愛飛行","祈禱時專心"],"以前快取的簡體歌詞也要顯示繁體");
+        assert!(std::fs::read_to_string(&path).unwrap().contains("我对着流星"),"磁碟上的快取維持原樣，之後調整轉換規則也不必重新聯網");
+        std::env::remove_var("DAOZAI_DATA_DIR");let _=std::fs::remove_dir_all(dir);
     }
 
     fn exact_plain_then_search(search:&str,duration:f64,scripted:usize)->Result<Lyrics,FetchError> {

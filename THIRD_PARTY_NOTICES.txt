@@ -365,6 +365,11 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 
+OpenCC 简繁转换词库
+https://github.com/BYVoid/OpenCC
+assets/s2t/ 的歌词简转繁资料由 OpenCC 词库经 scripts/gen-s2t.py 精简产生（经由 opencc-python-reimplemented 取得）。
+许可: Apache-2.0，许可全文见下方各 Apache-2.0 依赖所附的 Apache License, Version 2.0。
+
 === Rust dependencies ===
 以下为锁定依赖的许可与版权文本；包括跨平台开发依赖。
 

@@ -26,6 +26,7 @@ pub mod skin_paint;
 pub mod icons;
 pub mod input;
 pub mod lyrics;
+mod s2t;
 pub mod mail;
 pub mod mail_format;
 mod mail_reader;
