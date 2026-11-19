@@ -909,7 +909,7 @@ impl App {
         let weather_source=crate::weather_source_ui::State::load();
         // 中央氣象署資料由天氣重新整理排程在背景取得，啟動時不阻塞介面。
         let weather=crate::weather::State::load(&settings.weather_city,settings.weather_position.as_ref());
-        let initial_page = 0;
+        let initial_page = settings.page_order.iter().copied().find(|page| settings.visible_pages[*page]).unwrap_or(0);
         Self {
             opts,
             render_compat_running: settings.render_compat,

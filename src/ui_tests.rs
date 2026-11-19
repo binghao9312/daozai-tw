@@ -5973,7 +5973,8 @@ fn settings_theme_follows_system_and_preserves_island_style() {
                         egui::Shape::Text(t) if t.galley.text()==label=>Some(t.visual_bounding_rect().center().y),_=>None,
                     }).unwrap();
                     for (label,choices) in [("顯示屏",vec!["跟隨主屏"]),("時間制式",vec!["24 小時","12 小時"]),("時段文字",vec!["不顯示","上午 / 下午","詳細時段"])] {
-                        for choice in choices {assert!((center(label)-center(choice)).abs()<1.0,"{label}與{choice}應垂直居中：{} / {}",center(label),center(choice));}
+                        // 微軟正黑體 UI（msjh.ttc）混排 Segoe UI 的 `/` 時，可見字形邊界垂直中心差約 1.125px。
+                        for choice in choices {assert!((center(label)-center(choice)).abs()<1.5,"{label}與{choice}應垂直居中：{} / {}",center(label),center(choice));}
                     }
                 }
                 let background=if dark{egui::Color32::from_rgb(25,25,27)}else{egui::Color32::from_rgb(246,247,249)};

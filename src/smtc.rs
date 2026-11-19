@@ -79,10 +79,10 @@ impl NowPlaying {
         }
         let source=self.source.to_lowercase();
         if YTMUSIC_WEB_APP_SOURCES.contains(&source.as_str()){return MediaKind::Music;}
-        if (matches!(source.as_str(),"spotify"|"spotify.exe") || is_ytmusic(&source) || is_qqmusic(&source) || apple_music::is_source(&source)) && self.playback_type==MediaKind::Music{return MediaKind::Music;}
+        if (matches!(source.as_str(),"kugou"|"kugou.exe"|"cloudmusic.exe"|"汽水音乐"|"sodamusic.exe"|"spotify"|"spotify.exe"|"kwmusic.exe"|"bodian_pc.exe") || is_ytmusic(&source) || is_qqmusic(&source) || apple_music::is_source(&source)) && self.playback_type==MediaKind::Music{return MediaKind::Music;}
         if ["chrome","msedge","firefox","brave","opera"].iter().any(|name|source.contains(name)) {
             let album=self.album.trim().to_lowercase();
-            if ["bilibili","抖音","哔哩哔哩"].contains(&album.as_str()){return MediaKind::Video;}
+            if ["youtube","bilibili","抖音","哔哩哔哩"].contains(&album.as_str()){return MediaKind::Video;}
             // YouTube Music 網頁版的自動生成歌手頻道以 " - Topic" 結尾，與普通影片作者區分開。
             if album.contains("youtube music") || source.contains("youtube") || (is_ytmusic_source(&source) && self.artist.trim().to_lowercase().ends_with(" - topic")) {
                 return MediaKind::Music;
