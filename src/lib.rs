@@ -29,6 +29,7 @@ pub mod lyrics;
 mod s2t;
 pub mod mail;
 pub mod gws;
+pub mod gws_install;
 pub mod mail_format;
 mod mail_reader;
 pub mod mail_manage;

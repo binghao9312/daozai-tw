@@ -2154,7 +2154,7 @@ impl App {
         let ctx = &ui.ctx().clone();
         settings_label(ui, "Google Workspace CLI（免應用程式密碼）");
         settings_card(ui, |ui| {
-            let busy = matches!(self.gws.phase, Phase::Checking | Phase::LoggingIn);
+            let busy = matches!(self.gws.phase, Phase::Checking | Phase::LoggingIn | Phase::Installing);
             let (status_text, status_color) = match &self.gws.phase {
                 Phase::Idle => (
                     "尚未檢查本機 gws 登入狀態".to_string(),
@@ -2184,6 +2184,14 @@ impl App {
                     "● 本機未安裝 gws CLI".to_string(),
                     settings_color(ctx, Color32::from_gray(180), Color32::from_gray(75)),
                 ),
+                Phase::Installing => (
+                    "● 正在下載並安裝 gws…".to_string(),
+                    settings_color(ctx, Color32::from_rgb(240, 180, 110), Color32::from_rgb(145, 89, 12)),
+                ),
+                Phase::InstallFailed(_) => (
+                    "● gws 安裝失敗".to_string(),
+                    settings_color(ctx, Color32::from_rgb(240, 96, 96), Color32::from_rgb(184, 34, 34)),
+                ),
                 Phase::Failed(_) => (
                     "● 連線檢查失敗".to_string(),
                     settings_color(ctx, Color32::from_rgb(240, 96, 96), Color32::from_rgb(184, 34, 34)),
@@ -2200,6 +2208,13 @@ impl App {
             );
             ui.add_space(4.0);
             ui.horizontal_wrapped(|ui| {
+                if matches!(self.gws.phase, Phase::NotInstalled | Phase::InstallFailed(_))
+                    && ui.add_enabled(!busy, egui::Button::new("下載並安裝 gws")).clicked()
+                {
+                    self.gws.phase = Phase::Installing;
+                    self.gws.note = "正在從官方 GitHub 發行頁下載 Google Workspace CLI（gws），請稍候…".into();
+                    self.pending.push(Cmd::GwsInstall);
+                }
                 if ui.add_enabled(!busy, egui::Button::new("登入並綁定 Gmail + 日曆")).clicked() {
                     self.gws.phase = Phase::LoggingIn;
                     self.gws.note = "正在啟動 Google Workspace CLI 授權…".into();

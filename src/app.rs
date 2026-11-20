@@ -214,6 +214,8 @@ pub enum Cmd {
     GwsLogin,
     /// 開啟終端機執行 `gws auth setup --login`。
     GwsSetup,
+    /// 從官方發行頁下載並安裝 Google Workspace CLI（gws）。
+    GwsInstall,
     /// 重啟島仔（切換渲染方式後生效）。
     RestartApp,
 }
@@ -1274,7 +1276,16 @@ impl App {
                 self.gws.note = "尚未設定 gws 的 Google OAuth 用戶端，請先執行 gws auth setup。".into();
             }
             Phase::NotInstalled => {
-                self.gws.note = "本機未安裝 Google Workspace CLI（gws）；仍可使用下方應用程式密碼或 CalDAV 連線。".into();
+                self.gws.note = format!(
+                    "本機未安裝 Google Workspace CLI（gws）。可按「下載並安裝 gws」，島仔會從官方 GitHub 發行頁取得 {}（約 6 MB），核對雜湊後只放進島仔自己的資料夾，不改系統設定；也可以繼續使用下方應用程式密碼或 CalDAV 連線。",
+                    crate::gws_install::VERSION
+                );
+            }
+            Phase::Installing => {
+                self.gws.note = "正在從官方 GitHub 發行頁下載 Google Workspace CLI（gws），請稍候…".into();
+            }
+            Phase::InstallFailed(err) => {
+                self.gws.note = format!("下載安裝 gws 失敗：{err}。可再按一次重試，或改用應用程式密碼／CalDAV 連線。");
             }
             Phase::Failed(err) => {
                 self.gws.note = format!("Google Workspace CLI 檢查失敗：{err}");

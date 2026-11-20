@@ -34,6 +34,10 @@ pub enum Phase {
     NotLoggedIn,
     NeedsSetup,
     NotInstalled,
+    /// 正在從官方發行頁下載並安裝 gws。
+    Installing,
+    /// 下載或安裝 gws 失敗（網路、雜湊不符、寫入失敗…），可再按一次重試。
+    InstallFailed(String),
     Failed(String),
 }
 
@@ -465,7 +469,8 @@ pub fn find_executable() -> Option<Executable> {
             }
         }
     }
-    None
+    // 使用者自己裝的（npm、PATH）優先；都沒有才用設定頁「下載並安裝」放進 Daozai 資料夾的那份。
+    crate::gws_install::installed_exe().map(Executable::Binary)
 }
 
 fn build_command(exe: &Executable, args: &[&str]) -> Command {
@@ -1150,6 +1155,7 @@ enum ServiceCmd {
     Check { auto_login: bool, auto_bind: bool },
     Login,
     Setup,
+    Install,
 }
 
 pub struct Service {
@@ -1185,6 +1191,11 @@ impl Service {
         let _ = self.cmd.send(ServiceCmd::Setup);
     }
 
+    /// 從官方發行頁下載並安裝 gws，裝好後自動重新檢查。
+    pub fn install(&self) {
+        let _ = self.cmd.send(ServiceCmd::Install);
+    }
+
     pub fn try_recv(&self) -> Option<Event> {
         self.ev.try_recv().ok()
     }
@@ -1195,34 +1206,44 @@ fn send_event(ev: &Sender<Event>, ctx: &egui::Context, phase: Phase, auto_bind: 
     ctx.request_repaint();
 }
 
+fn run_check(ev: &Sender<Event>, ctx: &egui::Context, auto_login: bool, auto_bind: bool) {
+    match auth_status() {
+        Ok(None) => send_event(ev, ctx, Phase::NotInstalled, false),
+        Ok(Some(st))
+            if st.token_valid && (st.has_gmail || st.has_calendar) && !st.user.is_empty() =>
+        {
+            send_event(ev, ctx, Phase::Connected(st), auto_bind);
+        }
+        Ok(Some(st)) if !st.client_config_exists => {
+            send_event(ev, ctx, Phase::NeedsSetup, false);
+        }
+        Ok(Some(_)) if auto_login => {
+            send_event(ev, ctx, Phase::LoggingIn, false);
+            match login() {
+                Ok(st) => send_event(ev, ctx, Phase::Connected(st), true),
+                Err(err) => send_event(ev, ctx, Phase::Failed(err), false),
+            }
+        }
+        Ok(Some(_)) => send_event(ev, ctx, Phase::NotLoggedIn, false),
+        Err(err) => send_event(ev, ctx, Phase::Failed(err), false),
+    }
+}
+
 fn service_loop(cmd_rx: Receiver<ServiceCmd>, ev: Sender<Event>, ctx: egui::Context) {
     while let Ok(cmd) = cmd_rx.recv() {
         match cmd {
             ServiceCmd::Check {
                 auto_login,
                 auto_bind,
-            } => match auth_status() {
-                Ok(None) => send_event(&ev, &ctx, Phase::NotInstalled, false),
-                Ok(Some(st))
-                    if st.token_valid
-                        && (st.has_gmail || st.has_calendar)
-                        && !st.user.is_empty() =>
-                {
-                    send_event(&ev, &ctx, Phase::Connected(st), auto_bind);
+            } => run_check(&ev, &ctx, auto_login, auto_bind),
+            ServiceCmd::Install => {
+                send_event(&ev, &ctx, Phase::Installing, false);
+                match crate::gws_install::install() {
+                    // 裝好就接著檢查登入狀態；已經登入過的帳號直接綁定，不再自動開瀏覽器。
+                    Ok(_) => run_check(&ev, &ctx, false, true),
+                    Err(err) => send_event(&ev, &ctx, Phase::InstallFailed(err), false),
                 }
-                Ok(Some(st)) if !st.client_config_exists => {
-                    send_event(&ev, &ctx, Phase::NeedsSetup, false);
-                }
-                Ok(Some(_)) if auto_login => {
-                    send_event(&ev, &ctx, Phase::LoggingIn, false);
-                    match login() {
-                        Ok(st) => send_event(&ev, &ctx, Phase::Connected(st), true),
-                        Err(err) => send_event(&ev, &ctx, Phase::Failed(err), false),
-                    }
-                }
-                Ok(Some(_)) => send_event(&ev, &ctx, Phase::NotLoggedIn, false),
-                Err(err) => send_event(&ev, &ctx, Phase::Failed(err), false),
-            },
+            }
             ServiceCmd::Login => match auth_status() {
                 Ok(None) => send_event(&ev, &ctx, Phase::NotInstalled, false),
                 Ok(Some(st))

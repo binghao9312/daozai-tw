@@ -8905,6 +8905,64 @@ fn gws_connected_event_auto_binds_gmail_and_calendar_and_respects_auto_bind_flag
 }
 
 #[test]
+fn gws_install_button_shows_only_when_missing_and_requests_the_download() {
+    use crate::gws::Phase;
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
+    h.app.open_mail_settings();h.ctx.set_embed_viewports(false);
+    let output=std::sync::Arc::new(Mutex::new(None));let capture=output.clone();
+    let events=std::sync::Arc::new(Mutex::new(Vec::new()));let input=events.clone();
+    egui::Context::set_immediate_viewport_renderer(move|ctx,mut viewport|{
+        let id=viewport.ids.this;
+        let raw=egui::RawInput{viewport_id:id,focused:true,events:std::mem::take(&mut *input.lock().unwrap()),
+            screen_rect:Some(Rect::from_min_size(Pos2::ZERO,egui::vec2(690.0,3200.0))),
+            viewports:std::iter::once((id,egui::ViewportInfo{focused:Some(true),..Default::default()})).collect(),..Default::default()};
+        *capture.lock().unwrap()=Some(ctx.run(raw,|ctx|(viewport.viewport_ui_cb)(ctx)));
+    });
+    let show=|h:&mut H|{
+        for _ in 0..3{let _=h.ctx.run(Default::default(),|ctx|h.app.settings_ui(ctx,false));}
+        output.lock().unwrap().take().unwrap()
+    };
+    let label_at=|child:&egui::FullOutput,label:&str|child.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Text(t)if t.galley.text()==label=>Some(t.visual_bounding_rect().center()),_=>None});
+    // 已經有 gws（已登入或尚未登入）時不顯示下載按鈕。
+    for phase in [Phase::Idle,Phase::NotLoggedIn,Phase::NeedsSetup,Phase::Installing,Phase::Failed("x".into())] {
+        h.app.gws.phase=phase.clone();
+        let child=show(&mut h);
+        assert!(label_at(&child,"下載並安裝 gws").is_none(),"{phase:?} 不應出現下載按鈕");
+    }
+    // 沒裝，或上次安裝失敗：顯示按鈕，點下去先進入安裝中並交給背景服務。
+    for phase in [Phase::NotInstalled,Phase::InstallFailed("網路中斷".into())] {
+        h.app.gws.phase=phase.clone();h.app.pending.clear();
+        let child=show(&mut h);
+        let point=label_at(&child,"下載並安裝 gws").unwrap_or_else(||panic!("{phase:?} 應出現下載按鈕"));
+        // 先把指標移上去（egui 按鈕要前一畫格已懸停），再分別按下、放開。
+        for step in [None,Some(true),Some(false)]{
+            let mut sent=vec![egui::Event::PointerMoved(point)];
+            if let Some(pressed)=step{sent.push(egui::Event::PointerButton{pos:point,button:egui::PointerButton::Primary,pressed,modifiers:Default::default()});}
+            *events.lock().unwrap()=sent;
+            let _=h.ctx.run(Default::default(),|ctx|h.app.settings_ui(ctx,false));
+        }
+        let _=h.ctx.run(Default::default(),|ctx|h.app.settings_ui(ctx,false));
+        assert!(h.app.pending.iter().any(|c|matches!(c,crate::app::Cmd::GwsInstall)),"{phase:?}：按下後應要求下載安裝");
+        assert_eq!(h.app.gws.phase,Phase::Installing);
+        let child=show(&mut h);
+        assert!(child.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text().contains("正在下載並安裝 gws"))),"安裝中應顯示進度狀態");
+    }
+}
+
+#[test]
+fn gws_install_events_explain_source_and_failure() {
+    use crate::gws::{Event,Phase};
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
+    h.app.gws_event(Event{phase:Phase::NotInstalled,auto_bind:false});
+    assert!(h.app.gws.note.contains("下載並安裝 gws")&&h.app.gws.note.contains("GitHub")&&h.app.gws.note.contains(crate::gws_install::VERSION),"沒裝時要說明可一鍵下載與來源版本：{}",h.app.gws.note);
+    h.app.gws_event(Event{phase:Phase::Installing,auto_bind:false});
+    assert_eq!(h.app.gws.phase,Phase::Installing);
+    h.app.gws_event(Event{phase:Phase::InstallFailed("下載的檔案雜湊與預期不符".into()),auto_bind:false});
+    assert!(h.app.gws.note.contains("雜湊與預期不符")&&h.app.gws.note.contains("重試"),"{}",h.app.gws.note);
+    assert!(h.app.mail.accounts.is_empty()&&h.app.calendar.feeds.is_empty(),"安裝失敗不會綁定任何帳號");
+}
+
+#[test]
 fn mail_filter_defaults_to_important_and_persists() {
     let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut h = H::new();
