@@ -656,7 +656,11 @@ impl Window {
         }
         let raise=expanded && !self.expanded;
         unsafe { apply_style(self.hwnd, editing, raise) };
-        if let Layering::Active(layered)=&mut self.layering {layered.sync(self.hwnd,raise);}
+        if let Layering::Active(layered)=&mut self.layering {
+            // 島仔隱藏時（區域為空，例如全螢幕隱藏），獨立的分層顯示視窗也要一起藏起來。
+            layered.set_hidden(region.2<=0.0 || region.3<=0.0);
+            layered.sync(self.hwnd,raise);
+        }
         self.expanded = expanded;
     }
 }

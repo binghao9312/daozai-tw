@@ -164,6 +164,8 @@ pub struct Layered {
     bits: *mut u8,
     size: (i32, i32),
     last: Option<u64>,
+    /// 島仔被藏起來（例如全螢幕隱藏）：顯示視窗是獨立視窗，島仔視窗的區域裁剪管不到它，要自己跟著藏。
+    hidden: bool,
 }
 
 impl Layered {
@@ -174,7 +176,12 @@ impl Layered {
             unsafe { let _ = DestroyWindow(display); }
             return Err(windows::core::Error::from_win32());
         }
-        Ok(Self { display, dc, bitmap: HBITMAP::default(), old: HGDIOBJ::default(), bits: std::ptr::null_mut(), size: (0, 0), last: None })
+        Ok(Self { display, dc, bitmap: HBITMAP::default(), old: HGDIOBJ::default(), bits: std::ptr::null_mut(), size: (0, 0), last: None, hidden: false })
+    }
+
+    /// 島仔整個隱藏（全螢幕隱藏）時，顯示視窗跟著藏；恢復顯示後下一次 `sync` 會把它放回島仔視窗上方。
+    pub fn set_hidden(&mut self, hidden: bool) {
+        self.hidden = hidden;
     }
 
     pub(crate) fn display(&self) -> HWND { self.display }
@@ -250,7 +257,7 @@ impl Layered {
             let _ = hide_owner(owner);
             let owner_visible = IsWindowVisible(owner).as_bool();
             let display_visible = IsWindowVisible(self.display).as_bool();
-            if !owner_visible {
+            if !owner_visible || self.hidden {
                 if display_visible { let _ = ShowWindow(self.display, SW_HIDE); }
                 return;
             }
@@ -421,6 +428,20 @@ mod tests {
             let _ = ShowWindow(owner, SW_HIDE);
             layered.sync(owner, false);
             assert!(!IsWindowVisible(layered.display()).as_bool(), "島仔視窗隱藏時顯示視窗一起隱藏");
+            // 全螢幕隱藏：島仔視窗仍是可見的（只是區域為空），顯示視窗必須自己藏起來，恢復後再回來。
+            let _ = ShowWindow(owner, SW_SHOWNOACTIVATE);
+            layered.sync(owner, false);
+            assert!(IsWindowVisible(layered.display()).as_bool());
+            layered.set_hidden(true);
+            layered.sync(owner, false);
+            assert!(!IsWindowVisible(layered.display()).as_bool(), "全螢幕隱藏時顯示視窗不能留在畫面上");
+            let mut changed = px.clone();
+            changed[12..16].copy_from_slice(&[10, 20, 30, 255]);
+            assert!(layered.present(owner, [4, 2], &changed).unwrap(), "隱藏期間畫面照常更新");
+            assert!(!IsWindowVisible(layered.display()).as_bool(), "隱藏期間提交新畫面也不能把顯示視窗帶回來");
+            layered.set_hidden(false);
+            layered.sync(owner, false);
+            assert!(IsWindowVisible(layered.display()).as_bool(), "離開全螢幕後顯示視窗回來");
             layered.detach(owner);
             assert!(GetWindowLongPtrW(owner, GWL_EXSTYLE) & WS_EX_LAYERED.0 as isize == 0);
             let _ = DestroyWindow(owner);
