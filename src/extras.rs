@@ -425,6 +425,12 @@ impl App {
                 if matches!(&a.source,AlertSource::External(_)){a.body="收到新通知 · 內容已隱藏".into();}
             }
         }
+        // 全螢幕隱藏期間島整個不顯示：訊息類通知（Discord 等）與鈴鐺先不倒數，離開全螢幕後才開始計時，
+        // 免得還沒被看到就過期。健康提醒在隱藏時本來就會丟掉，其他內部提醒維持原本的計時。
+        if self.fullscreen_hidden && self.notice.as_ref().is_some_and(|a|matches!(a.source,AlertSource::Messenger(_)|AlertSource::External(_))) {
+            if let Some(a)=self.notice.as_mut(){a.at=self.t;}
+            self.notification_bell_at=self.t;self.notification_bell_until=self.t+4.5;
+        }
         if self
             .notice
             .as_ref()

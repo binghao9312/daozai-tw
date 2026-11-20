@@ -6510,6 +6510,31 @@ fn external_notice_respects_permissions_masks_preview_and_never_reemits(){
 }
 
 #[test]
+fn discord_notice_waits_while_the_island_is_hidden_by_fullscreen_instead_of_expiring_unseen(){
+ let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.frame(vec![]);
+ h.app.settings.read_notifications=true;h.app.settings.notification_preview=true;
+ // 全螢幕影片擋住島時來的 Discord 通知：隱藏期間不倒數，島和鈴鐺都留著。
+ h.app.fullscreen_hidden=true;
+ h.app.receive_notification("Discord".into(),"com.squirrel.Discord.Discord".into(),"在嗎".into());
+ h.app.tick_alerts();assert!(h.app.notice.is_some(),"通知先成為目前顯示的那一則");
+ for _ in 0..6 {h.app.t+=10.0;h.app.tick_alerts();}
+ assert!(h.app.notice.is_some(),"隱藏了一分鐘，通知不能過期");
+ assert!(h.app.t<h.app.notification_bell_until,"鈴鐺也要等到島出現");
+ // 離開全螢幕後才開始計時，使用者有完整的 4.5 秒。
+ h.app.fullscreen_hidden=false;h.app.tick_alerts();
+ h.app.t+=4.4;h.app.tick_alerts();assert!(h.app.notice.is_some(),"離開全螢幕後還在");
+ h.app.t+=0.2;h.app.tick_alerts();assert!(h.app.notice.is_none(),"顯示滿 4.5 秒後照常收起");
+ // 沒被全螢幕擋住時行為不變：一般外部通知 4.5 秒後過期。
+ h.app.receive_notification("系統音量".into(),"external.test".into(),"內容".into());
+ h.app.tick_alerts();assert!(h.app.notice.is_some());h.app.t+=4.6;h.app.tick_alerts();assert!(h.app.notice.is_none());
+ // 內部提醒（例如行事曆）維持原本的計時，不因為這次修改被留住。
+ h.app.fullscreen_hidden=true;
+ h.app.alert("會議提醒","五分鐘後開始",7,false);h.app.tick_alerts();assert!(h.app.notice.is_some());
+ h.app.t+=7.9;h.app.tick_alerts();assert!(h.app.notice.is_some(),"內部提醒維持自己的 8 秒");
+ h.app.t+=0.2;h.app.tick_alerts();assert!(h.app.notice.is_none(),"內部提醒不受影響，隱藏期間照常過期");
+}
+
+#[test]
 #[cfg(feature="cn-messengers")]
 fn qq_only_notifications_filter_by_app_id_before_display_and_respect_preview(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.frame(vec![]);
