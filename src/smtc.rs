@@ -26,6 +26,9 @@ mod player_seek;
 #[path="player_process.rs"]
 pub(crate) mod player_process;
 #[cfg(windows)]
+#[path="browser_tab.rs"]
+mod browser_tab;
+#[cfg(windows)]
 #[path="music_log.rs"]
 mod music_log;
 
@@ -249,7 +252,14 @@ fn read_artwork(props:&windows::Media::Control::GlobalSystemMediaTransportContro
 }
 
 /// YouTube Music 常見的 SourceAppUserModelId：Chrome / Edge / Brave 的 PWA 與分頁，以及原生或第三方客戶端。
-pub(crate) const YTMUSIC_SOURCE_IDS:&[&str]=&["chrome.exe","msedge.exe","brave.exe","ytm-rs.exe","youtube music desktop app","pear desktop"];
+/// 瀏覽器分頁在系統媒體會話裡的來源名沒有 `.exe`（實測是「Chrome」），兩種寫法都列入。
+pub(crate) const YTMUSIC_SOURCE_IDS:&[&str]=&["chrome.exe","msedge.exe","brave.exe","chrome","msedge","brave","ytm-rs.exe","youtube music desktop app","pear desktop"];
+
+/// Chromium 系瀏覽器的一般分頁（不含 `Chrome._crx_<id>` 這種應用程式視窗）。
+#[cfg(windows)]
+fn is_chromium_tab_source(source:&str)->bool {
+    matches!(source.to_ascii_lowercase().as_str(),"chrome"|"chrome.exe"|"msedge"|"msedge.exe"|"brave"|"brave.exe"|"opera"|"opera.exe"|"vivaldi"|"vivaldi.exe")
+}
 
 /// YouTube Music 桌面版（Chrome 應用程式）在系統媒體會話中的 SourceAppUserModelId，已全部小寫。
 /// 會話名與開始功能表捷徑的 app-id（cinhimbnkkaeohfgghhklpknlkffjgod）不完全一致，兩種寫法都列入。
@@ -457,6 +467,12 @@ fn read_session(session:&windows::Media::Control::GlobalSystemMediaTransportCont
     }
     if !has_position{sampled_at=None;}
     let playback_type=match playback_type.map(|kind|kind.0){Some(1)=>MediaKind::Music,Some(2)=>MediaKind::Video,_=>MediaKind::Unknown};
+    // 網頁版 YouTube Music 的專輯常是空的，會話裡也沒有網址，kind() 會把它當成一般網頁媒體而隱藏。
+    // 這裡看瀏覽器分頁確認，確認後補上專輯名，讓 kind() 走「專輯含 YouTube Music」那條既有規則。
+    // 掃描在背景進行，第一次輪詢可能還沒有結果，下一次就有。
+    if album.trim().is_empty() && playback_type!=MediaKind::Video && is_chromium_tab_source(&source) && browser_tab::is_ytmusic_page(&source,&raw_title,&artist) {
+        album="YouTube Music".into();
+    }
     Some(NowPlaying { title, artist, album, source, song_id:None, playing, position, sampled_at, event_time_ms, duration, artwork:None, playback_type, volume:None })
 }
 
@@ -921,6 +937,27 @@ mod tests {
         assert_eq!(topic.kind(),MediaKind::Music);
         let plain=NowPlaying{source:"chrome.exe".into(),title:"Clip".into(),artist:"Creator".into(),playback_type:MediaKind::Music,..Default::default()};
         assert_eq!(plain.kind(),MediaKind::Unknown,"没有专辑信息的浏览器媒体不自动认作歌曲");
+    }
+
+    #[test]
+    fn web_ytmusic_tab_needs_the_browser_tab_check_because_its_album_is_empty() {
+        // 這台機器上實際讀到的網頁版 YouTube Music 會話：來源是「Chrome」（沒有 .exe），專輯為空，類型是音樂。
+        let tab=NowPlaying{source:"Chrome".into(),title:"晴天".into(),artist:"周杰倫".into(),playing:true,playback_type:MediaKind::Music,..Default::default()};
+        assert_eq!(tab.kind(),MediaKind::Unknown,"只看會話分不出它與別的網站的影片，要靠分頁名稱確認");
+        // 分頁名稱確認後 read_session 會補上專輯名，走既有規則。
+        let confirmed=NowPlaying{album:"YouTube Music".into(),..tab.clone()};
+        assert_eq!(confirmed.kind(),MediaKind::Music);
+        let video=NowPlaying{playback_type:MediaKind::Video,..confirmed.clone()};
+        assert_eq!(video.kind(),MediaKind::Video,"系統明確回報影片時不改判為歌曲");
+        // 自動生成的歌手頻道（" - Topic"）用的是真實來源名「Chrome」，不必另外確認。
+        let topic=NowPlaying{artist:"周杰倫 - Topic".into(),..tab.clone()};
+        assert_eq!(topic.kind(),MediaKind::Music);
+    }
+
+    #[test]
+    fn only_plain_chromium_tabs_are_checked_against_the_tab_strip() {
+        for source in ["Chrome","chrome.exe","MSEdge","msedge.exe","Brave","Opera","Vivaldi"] {assert!(is_chromium_tab_source(source),"{source}");}
+        for source in ["Chrome._crx_cinhimbnkkghhklpknlkffjgod","Spotify.exe","firefox.exe","QQMusic.exe","cloudmusic.exe",""] {assert!(!is_chromium_tab_source(source),"{source}");}
     }
 
     #[test]

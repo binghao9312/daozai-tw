@@ -32,6 +32,8 @@ pub static CONTROL:Lane=Lane::new("daozai-control",1);
 pub static VOLUME:Lane=Lane::new("daozai-volume",1);
 pub static ASYNC:Lane=Lane::new("winrt-request",4);
 pub static ASYNC_ARTWORK:Lane=Lane::new("winrt-artwork",2);
+/// 讀瀏覽器分頁名稱以辨識網頁版 YouTube Music；UI Automation 卡住時最多佔住這一個執行緒。
+pub static BROWSER_TABS:Lane=Lane::new("daozai-browser-tabs",1);
 static MONITOR:Lane=Lane::new("daozai-diagnostics",1);
 pub static TIMEOUTS:AtomicUsize=AtomicUsize::new(0);
 pub static REJECTED_DATA:AtomicUsize=AtomicUsize::new(0);
@@ -134,7 +136,7 @@ fn record(value:Snapshot)->String {
     let mut line=format!("time={now} build={} pid={} private={} working={} handles={} threads={} abnormal={} timeouts={} rejected_data={} control_dropped={} textures={} texture_bytes={} galleys={}",
         option_env!("DAOZAI_BUILD_LABEL").or(option_env!("CARGO_PKG_VERSION")).unwrap_or("test"),std::process::id(),value.private_bytes,value.working_bytes,value.handles,value.threads,value.abnormal(),
         TIMEOUTS.load(Ordering::Relaxed),REJECTED_DATA.load(Ordering::Relaxed),CONTROL_DROPPED.load(Ordering::Relaxed),TEXTURES.load(Ordering::Relaxed),TEXTURE_BYTES.load(Ordering::Relaxed),GALLEYS.load(Ordering::Relaxed));
-    for lane in [&POLLER,&ARTWORK,&COVER,&LYRICS,&NATIVE_LYRICS,&CONTROL,&VOLUME,&ASYNC,&ASYNC_ARTWORK,&MONITOR] {
+    for lane in [&POLLER,&ARTWORK,&COVER,&LYRICS,&NATIVE_LYRICS,&CONTROL,&VOLUME,&ASYNC,&ASYNC_ARTWORK,&BROWSER_TABS,&MONITOR] {
         let _=write!(line," {}={}/{}/{}/{}",lane.name,lane.active(),lane.limit,lane.started.load(Ordering::Relaxed),lane.denied.load(Ordering::Relaxed));
     }
     line.push('\n');line
