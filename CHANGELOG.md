@@ -1,5 +1,12 @@
 # 更新記錄
 
+## v0.6.75（臺灣在地化版）
+
+- 新增 LINE 桌面版通知支援：透過 Windows 系統 Toast 與工作列閃爍雙通道擷取並自動去重，識別 Qt `QWindowIcon` 主視窗與多帳號（透過 `LineLauncher.exe` 或 `LINE.exe` 喚醒），於設定頁「通知、信箱與日程」新增「LINE 新訊息提醒」開關與專用圖示。
+- 新增全螢幕通知彈出開關：於「常規 → 聲音與顯示 → 全屏時隱藏」下方新增「全螢幕隱藏時仍彈出通知」選項；啟用後全螢幕期間喝水／久坐等健康提醒仍保持靜默，但收到 LINE、Discord、郵件、行事曆或系統通知時島體會暫時浮現並在顯示完畢後自動重新隱藏。
+- Spotify 與 Apple Music 識別補強：`smtc::is_spotify` 與 `music_log::player_exe` 支援 Microsoft Store 版 Spotify AUMID（`SpotifyAB.SpotifyMusic_*`）；`apple_music` 支援 `appleinc.applemusicwin_*!app` AUMID 與 Em Dash（`—`）／En Dash（`–`）藝人及專輯解析。
+- 相容渲染背景模糊控制修正：`Window::update` 依皮膚與設定「背景模糊」狀態明確切換系統合成模糊底板。
+
 ## v0.6.74（臺灣在地化版）
 
 - 修復 YouTube Music 播放時點擊其他播放源會失去來源與歌詞：跨會話選擇改為音樂永遠優先於影片與未識別網頁媒體，不再因點擊影片或網頁媒體而蓋過或卡死原本的音樂會話；同時針對 Chrome、Edge、Brave、Opera、Vivaldi 所有分頁共用單一 Windows 媒體會話的限制，在網頁版 YouTube Music 被同瀏覽器其他分頁覆蓋時，透過短期分頁快照確認該首歌曲仍在背景分頁播放並持續保留來源、封面、進度與歌詞，直到分頁暫停、關閉、換歌或結束時才清除。另外修正封面讀取改以原始標題比對，避免歌名清洗後略過系統縮圖。

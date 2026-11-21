@@ -13,7 +13,7 @@ pub(crate) mod desktop;
 pub use windows::{Runtime,ToastAccounts,TaskbarEvent};
 
 #[derive(Clone,Copy,Debug,PartialEq,Eq,Hash)]
-pub enum Messenger {Discord,Wechat,Qq,WeCom,Feishu,DingTalk}
+pub enum Messenger {Discord,Line,Wechat,Qq,WeCom,Feishu,DingTalk}
 
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub enum Capture {Taskbar,SystemToast}
@@ -50,6 +50,19 @@ const DISCORD:Adapter=Adapter{
     tray_enabled:|_|true,
     paint_icon:discord_icon,
     #[cfg(windows)] native:&desktop::DISCORD,
+};
+
+const LINE:Adapter=Adapter{
+    client:Messenger::Line,name:"LINE",capture:Capture::SystemToast,notification_id:"LINE",
+    aliases:&["NAVER.WIN32_LINEwin8_8ptj331gd3tyt!LINE","LINE.LINE","jp.naver.line"],
+    display_names:&["LINE"],
+    process_names:&["LINE.exe"],
+    publishers:&["ly corporation","line corporation","naver"],
+    keep_unidentified:true,dismiss_unread:true,icon_scale:1.0,collapsed_icon_scale:0.85,
+    enabled:|settings|settings.line_notifications,
+    tray_enabled:|_|true,
+    paint_icon:line_icon,
+    #[cfg(windows)] native:&desktop::LINE,
 };
 
 const WECHAT:Adapter=Adapter{
@@ -92,11 +105,11 @@ const DINGTALK:Adapter=Adapter{
 };
 
 impl Messenger {
-    pub const ALL:[Self;6]=[Self::Discord,Self::Wechat,Self::Qq,Self::WeCom,Self::Feishu,Self::DingTalk];
+    pub const ALL:[Self;7]=[Self::Discord,Self::Line,Self::Wechat,Self::Qq,Self::WeCom,Self::Feishu,Self::DingTalk];
     pub const OFFICE:[Self;3]=[Self::WeCom,Self::Feishu,Self::DingTalk];
-    /// 實際參與監聽、通知識別和設定的客戶端。預設只有 Discord；舊版中國 IM 需要 `cn-messengers` 功能才會註冊。
-    pub const REGISTERED:&'static [Self]=if cfg!(feature="cn-messengers") {let all:&'static [Self]=&Self::ALL;all} else {let discord:&'static [Self]=&[Self::Discord];discord};
-    pub fn adapter(self)->&'static Adapter{match self{Self::Discord=>&DISCORD,Self::Wechat=>&WECHAT,Self::Qq=>&QQ,Self::WeCom=>&WECOM,Self::Feishu=>&FEISHU,Self::DingTalk=>&DINGTALK}}
+    /// 實際參與監聽、通知識別和設定的客戶端。預設支援 Discord 與 LINE；舊版中國 IM 需要 `cn-messengers` 功能才會註冊。
+    pub const REGISTERED:&'static [Self]=if cfg!(feature="cn-messengers") {let all:&'static [Self]=&Self::ALL;all} else {let defaults:&'static [Self]=&[Self::Discord,Self::Line];defaults};
+    pub fn adapter(self)->&'static Adapter{match self{Self::Discord=>&DISCORD,Self::Line=>&LINE,Self::Wechat=>&WECHAT,Self::Qq=>&QQ,Self::WeCom=>&WECOM,Self::Feishu=>&FEISHU,Self::DingTalk=>&DINGTALK}}
     pub fn name(self)->&'static str{self.adapter().name}
     pub fn from_notification_id(id:&str)->Option<Self>{
         let id=id.trim();
@@ -104,10 +117,22 @@ impl Messenger {
             let adapter=client.adapter();
             adapter.notification_id.eq_ignore_ascii_case(id) || adapter.aliases.iter().any(|alias|alias.eq_ignore_ascii_case(id))
         }){return Some(client);}
+        let lower=id.to_ascii_lowercase();
         // Discord 的 AppUserModelId 會隨渠道和安裝方式變化（如 com.squirrel.Discord.Discord），只要包含 Discord 即歸屬 Discord。
-        (Self::REGISTERED.contains(&Self::Discord) && id.to_ascii_lowercase().contains("discord")).then_some(Self::Discord)
+        if Self::REGISTERED.contains(&Self::Discord) && lower.contains("discord"){return Some(Self::Discord);}
+        (Self::REGISTERED.contains(&Self::Line) && is_line_notification_id(&lower)).then_some(Self::Line)
     }
     pub fn enabled(self,settings:&Settings)->bool{settings.notifications && (self.adapter().enabled)(settings)}
+}
+
+fn is_line_notification_id(lower:&str)->bool{
+    lower=="line"
+        || lower=="line.exe"
+        || lower.starts_with("naver.win32_line")
+        || lower.starts_with("line_")
+        || lower.starts_with("line.")
+        || lower.ends_with(".line")
+        || lower.ends_with("!line")
 }
 
 pub fn taskbar_client(app:&str,id:&str)->Option<Messenger>{
@@ -211,6 +236,14 @@ fn discord_icon(c:&Card,x:f32,y:f32){
     }
 }
 
+fn line_icon(c:&Card,x:f32,y:f32){
+    let rect=c.rect(x-9.5,y-9.5,19.0,19.0);
+    let icon=egui::Image::new(egui::include_image!("../assets/messenger/line.svg"));
+    if let Ok(egui::load::TexturePoll::Ready{texture})=icon.load_for_size(c.ui.ctx(),rect.size()){
+        c.painter.image(texture.id,rect,egui::Rect::from_min_max(egui::Pos2::ZERO,egui::pos2(1.0,1.0)),egui::Color32::WHITE);
+    }
+}
+
 fn wechat_icon(c:&Card,x:f32,y:f32){
     use egui::Color32;
     let ink=Color32::from_gray(24);let back=Color32::from_rgb(70,203,123);let front=Color32::from_rgb(145,235,165);
@@ -244,25 +277,30 @@ mod tests {
             assert_eq!(Messenger::from_notification_id(adapter.notification_id),Some(client));
             assert!(!adapter.process_names.is_empty());
             #[cfg(windows)]{
-                // Discord 走系統通知，同時保留工作列閃動作為補充（原生視窗閃動監聽）。
-                assert_eq!(adapter.native.taskbar.is_some(),adapter.capture==Capture::Taskbar||client==Messenger::Discord);
+                // Discord 與 LINE 走系統通知，同時保留工作列閃動作為補充（原生視窗閃動監聽）。
+                assert_eq!(adapter.native.taskbar.is_some(),adapter.capture==Capture::Taskbar||matches!(client,Messenger::Discord|Messenger::Line));
             }
         }
-        for id in ["QQMusic","企业微信助手","FeishuMeeting","DingTalkHelper","unknown"]{assert_eq!(Messenger::from_notification_id(id),None,"未接入的应用不能误认为现有客户端");}
+        for id in ["QQMusic","企业微信助手","FeishuMeeting","DingTalkHelper","online","commandline","airline","unknown"]{assert_eq!(Messenger::from_notification_id(id),None,"未接入的应用不能误认为现有客户端：{id}");}
     }
     #[test]
-    fn only_discord_is_registered_by_default_and_matches_every_discord_app_identity(){
+    fn only_discord_and_line_are_registered_by_default_and_match_their_identities(){
         if cfg!(feature="cn-messengers"){return;}
-        assert_eq!(Messenger::REGISTERED,&[Messenger::Discord]);
+        assert_eq!(Messenger::REGISTERED,&[Messenger::Discord,Messenger::Line]);
         for id in ["com.squirrel.Discord.Discord","com.squirrel.Discord.DiscordPTB","Discord","discord.exe","Discord.Canary"]{
             assert_eq!(Messenger::from_notification_id(id),Some(Messenger::Discord),"{id}");
         }
-        for id in ["Tencent.WeChat","Tencent.Weixin","QQ","com.electron.Feishu","WXWork","DingTalk","unknown"]{
-            assert_eq!(Messenger::from_notification_id(id),None,"默认功能关闭时 {id} 不能被注册");
+        for id in ["LINE","line.exe","NAVER.WIN32_LINEwin8_8ptj331gd3tyt!LINE","LINE_x486b4ff3yryg!LINE","LINE.LINE","jp.naver.line"]{
+            assert_eq!(Messenger::from_notification_id(id),Some(Messenger::Line),"{id}");
+        }
+        for id in ["online","commandline","offline","Tencent.WeChat","Tencent.Weixin","QQ","com.electron.Feishu","WXWork","DingTalk","unknown"]{
+            assert_eq!(Messenger::from_notification_id(id),None,"{id} 不能誤識別或被註冊");
         }
         assert_eq!(taskbar_client("微信","unknown"),None);
-        assert_eq!(taskbar_client("Discord","unknown"),None,"Discord 走系统通知渠道，不参与任务栏显示名匹配");
+        assert_eq!(taskbar_client("Discord","unknown"),None,"Discord 走系統通知清單，工作列直連不靠顯示名稱猜測");
+        assert_eq!(taskbar_client("LINE","unknown"),None,"LINE 走系統通知清單，工作列事件直接依 PID/路徑比對");
         assert!(NotificationFilter::for_settings(&Settings{qq_only:true,..Default::default()}).allows("com.squirrel.Discord.Discord"),"QQ 专用过滤不能屏蔽 Discord");
+        assert!(NotificationFilter::for_settings(&Settings{qq_only:true,..Default::default()}).allows("NAVER.WIN32_LINEwin8_8ptj331gd3tyt!LINE"));
     }
     #[cfg(feature="cn-messengers")]
     #[test]

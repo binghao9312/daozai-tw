@@ -7,6 +7,10 @@ pub(crate) const DISCORD:NativeAdapter=NativeAdapter{
     paths:||paths(Messenger::Discord),main_frame:|class,style,extended|main_frame(Messenger::Discord,class,style,extended),
     accounts:None,ready,strict_window:true,open,taskbar:Some(|ctx|start(Messenger::Discord,ctx)),
 };
+pub(crate) const LINE:NativeAdapter=NativeAdapter{
+    paths:line_paths,main_frame:|class,style,extended|main_frame(Messenger::Line,class,style,extended),
+    accounts:None,ready,strict_window:true,open,taskbar:Some(|ctx|start(Messenger::Line,ctx)),
+};
 pub(crate) const WECOM:NativeAdapter=NativeAdapter{
     paths:||paths(Messenger::WeCom),main_frame:|class,style,extended|main_frame(Messenger::WeCom,class,style,extended),
     accounts:None,ready,strict_window:true,open,taskbar:Some(|ctx|start(Messenger::WeCom,ctx)),
@@ -20,6 +24,23 @@ pub(crate) const DINGTALK:NativeAdapter=NativeAdapter{
     accounts:None,ready,strict_window:true,open,taskbar:Some(|ctx|start(Messenger::DingTalk,ctx)),
 };
 fn paths(client:Messenger)->Vec<String>{client.adapter().process_names.iter().map(|name|format!("*{}",name.to_ascii_lowercase())).collect()}
+fn line_paths()->Vec<String>{
+    use windows::{core::w,Win32::System::Registry::HKEY_CURRENT_USER};
+    let mut found=Vec::new();
+    if let Some(dir)=registry_string(HKEY_CURRENT_USER,w!("Software\\LINE Corporation\\LINE"),w!("InstallDir")){
+        let base=std::path::PathBuf::from(dir);
+        found.push(base.join("current").join("LINE.exe"));
+        found.push(base.join("LINE.exe"));
+    }
+    if let Some(local)=std::env::var_os("LOCALAPPDATA"){
+        found.push(std::path::PathBuf::from(local).join("LINE").join("bin").join("current").join("LINE.exe"));
+    }
+    let mut out:Vec<String>=found.into_iter().filter(|p|p.is_absolute() && p.is_file())
+        .filter_map(|p|p.canonicalize().ok()).map(|p|normalized(&p.to_string_lossy())).collect();
+    out.sort();out.dedup();
+    out.extend(paths(Messenger::Line));
+    out
+}
 fn start(client:Messenger,ctx:eframe::egui::Context)->Result<Box<dyn TaskbarSource>,String>{
     Ok(Box::new(crate::wechat::Listener::for_client(client,ctx)?))
 }
@@ -27,6 +48,7 @@ fn main_frame(client:Messenger,class:&str,style:u32,extended:u32)->bool{
     if style&WS_CHILD.0!=0 || extended&(WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE).0!=0{return false;}
     match client{
         Messenger::Discord=>class=="Chrome_WidgetWin_1" && frame_style(class,style,extended),
+        Messenger::Line=>class.starts_with("Qt") && class.ends_with("QWindowIcon") && frame_style(class,style,extended),
         Messenger::WeCom=>class=="WeWorkWindow",
         Messenger::Feishu=>class=="Chrome_WidgetWin_1" && frame_style(class,style,extended),
         Messenger::DingTalk=>(class=="StandardFrame_DingTalk" || class.starts_with("Qt") && class.ends_with("QWindowIcon")) && frame_style(class,style,extended),
@@ -39,6 +61,7 @@ pub(crate) unsafe fn main_window(window:HWND,client:Messenger)->bool{
         || !client_main_frame(client,&class_name(window),GetWindowLongW(window,GWL_STYLE)as u32,GetWindowLongW(window,GWL_EXSTYLE)as u32){return false;}
     if client==Messenger::DingTalk && class_name(window)!=DINGTALK_FRAME && has_dingtalk_frame(window_pid(window)){return false;}
     if client==Messenger::Discord && !discord_title(&window_title(window)) && discord_main_frame(window_pid(window)).is_some(){return false;}
+    if client==Messenger::Line && !line_title(&window_title(window)) && line_main_frame(window_pid(window)).is_some(){return false;}
     if client==Messenger::Feishu && !feishu_title(&window_title(window)) && feishu_main_frame(window_pid(window)).is_some(){return false;}
     if IsIconic(window).as_bool(){return true;}
     let mut rect=RECT::default();
@@ -110,6 +133,37 @@ unsafe fn discord_main_frame(pid:u32)->Option<HWND>{
     match search.found.as_slice(){[one]=>Some(*one),_=>None}
 }
 
+/// LINE 主視窗標題通常為「LINE」，獨立聊天窗為對話名稱；若已存在該行程的「LINE」主視窗，則不把獨立聊天窗當第二個主視窗。
+fn line_title(title:&str)->bool{title.trim().eq_ignore_ascii_case("LINE")}
+unsafe fn line_main_frame(pid:u32)->Option<HWND>{
+    struct Search{pid:u32,found:Vec<HWND>}
+    unsafe extern "system" fn visit(window:HWND,data:LPARAM)->BOOL{
+        let search=&mut *(data.0 as *mut Search);
+        let class=class_name(window);
+        if window_pid(window)==search.pid && class.starts_with("Qt") && class.ends_with("QWindowIcon") && line_title(&window_title(window)){search.found.push(window);}
+        true.into()
+    }
+    let mut search=Search{pid,found:Vec::new()};
+    let _=EnumWindows(Some(visit),LPARAM((&mut search as *mut Search)as isize));
+    match search.found.as_slice(){[one]=>Some(*one),_=>None}
+}
+unsafe fn line_owner(window:HWND)->Option<HWND>{
+    let class=class_name(window);
+    if !(class.starts_with("Qt") && class.ends_with("QWindowIcon")) || line_title(&window_title(window)){return None;}
+    line_main_frame(window_pid(window))
+}
+fn line_launcher_exe()->Option<std::path::PathBuf>{
+    use windows::{core::w,Win32::System::Registry::HKEY_CURRENT_USER};
+    let mut candidates=Vec::new();
+    if let Some(launcher)=registry_string(HKEY_CURRENT_USER,w!("Software\\LINE Corporation\\LINE"),w!("LauncherPath")){
+        candidates.push(std::path::PathBuf::from(launcher));
+    }
+    if let Some(local)=std::env::var_os("LOCALAPPDATA"){
+        candidates.push(std::path::PathBuf::from(local).join("LINE").join("bin").join("LineLauncher.exe"));
+    }
+    candidates.into_iter().find(|p|p.is_file() && p.file_name().and_then(|n|n.to_str()).is_some_and(|n|n.eq_ignore_ascii_case("LineLauncher.exe")))
+}
+
 /// 飛書獨立會話 / 文件視窗閃動時，歸到同程序的主視窗：同一程序就是同一個飛書例項，不會串到其他帳號。
 unsafe fn feishu_owner(window:HWND)->Option<HWND>{
     if !feishu_frame(window) || feishu_title(&window_title(window)){return None;}
@@ -131,10 +185,10 @@ fn candidates(client:Messenger,paths:&[String])->Option<Vec<Target>>{unsafe{
         Some(Target{unread,started:process_started(*process)?})
     }).collect()
 }}
-/// Discord 的系統通知沒有帳號登記（accounts 為空），無法像 QQ、微信那樣依通知綁定行程。
-/// 只有當前恰好存在一個 Discord 主視窗時才綁定它；多個實例或找不到時不猜測，保留「無法確認」。
-pub(crate) fn toast_target()->Option<Target>{
-    let targets=candidates(Messenger::Discord,&paths(Messenger::Discord))?;
+/// Discord / LINE 的系統通知沒有帳號登記（accounts 為空），無法像 QQ、微信那樣依通知綁定行程。
+/// 只有當前恰好存在一個該客戶端主視窗時才綁定它；多個實例或找不到時不猜測，保留「無法確認」。
+pub(crate) fn toast_target(client:Messenger)->Option<Target>{
+    let targets=candidates(client,&client_paths(client))?;
     match targets.as_slice(){[one]=>Some(*one),_=>None}
 }
 /// 只接受原事件視窗或其明確的所屬主視窗，同程序的其他視窗不能借用。
@@ -148,6 +202,7 @@ pub(crate) fn flash_target(client:Messenger,window:HWND,paths:&[String])->Option
     let Some(accounts)=candidates(client,paths)else{return Some(Unread::of(client));};
     let mut root=GetAncestor(window,GA_ROOTOWNER);
     if client==Messenger::Feishu {if let Some(main)=feishu_owner(root){root=main;}}
+    else if client==Messenger::Line {if let Some(main)=line_owner(root){root=main;}}
     Some(select_target(client,root.0 as isize,&accounts))
 }}
 fn ready(target:Target)->bool{
@@ -169,7 +224,11 @@ fn open(unread:Unread,paths:&[String],_:bool)->Result<(),OpenError>{unsafe{
     match wake_route(unread.source,IsWindowVisible(window).as_bool(),IsIconic(window).as_bool()) {
         WakeRoute::Restore=>{let _=ShowWindowAsync(window,SW_RESTORE);}
         WakeRoute::Show=>{let _=ShowWindowAsync(window,SW_SHOW);}
-        WakeRoute::Relaunch=>return if unread.source==Messenger::Discord {relaunch_discord(window)} else {relaunch(window,unread.pid,paths)},
+        WakeRoute::Relaunch=>return match unread.source{
+            Messenger::Discord=>relaunch_discord(window),
+            Messenger::Line=>relaunch_line(window,unread.pid,paths),
+            _=>relaunch(window,unread.pid,paths),
+        },
         WakeRoute::Focus=>{}
     }
     if SetForegroundWindow(window).as_bool(){wake_step("系统已接受");Ok(())}else{wake_step("系统拒绝切前台");Err(OpenError::Unavailable)}
@@ -179,12 +238,30 @@ fn open(unread:Unread,paths:&[String],_:bool)->Result<(),OpenError>{unsafe{
 enum WakeRoute {Focus,Restore,Show,Relaunch}
 /// 怎樣把主視窗帶到前臺。飛書關到系統匣後視窗被隱藏，若由島仔直接 `ShowWindow`，飛書不會恢復渲染，
 /// 頁面停在載入骨架、點選無響應（#181，本機飛書 8.6 復現）；改為再啟動一次飛書主程式，由飛書自己顯示原視窗。
+/// LINE（Qt）與 Discord 縮到系統匣時亦同，交由各自的啟動器／主程式顯示原視窗。
 /// 最小化的視窗照常還原（實測正常）；其他客戶端未驗證，保持原做法。
 fn wake_route(source:Messenger,visible:bool,iconic:bool)->WakeRoute {
     if iconic {WakeRoute::Restore}
     else if visible {WakeRoute::Focus}
-    else if source==Messenger::Feishu || source==Messenger::Discord {WakeRoute::Relaunch}
+    else if matches!(source,Messenger::Feishu|Messenger::Discord|Messenger::Line) {WakeRoute::Relaunch}
     else {WakeRoute::Show}
+}
+
+/// LINE 縮到系統匣時，優先執行 `LineLauncher.exe` 喚起原主視窗，找不到啟動器時改啟動已核實的 `LINE.exe`。
+unsafe fn relaunch_line(window:HWND,pid:u32,paths:&[String])->Result<(),OpenError>{
+    if let Some(launcher)=line_launcher_exe(){
+        wake_step("窗口在托盘中，由 LineLauncher.exe 唤起");
+        let started=std::process::Command::new(&launcher)
+            .stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn();
+        if started.is_err(){wake_step("启动 LineLauncher.exe 失败");return relaunch(window,pid,paths);}
+        let until=std::time::Instant::now()+std::time::Duration::from_secs(3);
+        while std::time::Instant::now()<until {
+            if IsWindowVisible(window).as_bool(){let _=SetForegroundWindow(window);wake_step("LINE 已显示主窗口");return Ok(());}
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        wake_step("LINE 3 秒内没有显示主窗口");return Err(OpenError::Unavailable);
+    }
+    relaunch(window,pid,paths)
 }
 
 /// Discord 縮到系統匣時，執行 `%LOCALAPPDATA%\Discord\Update.exe --processStart Discord.exe` 讓它顯示原主視窗。
@@ -262,7 +339,7 @@ mod tests{
         assert!(steps.iter().any(|s|s.contains("由客户端自己显示")));
     }}
     #[test]
-    fn discord_wakes_minimized_windows_by_restore_and_tray_windows_by_update_exe(){
+    fn discord_and_line_wake_routes_and_titles_follow_window_rules(){
         assert_eq!(wake_route(Messenger::Discord,true,true),WakeRoute::Restore,"最小化的 Discord 用 SW_RESTORE 还原");
         assert_eq!(wake_route(Messenger::Discord,true,false),WakeRoute::Focus,"可见窗口只需前置");
         assert_eq!(wake_route(Messenger::Discord,false,false),WakeRoute::Relaunch,"缩到系统匣时交给 Update.exe");
@@ -270,6 +347,17 @@ mod tests{
         assert!(discord_title("Discord"));
         assert!(!discord_title("Discord 频道设置对话框的外部说明文字"),"标题必须是 Discord 主窗口格式");
         assert!(!discord_title("Chrome 下载"));
+
+        assert_eq!(wake_route(Messenger::Line,true,true),WakeRoute::Restore);
+        assert_eq!(wake_route(Messenger::Line,true,false),WakeRoute::Focus);
+        assert_eq!(wake_route(Messenger::Line,false,false),WakeRoute::Relaunch);
+        assert!(line_title("LINE"));
+        assert!(line_title(" Line "));
+        assert!(!line_title("王小明 - LINE 聊天"));
+        let frame=WS_OVERLAPPEDWINDOW.0;
+        assert!(main_frame(Messenger::Line,"Qt663QWindowIcon",frame,0));
+        assert!(!main_frame(Messenger::Line,"Qt663QWindowIcon",WS_POPUP.0,0));
+        assert!(!main_frame(Messenger::Line,"Qt663QWindowIcon",frame,WS_EX_TOOLWINDOW.0));
     }
     #[test]
     fn main_window_rules_exclude_login_popups_and_cross_client_windows(){

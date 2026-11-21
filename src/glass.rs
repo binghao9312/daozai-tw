@@ -32,6 +32,8 @@ pub const SATURATION: f32 = 1.45;
 pub const DISPERSION: f32 = 0.03;
 /// 深色玻璃的底色與描邊（`poni-core/src/look.rs:139, 142`）。
 pub const GROUND_DARK: (u8, u8, u8) = (0x1C, 0x1C, 0x1E);
+// /// 液態玻璃的冷調深邃底色。
+// pub const LIQUID_GROUND: (u8, u8, u8) = (0x10, 0x15, 0x20);
 pub const BORDER_ALPHA: f32 = 0.10;
 
 /// 玻璃厚度：0 = 收起的小藥丸，1 = 展開的面板。
@@ -138,6 +140,38 @@ pub fn light_tint(backdrop: Option<[f32; 3]>, blurred: bool) -> f32 {
     if blurred { (need + 0.03).clamp(0.12, 0.95) } else { (need + 0.20).clamp(0.72, 0.96) }
 }
 
+/*
+/// 液態玻璃的著色量：保持高通透度（80%–92% 透背景），只依背景亮度疊極輕的冷調底膜，
+/// 由輪廓 3D 彎月面焦散、折射暗帶與字體黑邊共同確保層次與可讀性。
+pub fn liquid_glass_tint(backdrop: Option<[f32; 3]>, blurred: bool) -> f32 {
+    let luma = backdrop.map_or(0.45, rel_luminance).clamp(0.0, 1.0);
+    let base = 0.08 + 0.10 * luma;
+    if blurred { base.clamp(0.08, 0.18) } else { (base + 0.02).clamp(0.10, 0.20) }
+}
+
+/// 液態玻璃輪廓上的雙向 Fresnel 鏡面高光與微色散偏色：
+/// 傳入外法線方向（單位向量）與可選的游標偏移向量（已歸一化或單位方向），
+/// 返回 `(不透明度 0.15..=0.95, [r, g, b])`。
+pub fn liquid_fresnel_rim(normal: [f32; 2], cursor_offset: Option<[f32; 2]>) -> (f32, [u8; 3]) {
+    let len = (normal[0] * normal[0] + normal[1] * normal[1]).sqrt().max(1e-4);
+    let (nx, ny) = (normal[0] / len, normal[1] / len);
+    // 主光源來自左上方 (-0.65, -0.76)，次級底緣反光位於右下方 (0.65, 0.76)。
+    let key_dot = (nx * -0.65 + ny * -0.76).clamp(0.0, 1.0);
+    let bounce_dot = (nx * 0.65 + ny * 0.76).clamp(0.0, 1.0);
+    let cursor_boost = cursor_offset.map_or(0.0, |c| {
+        let cl = (c[0] * c[0] + c[1] * c[1]).sqrt();
+        if cl < 1e-4 { 0.0 } else { (nx * (c[0] / cl) + ny * (c[1] / cl)).clamp(0.0, 1.0).powf(2.2) * 0.28 }
+    });
+    let alpha = (0.16 + 0.62 * key_dot.powf(1.6) + 0.28 * bounce_dot.powf(2.0) + cursor_boost).clamp(0.15, 0.95);
+    // 左上冷白帶極淺青、右下呈現微藍紫折光色散，呈現厚玻璃稜鏡邊緣感。
+    let warm_cool = ((nx - ny) * 0.5).clamp(-1.0, 1.0);
+    let prism_b = 255.0;
+    let prism_r = (218.0 + 18.0 * key_dot - 16.0 * bounce_dot + 12.0 * (-warm_cool)).round().clamp(165.0, 255.0) as u8;
+    let prism_g = (234.0 + 16.0 * key_dot - 22.0 * bounce_dot + 10.0 * warm_cool).round().clamp(185.0, 255.0) as u8;
+    (alpha, [prism_r, prism_g, prism_b as u8])
+}
+*/
+
 /// 淺色玻璃的底色。
 pub const LIGHT_GROUND: [f32; 3] = [248.0 / 255.0, 248.0 / 255.0, 250.0 / 255.0];
 
@@ -186,6 +220,28 @@ mod tests {
         }
         assert!(light_tint(Some([1.0; 3]), true) < light_tint(Some([0.0; 3]), true), "亮背景更通透");
     }
+
+    /*
+    #[test]
+    fn liquid_glass_keeps_text_readable_and_fresnel_rim_varies_with_direction() {
+        for b in [[0.0; 3], [0.25; 3], [0.55; 3], [0.95, 0.9, 0.7], [1.0; 3]] {
+            for blurred in [true, false] {
+                let t = liquid_glass_tint(Some(b), blurred);
+                assert!((0.08..=0.20).contains(&t), "液態玻璃底層應維持高通透：{b:?} {blurred} {t}");
+            }
+        }
+        assert!(liquid_glass_tint(Some([0.05; 3]), true) < liquid_glass_tint(Some([1.0; 3]), true));
+        assert!(liquid_glass_tint(Some([0.05; 3]), true) < glass_tint(Some([0.05; 3]), true));
+        assert!(liquid_glass_tint(Some([1.0; 3]), true) < glass_tint(Some([1.0; 3]), true));
+        let (key_a, key_rgb) = liquid_fresnel_rim([-0.7, -0.7], None);
+        let (side_a, _) = liquid_fresnel_rim([1.0, 0.0], None);
+        let (bounce_a, bounce_rgb) = liquid_fresnel_rim([0.7, 0.7], None);
+        assert!(key_a > bounce_a && bounce_a > side_a);
+        assert!(key_rgb[0] > bounce_rgb[0] && key_rgb[2] == 255 && bounce_rgb[2] == 255);
+        let (cursor_a, _) = liquid_fresnel_rim([1.0, 0.0], Some([1.0, 0.0]));
+        assert!(cursor_a > side_a);
+    }
+    */
 
     #[test]
     fn backdrop_estimate_leans_toward_bright_samples() {

@@ -9,9 +9,9 @@ pub(crate) fn player_exe(source:&str)->Option<&'static str> {
         "cloudmusic.exe"=>"cloudmusic.exe",
         "qqmusic"|"qqmusic.exe"|"tencent.qqmusic"=>"QQMusic.exe",
         "汽水音乐"|"sodamusic.exe"=>"SodaMusic.exe",
-        "spotify"|"spotify.exe"=>"Spotify.exe",
         "kwmusic.exe"=>"kwmusic.exe",
         "bodian_pc.exe"=>"bodian_pc.exe",
+        _ if super::is_spotify(source)=>"Spotify.exe",
         _ if super::apple_music::is_source(source)=>"AppleMusic.exe",
         _=>return None,
     })

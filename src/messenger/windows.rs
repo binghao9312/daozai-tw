@@ -121,7 +121,7 @@ pub(crate) fn window_pid(hwnd:HWND)->u32{
 pub(crate) unsafe fn foreground_main_pid(source:Messenger,paths:&[String])->Option<u32>{
     let hwnd=GetForegroundWindow();
     if IsIconic(hwnd).as_bool() || !visible_main_frame(hwnd,source) || !matches(hwnd,paths){return None;}
-    if Messenger::OFFICE.contains(&source) && !super::desktop::main_window(hwnd,source){return None;}
+    if (Messenger::OFFICE.contains(&source) || matches!(source,Messenger::Discord|Messenger::Line)) && !super::desktop::main_window(hwnd,source){return None;}
     let pid=window_pid(hwnd);
     Some(if source==Messenger::Wechat{crate::wechat::account_pid(pid,paths)}else{pid})
 }
@@ -265,8 +265,8 @@ impl ToastAccounts {
     pub fn target(&mut self,client:Messenger,id:u32,created:i64)->Option<Target>{
         match self.entries.iter_mut().find(|entry|entry.client==client){
             Some(entry)=>entry.history.target(id,created,client.adapter().native.ready),
-            // 沒有帳號登記的客戶端（如 Discord）只在唯一主視窗時綁定，其餘情況保持無法確認。
-            None=>if client==Messenger::Discord {super::desktop::toast_target()} else {None},
+            // 沒有帳號登記的客戶端（如 Discord、LINE）只在唯一主視窗時綁定，其餘情況保持無法確認。
+            None=>if matches!(client,Messenger::Discord|Messenger::Line) {super::desktop::toast_target(client)} else {None},
         }
     }
     pub fn retain(&mut self,exists:impl Fn(Messenger,u32,i64)->bool){

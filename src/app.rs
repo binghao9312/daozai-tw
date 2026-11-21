@@ -2040,6 +2040,13 @@ impl App {
         self.screen=env.screen;
         if self.settings.skin.is_glass() {
             let target=if self.settings.skin==model::Skin::GlassLight {glass::light_tint(env.backdrop,env.glass_blur)}else{glass::glass_tint(env.backdrop,env.glass_blur)};
+            /*
+            let target=match self.settings.skin {
+                model::Skin::GlassLight=>glass::light_tint(env.backdrop,env.glass_blur),
+                model::Skin::LiquidGlass=>glass::liquid_glass_tint(env.backdrop,env.glass_blur),
+                _=>glass::glass_tint(env.backdrop,env.glass_blur),
+            };
+            */
             self.glass_tint=if self.glass_tint<=0.0 {target}else{anim::approach(self.glass_tint,target,3.0,dt)};
         }
         let browser_minimal=self.settings.browser_minimal && self.browser_at_top;
@@ -2239,7 +2246,12 @@ impl App {
         if let Some(r)=outside_badge{
             let appear=self.messenger_appear();
             painter.rect_filled(r,r.width()/2.0,paint::alpha(self.glass_fill(),appear));
-            if glass_skin {painter.rect_stroke(r,r.width()/2.0,egui::Stroke::new(1.0_f32,paint::alpha(self.glass_rim(),appear)),egui::StrokeKind::Inside);}
+            /*
+            if self.settings.skin==model::Skin::LiquidGlass {
+                self.paint_liquid_round_optics(&painter,r,r.width()/2.0,env.cursor,appear);
+            } else */ if glass_skin {
+                painter.rect_stroke(r,r.width()/2.0,egui::Stroke::new(1.0_f32,paint::alpha(self.glass_rim(),appear)),egui::StrokeKind::Inside);
+            }
         }
         if self.settings.skin==model::Skin::Fluid {
             self.fluid_origin=body.min;
@@ -2324,7 +2336,10 @@ impl App {
             let from=crate::skin_paint::shape_count(&ctx,layer);
             shape::shadow(&painter,rect,0.0,0.0,radius,0.5*shadow_k);
             painter.rect_filled(rect,radius,self.glass_fill());
-            if glass_skin {
+            /*
+            if self.settings.skin==model::Skin::LiquidGlass {
+                self.paint_liquid_round_optics(&painter,rect,radius,env.cursor,1.0);
+            } else */ if glass_skin {
                 painter.rect_stroke(rect,radius,egui::Stroke::new(1.0_f32,self.glass_rim()),egui::StrokeKind::Inside);
             }
             keep_colors.push((from,crate::skin_paint::shape_count(&ctx,layer)));
@@ -2666,7 +2681,13 @@ impl App {
 
     /// 當前皮膚的換色調色盤（經典為 None）。
     pub(crate) fn skin_palette(&self)->Option<crate::skin_paint::Palette> {
-        match self.settings.skin {model::Skin::Cream=>Some(crate::skin_paint::CREAM),model::Skin::GlassLight=>Some(crate::skin_paint::GLASS_LIGHT),model::Skin::GlassDark=>Some(crate::skin_paint::GLASS_DARK),model::Skin::Classic|model::Skin::Fluid=>None}
+        match self.settings.skin {
+            model::Skin::Cream=>Some(crate::skin_paint::CREAM),
+            model::Skin::GlassLight=>Some(crate::skin_paint::GLASS_LIGHT),
+            model::Skin::GlassDark=>Some(crate::skin_paint::GLASS_DARK),
+            // model::Skin::LiquidGlass=>Some(crate::skin_paint::LIQUID_GLASS),
+            model::Skin::Classic|model::Skin::Fluid=>None,
+        }
     }
 
     /// 設定頁預覽用的島體底色：沒有真實模糊，毛玻璃按較實的玻璃表現。
@@ -2674,6 +2695,7 @@ impl App {
         match self.settings.skin {
             model::Skin::GlassDark=>{let (r,g,b)=glass::GROUND_DARK;Color32::from_rgba_unmultiplied(r,g,b,215)}
             model::Skin::GlassLight=>{let [r,g,b]=glass::LIGHT_GROUND.map(|v|(v*255.0).round() as u8);Color32::from_rgba_unmultiplied(r,g,b,225)}
+            // model::Skin::LiquidGlass=>{let (r,g,b)=glass::LIQUID_GROUND;Color32::from_rgba_unmultiplied(r,g,b,48)}
             _=>self.glass_fill(),
         }
     }
@@ -2684,19 +2706,21 @@ impl App {
         match self.settings.skin {
             model::Skin::GlassDark=>{let (r,g,b)=glass::GROUND_DARK;Color32::from_rgba_unmultiplied(r,g,b,alpha)}
             model::Skin::GlassLight=>{let [r,g,b]=glass::LIGHT_GROUND.map(|v|(v*255.0).round() as u8);Color32::from_rgba_unmultiplied(r,g,b,alpha)}
+            // model::Skin::LiquidGlass=>{let (r,g,b)=glass::LIQUID_GROUND;Color32::from_rgba_unmultiplied(r,g,b,alpha)}
             model::Skin::Cream=>{let [r,g,b]=crate::skin_paint::CREAM.paper;Color32::from_rgb(r,g,b)}
             model::Skin::Classic=>Color32::BLACK,
             model::Skin::Fluid=>self.fluid.compose(0.5,0.5,1.0,1.0,0.0),
         }
     }
 
-    /// 毛玻璃邊緣高光：淺色玻璃更亮，像蘋果的玻璃邊緣。
+    /// 毛玻璃邊緣高光：淺色玻璃更亮。
     fn glass_rim(&self)->Color32 {
+        // if self.settings.skin==model::Skin::LiquidGlass {return Color32::from_rgba_unmultiplied(220,242,255,140);}
         let strength=if self.settings.skin==model::Skin::GlassLight {0.55} else {glass::rim_alpha()*0.7};
         Color32::from_white_alpha((255.0*strength).round() as u8)
     }
 
-    /// 繪製島體（或通知膠囊）的本體：經典皮膚為純黑；毛玻璃為著色底 + 頂部柔光 + 邊緣高光。
+    /// 繪製島體（或通知膠囊）的本體：經典為純黑；毛玻璃為著色底 + 頂部柔光 + 邊緣高光。
     fn paint_body(&self,painter:&egui::Painter,rect:Rect,flare:f32,flare_h:f32,radius:f32,feather:f32){
         let skin=self.settings.skin;
         if skin==model::Skin::Fluid {
@@ -2723,7 +2747,10 @@ impl App {
         if self.settings.island_shape==model::IslandShape::Pill {
             let radius=radius.min(rect.height().min(rect.width())*0.5);
             painter.rect_filled(rect,radius,self.glass_fill());
-            if skin.is_glass() && rect.height()>=10.0 {
+            /*
+            if skin==model::Skin::LiquidGlass {
+                self.paint_liquid_glass_optics(painter,rect,flare,flare_h,radius,feather,cursor);
+            } else */ if skin.is_glass() && rect.height()>=10.0 {
                 painter.rect_stroke(rect,radius,egui::Stroke::new(1.0_f32,self.glass_rim()),egui::StrokeKind::Inside);
             }
             return;
@@ -2731,6 +2758,12 @@ impl App {
         let dock=self.dock();
         if dock.is_side() {
             shape::fill_docked(painter,rect,dock,flare,flare_h,radius,self.glass_fill(),feather);
+            /*
+            if skin==model::Skin::LiquidGlass {
+                self.paint_liquid_glass_optics(painter,rect,flare,flare_h,radius,feather,cursor);
+                return;
+            }
+            */
             if !skin.is_glass() {return;}
             if skin==model::Skin::GlassLight {
                 let sheen=Color32::from_white_alpha(15);
@@ -2744,6 +2777,12 @@ impl App {
             return;
         }
         shape::fill(painter,rect,flare,flare_h,radius,self.glass_fill(),feather);
+        /*
+        if skin==model::Skin::LiquidGlass {
+            self.paint_liquid_glass_optics(painter,rect,flare,flare_h,radius,feather,cursor);
+            return;
+        }
+        */
         if !skin.is_glass() {return;}
         // 玻璃厚度帶來的上亮下暗：頂部白光在前 60% 高度（最多 64 點）內淡出；淺色玻璃更亮。
         if skin==model::Skin::GlassLight {
@@ -2755,6 +2794,192 @@ impl App {
             painter.add(egui::Shape::line(shape::outline(edge,flare,flare_h,(radius-0.5).max(0.0)),egui::Stroke::new(1.0_f32,self.glass_rim())));
         }
     }
+
+    /*
+    /// 液態玻璃光學層：中央完全透明通透，僅沿島體輪廓外緣 0..15pt 形成 3D 彎月面聚光與折射暗帶，加上游標水波亮點。
+    #[allow(clippy::too_many_arguments)]
+    fn paint_liquid_glass_optics(&self,painter:&egui::Painter,rect:Rect,flare:f32,flare_h:f32,radius:f32,feather:f32,cursor:Option<Pos2>) {
+        if rect.width()<10.0 || rect.height()<10.0 {return;}
+        let pill=self.settings.island_shape==model::IslandShape::Pill;
+        let dock=self.dock();
+        let (map,frame)=shape::EdgeMap::of(rect,if pill {model::Dock::Top}else{dock});
+        let mut rows=shape::sections(frame,flare,flare_h,radius);
+        if pill {
+            let mid=frame.center().y;
+            rows.retain(|row|row.0>mid && row.0>=frame.bottom()-radius);
+            let top=rows.iter().rev().map(|&(y,l,r)|(2.0*mid-y,l,r)).collect::<Vec<_>>();
+            rows.splice(0..0,top);
+        }
+        if rows.len()>=2 {
+            let height=rect.height().max(1.0);
+            let thick=glass::thickness(height);
+            let r_eff=radius.min(frame.height()*0.5).min(frame.width()*0.5).max(0.0);
+            let local_cursor=cursor.filter(|c|rect.expand(40.0).contains(*c)).map(|c|c-rect.min);
+            let contour_at=|y:f32|->(f32,f32){
+                if y<=rows[0].0 {return (rows[0].1,rows[0].2);}
+                let last=rows.len()-1;
+                if y>=rows[last].0 {return (rows[last].1,rows[last].2);}
+                let idx=rows.partition_point(|row|row.0<y).clamp(1,last);
+                let (ya,la,ra)=rows[idx-1];
+                let (yb,lb,rb)=rows[idx];
+                let span=yb-ya;
+                let t=if span.abs()<1e-4 {0.0} else {((y-ya)/span).clamp(0.0,1.0)};
+                (la+(lb-la)*t,ra+(rb-ra)*t)
+            };
+            let rows_for_mesh=rows.clone();
+            let mut mesh=shape::shade_mesh(frame,rows_for_mesh,feather,&|x,y|{
+                let (l,r)=contour_at(y);
+                let dx_left=(x-l).max(0.0);
+                let dx_right=(r-x).max(0.0);
+                let dy_top_raw=(y-frame.top()).max(0.0);
+                let dy_bot=(frame.bottom()-y).max(0.0);
+                let dy_top=if pill {dy_top_raw} else {dy_top_raw*1.45+1.2};
+
+                // 計算貼合輪廓的內縮距離 d_edge 與法線（圓角處用精確圓心距，其餘貼合肩部/直邊）。
+                let mut corner:Option<(f32,f32,f32)>=None;
+                if r_eff>1.0 && y>=frame.bottom()-r_eff {
+                    let cy_c=frame.bottom()-r_eff;
+                    if x<=frame.left()+r_eff {
+                        let (vx,vy)=(x-(frame.left()+r_eff),y-cy_c);
+                        if vx<=0.0 && vy>=0.0 {
+                            let dist=vx.hypot(vy);
+                            corner=Some(((r_eff-dist).max(0.0),if dist>1e-3{vx/dist}else{-0.707},if dist>1e-3{vy/dist}else{0.707}));
+                        }
+                    } else if x>=frame.right()-r_eff {
+                        let (vx,vy)=(x-(frame.right()-r_eff),y-cy_c);
+                        if vx>=0.0 && vy>=0.0 {
+                            let dist=vx.hypot(vy);
+                            corner=Some(((r_eff-dist).max(0.0),if dist>1e-3{vx/dist}else{0.707},if dist>1e-3{vy/dist}else{0.707}));
+                        }
+                    }
+                }
+                if corner.is_none() && pill && r_eff>1.0 && y<=frame.top()+r_eff {
+                    let cy_c=frame.top()+r_eff;
+                    if x<=frame.left()+r_eff {
+                        let (vx,vy)=(x-(frame.left()+r_eff),y-cy_c);
+                        if vx<=0.0 && vy<=0.0 {
+                            let dist=vx.hypot(vy);
+                            corner=Some(((r_eff-dist).max(0.0),if dist>1e-3{vx/dist}else{-0.707},if dist>1e-3{vy/dist}else{-0.707}));
+                        }
+                    } else if x>=frame.right()-r_eff {
+                        let (vx,vy)=(x-(frame.right()-r_eff),y-cy_c);
+                        if vx>=0.0 && vy<=0.0 {
+                            let dist=vx.hypot(vy);
+                            corner=Some(((r_eff-dist).max(0.0),if dist>1e-3{vx/dist}else{0.707},if dist>1e-3{vy/dist}else{-0.707}));
+                        }
+                    }
+                }
+                let (d_edge,fnx,fny)=if let Some(hit)=corner {
+                    hit
+                } else {
+                    let d=dx_left.min(dx_right).min(dy_top).min(dy_bot);
+                    let (la,ra)=contour_at(y-1.0);
+                    let (lb,rb)=contour_at(y+1.0);
+                    let slope_l=(lb-la)*0.5;
+                    let slope_r=(rb-ra)*0.5;
+                    let wl=(-dx_left/4.5).exp();
+                    let wr=(-dx_right/4.5).exp();
+                    let wt=(-dy_top/4.5).exp();
+                    let wb=(-dy_bot/4.5).exp();
+                    let mut nx= -wl + wr;
+                    let mut ny= -wt + wb + wl*slope_l - wr*slope_r;
+                    let len=nx.hypot(ny);
+                    if len<1e-3 {
+                        nx=x-frame.center().x;ny=y-frame.center().y;
+                        let cl=nx.hypot(ny).max(1e-3);
+                        (d,nx/cl,ny/cl)
+                    } else {
+                        (d,nx/len,ny/len)
+                    }
+                };
+
+                let world_p=map.apply(Pos2::new(x,y));
+                let p=world_p-rect.min;
+                let cursor_bright=local_cursor.map_or(0.0,|c|{
+                    let dist=((p.x-c.x).powi(2)+(p.y-c.y).powi(2)).sqrt();
+                    if dist>48.0 {0.0} else {
+                        let core=(-(dist/16.0).powi(2)*1.4).exp()*28.0;
+                        let ripple=(-((dist-28.0)/5.5).powi(2)).exp()*22.0;
+                        core+ripple
+                    }
+                });
+                // 中央內區保持完全純淨透明，不繪製整片乳白霧化層。
+                if d_edge>16.0 && cursor_bright<=0.05 {return Color32::TRANSPARENT;}
+
+                let world_n=map.apply(Pos2::new(x+fnx,y+fny))-world_p;
+                let cursor_offset=local_cursor.map(|c|[(c.x-p.x)/rect.width().max(40.0),(c.y-p.y)/rect.height().max(20.0)]);
+                let (rim_a,rim_rgb)=glass::liquid_fresnel_rim([world_n.x,world_n.y],cursor_offset);
+                let meniscus=(1.0-smoothstep(0.0,6.2,d_edge)).powf(1.35);
+                let ridge=(-((d_edge-2.3)/1.35).powi(2)).exp();
+                let cursor_edge_boost=local_cursor.map_or(0.0,|c|{
+                    let dist=((p.x-c.x).powi(2)+(p.y-c.y).powi(2)).sqrt();
+                    (-(dist/56.0).powi(2)).exp()*14.0
+                });
+                let meniscus_a=(meniscus*(30.0+34.0*rim_a+cursor_edge_boost)+ridge*(18.0+26.0*rim_a))*(0.78+0.22*thick);
+                let trough=(-((d_edge-8.5)/3.5).powi(2)).exp()*(24.0+10.0*thick);
+
+                let bright_a=(meniscus_a+cursor_bright).clamp(0.0,220.0);
+                let dark_a=trough.clamp(0.0,110.0);
+                let total_a=(bright_a+dark_a).clamp(0.0,220.0);
+                if total_a<0.5 {return Color32::TRANSPARENT;}
+                let mix_t=(bright_a/(bright_a+dark_a)).clamp(0.0,1.0);
+                let r=lerp(4.0,rim_rgb[0] as f32,mix_t).round().clamp(0.0,255.0) as u8;
+                let g=lerp(10.0,rim_rgb[1] as f32,mix_t).round().clamp(0.0,255.0) as u8;
+                let b=lerp(22.0,rim_rgb[2] as f32,mix_t).round().clamp(0.0,255.0) as u8;
+                Color32::from_rgba_unmultiplied(r,g,b,total_a.round() as u8)
+            });
+            if dock.is_side() && !pill {
+                for vertex in &mut mesh.vertices {vertex.pos=map.apply(vertex.pos);}
+            }
+            painter.add(egui::Shape::mesh(mesh));
+        }
+        let points=if pill {
+            round_rect_points(rect.shrink(0.5),(radius-0.5).max(0.0))
+        } else if dock.is_side() {
+            let edge=if dock==model::Dock::Left {Rect::from_min_max(rect.min+Vec2::new(0.0,0.5),rect.max-Vec2::new(0.5,0.5))}
+                else {Rect::from_min_max(rect.min+Vec2::new(0.5,0.5),rect.max-Vec2::new(0.0,0.5))};
+            shape::outline_docked(edge,dock,flare,flare_h,(radius-0.5).max(0.0))
+        } else {
+            let edge=Rect::from_min_max(rect.min+Vec2::new(0.5,0.0),rect.max-Vec2::new(0.5,0.5));
+            shape::outline(edge,flare,flare_h,(radius-0.5).max(0.0))
+        };
+        Self::paint_liquid_rim_points(painter,&points,rect,cursor,1.0);
+    }
+
+    /// 圓角浮層（如未讀膠囊、詳情卡片）的液態玻璃雙層彎月面與 Fresnel 邊框。
+    fn paint_liquid_round_optics(&self,painter:&egui::Painter,rect:Rect,radius:f32,cursor:Option<Pos2>,opacity:f32) {
+        if rect.width()<8.0 || rect.height()<8.0 || opacity<=0.01 {return;}
+        let opacity=opacity.clamp(0.0,1.0);
+        if rect.width()>=14.0 && rect.height()>=14.0 {
+            let trough_r=(radius-3.2).max(0.0);
+            painter.rect_stroke(rect.shrink(3.2),trough_r,egui::Stroke::new(1.2_f32,Color32::from_rgba_unmultiplied(4,10,22,(32.0*opacity).round() as u8)),egui::StrokeKind::Inside);
+            let inner_r=(radius-1.6).max(0.0);
+            painter.rect_stroke(rect.shrink(1.6),inner_r,egui::Stroke::new(1.4_f32,Color32::from_rgba_unmultiplied(215,244,255,(52.0*opacity).round() as u8)),egui::StrokeKind::Inside);
+        }
+        let points=round_rect_points(rect.shrink(0.5),(radius-0.5).max(0.0));
+        Self::paint_liquid_rim_points(painter,&points,rect,cursor,opacity);
+    }
+
+    fn paint_liquid_rim_points(painter:&egui::Painter,points:&[Pos2],rect:Rect,cursor:Option<Pos2>,opacity:f32) {
+        let center=rect.center();
+        let dark_hairline=Color32::from_rgba_unmultiplied(4,8,16,(125.0*opacity).round().clamp(0.0,255.0) as u8);
+        for pair in points.windows(2) {
+            let d=pair[1]-pair[0];
+            let len=d.length();
+            if !len.is_finite() || len<1e-3 {continue;}
+            let mut outward=Vec2::new(d.y/len,-d.x/len);
+            let mid=pair[0].lerp(pair[1],0.5);
+            if outward.dot(mid-center)<0.0 {outward=-outward;}
+            let cursor_offset=cursor.map(|c|[(c.x-mid.x)/rect.width().max(40.0),(c.y-mid.y)/rect.height().max(20.0)]);
+            let (alpha,[r,g,b])=glass::liquid_fresnel_rim([outward.x,outward.y],cursor_offset);
+            let halo_a=(alpha*0.26*opacity*255.0).round().clamp(0.0,255.0) as u8;
+            let core_a=(alpha*0.90*opacity*255.0).round().clamp(0.0,255.0) as u8;
+            painter.line_segment([pair[0],pair[1]],egui::Stroke::new(1.6_f32,dark_hairline));
+            painter.line_segment([pair[0],pair[1]],egui::Stroke::new(2.2_f32,Color32::from_rgba_unmultiplied(r.saturating_sub(25),g,b,halo_a)));
+            painter.line_segment([pair[0],pair[1]],egui::Stroke::new(1.1_f32,Color32::from_rgba_unmultiplied(r,g,b,core_a)));
+        }
+    }
+    */
 
     /// 拿起時沿島體輪廓的一圈柔光：外圈寬而淡，內圈細而亮。
     fn paint_lift_halo(&self,painter:&egui::Painter,rect:Rect,flare:f32,flare_h:f32,radius:f32,amount:f32) {

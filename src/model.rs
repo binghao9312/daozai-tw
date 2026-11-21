@@ -101,6 +101,7 @@ fn replace_file(tmp:&Path,path:&Path)->std::io::Result<()> {
 /// 島體配色皮膚（與形狀獨立，可任意組合）。
 /// - 經典：純黑；奶油：暖白底深棕字、橙色強調（參考 Oyen）；
 /// - 毛玻璃·淺 / 毛玻璃·深：系統實時模糊 + 淺色或深色玻璃。
+// /// - 液態玻璃：高通透曲面折射、雙向 Fresnel 高光與焦散光暈。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Skin {
     #[default]
@@ -108,19 +109,20 @@ pub enum Skin {
     Cream,
     GlassLight,
     GlassDark,
+    // LiquidGlass,
     Fluid,
 }
 
 impl Skin {
-    pub const ALL: [Skin; 5] = [Skin::Classic, Skin::Cream, Skin::GlassLight, Skin::GlassDark, Skin::Fluid];
+    pub const ALL: [Skin; 5] = [Skin::Classic, Skin::Cream, Skin::GlassLight, Skin::GlassDark, /* Skin::LiquidGlass, */ Skin::Fluid];
     pub fn key(self) -> &'static str {
-        match self { Self::Classic => "classic", Self::Fluid => "fluid", Self::Cream => "cream", Self::GlassLight => "glass_light", Self::GlassDark => "glass" }
+        match self { Self::Classic => "classic", Self::Fluid => "fluid", Self::Cream => "cream", Self::GlassLight => "glass_light", Self::GlassDark => "glass", /* Self::LiquidGlass => "liquid_glass" */ }
     }
     pub fn parse(value: &str) -> Self {
-        match value { "fluid" => Self::Fluid, "cream" => Self::Cream, "glass_light" => Self::GlassLight, "glass" | "glass_dark" => Self::GlassDark, _ => Self::Classic }
+        match value { "fluid" => Self::Fluid, "cream" => Self::Cream, "glass_light" => Self::GlassLight, "glass" | "glass_dark" => Self::GlassDark, /* "liquid_glass" | "liquid" => Self::LiquidGlass, */ _ => Self::Classic }
     }
     pub fn label(self) -> &'static str {
-        match self { Self::Classic => "經典", Self::Fluid => "懸浮雲", Self::Cream => "奶油", Self::GlassLight => "毛玻璃·淺", Self::GlassDark => "毛玻璃·深" }
+        match self { Self::Classic => "經典", Self::Fluid => "懸浮雲", Self::Cream => "奶油", Self::GlassLight => "毛玻璃·淺", Self::GlassDark => "毛玻璃·深", /* Self::LiquidGlass => "液態玻璃" */ }
     }
     pub fn description(self) -> &'static str {
         match self {
@@ -129,9 +131,12 @@ impl Skin {
             Self::Cream => "暖白底色配深棕文字和橙色強調，柔和明亮。",
             Self::GlassLight => "淺色磨砂玻璃，透出身後桌面的顏色，文字為深色；按背景明暗自動調整，保證清晰。",
             Self::GlassDark => "深色磨砂玻璃，透出身後桌面的顏色，文字為白色；按背景明暗自動調整，保證清晰。",
+            // Self::LiquidGlass => "高通透曲面液態玻璃，具備雙向 Fresnel 鏡面折光邊緣、曲率焦散內發光與游標動態反光。",
         }
     }
-    pub fn is_glass(self) -> bool { matches!(self, Self::GlassLight | Self::GlassDark) }
+    pub fn is_glass(self) -> bool { matches!(self, Self::GlassLight | Self::GlassDark /* | Self::LiquidGlass */) }
+    // pub fn uses_frosted_backdrop(self) -> bool { matches!(self, Self::GlassLight | Self::GlassDark) }
+    // pub fn is_liquid_glass(self) -> bool { self == Self::LiquidGlass }
 }
 
 /// 島體形狀：貼著螢幕頂邊的劉海，或懸浮在頂邊下方的膠囊。
@@ -232,6 +237,7 @@ pub struct Settings {
     pub wecom_notifications:bool,
     pub feishu_notifications:bool,
     pub dingtalk_notifications:bool,
+    pub line_notifications:bool,
     /// 微信縮在系統匣時，點提醒透過系統系統匣按鈕喚起微信（預設關閉）。
     pub wechat_tray_open:bool,
     pub qq_only:bool,
@@ -242,6 +248,7 @@ pub struct Settings {
     pub island_lyrics:bool,
     pub lyric_delay_ms:i32,
     pub hide_fullscreen: bool,
+    pub fullscreen_show_notices: bool,
     /// 啟用頂欄適配，按顯示方式避讓頂欄或保持島體在頂欄上方。
     pub avoid_top_bar: bool,
     pub top_bar_on_top: bool,
@@ -290,7 +297,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { display_id: String::new(), skin: Skin::Classic, island_shape: IslandShape::Notch, glass_blur: true, island_size: 100, island_offset: 0, oled_shift: false, dock: Dock::Top, settings_theme: Default::default(), pet: true, minimal: false, browser_minimal: false, avoid_browsers: true, avoid_apps: Vec::new(), visible_pages: [true; 9], page_order: [0,1,2,3,4,5,6,7,8], show_clock: true, show_battery: true, show_weather: true, clock_12h: false, clock_period: 0, clock_seconds: false, resident_order: Vec::new(), system_hud: true, bluetooth_notifications: true, read_notifications:false, wechat_notifications:false, wecom_notifications:false, feishu_notifications:false, dingtalk_notifications:false, wechat_tray_open:false, qq_only:false, notification_preview:false, notifications: true, sound: false, lyrics_enabled:true, island_lyrics:false, lyric_delay_ms:-350, hide_fullscreen: true, avoid_top_bar: true, top_bar_on_top: false, focus_minutes: 25, rest_minutes: 5, water_minutes: 45, serving_ml: 250, water_start: 9, water_end: 22, sit_remind: true, sit_minutes: 60, lunch_rest: true, lunch_start: 720, lunch_end: 810, mail_enabled: true, mail_filter: 0, mail_sync_operations:false, mail_code: true, mail_code_hide_seconds:60, mail_interval: 120, mail_ics: 15, ignored_mail_events: Vec::new(), calendar_prompt: true, calendar_auto_sync: true, clipboard_history: true, weather_city: String::new(), weather_position: None, weather_saved: Vec::new(), render_compat: false, render_compat_reason: String::new(), gws_onboarded: false }
+        Self { display_id: String::new(), skin: Skin::Classic, island_shape: IslandShape::Notch, glass_blur: true, island_size: 100, island_offset: 0, oled_shift: false, dock: Dock::Top, settings_theme: Default::default(), pet: true, minimal: false, browser_minimal: false, avoid_browsers: true, avoid_apps: Vec::new(), visible_pages: [true; 9], page_order: [0,1,2,3,4,5,6,7,8], show_clock: true, show_battery: true, show_weather: true, clock_12h: false, clock_period: 0, clock_seconds: false, resident_order: Vec::new(), system_hud: true, bluetooth_notifications: true, read_notifications:false, wechat_notifications:false, wecom_notifications:false, feishu_notifications:false, dingtalk_notifications:false, line_notifications:true, wechat_tray_open:false, qq_only:false, notification_preview:false, notifications: true, sound: false, lyrics_enabled:true, island_lyrics:false, lyric_delay_ms:-350, hide_fullscreen: true, fullscreen_show_notices: false, avoid_top_bar: true, top_bar_on_top: false, focus_minutes: 25, rest_minutes: 5, water_minutes: 45, serving_ml: 250, water_start: 9, water_end: 22, sit_remind: true, sit_minutes: 60, lunch_rest: true, lunch_start: 720, lunch_end: 810, mail_enabled: true, mail_filter: 0, mail_sync_operations:false, mail_code: true, mail_code_hide_seconds:60, mail_interval: 120, mail_ics: 15, ignored_mail_events: Vec::new(), calendar_prompt: true, calendar_auto_sync: true, clipboard_history: true, weather_city: String::new(), weather_position: None, weather_saved: Vec::new(), render_compat: false, render_compat_reason: String::new(), gws_onboarded: false }
     }
 }
 
@@ -376,6 +383,7 @@ impl Settings {
                 "wecom_notifications" => s.wecom_notifications=v=="1",
                 "feishu_notifications" => s.feishu_notifications=v=="1",
                 "dingtalk_notifications" => s.dingtalk_notifications=v=="1",
+                "line_notifications" => s.line_notifications=v!="0",
                 "wechat_tray_open" => s.wechat_tray_open=v=="1",
                 "qq_only" => s.qq_only=v=="1",
                 "notification_preview" => s.notification_preview=v=="1",
@@ -387,6 +395,7 @@ impl Settings {
                 "island_lyrics" => s.island_lyrics=v=="1",
                 "lyric_delay_ms" => s.lyric_delay_ms=v.parse::<i32>().unwrap_or(-350).clamp(-5000,5000),
                 "hide_fullscreen" => s.hide_fullscreen = v != "0",
+                "fullscreen_show_notices" => s.fullscreen_show_notices = v == "1",
                 "avoid_top_bar" => s.avoid_top_bar = v != "0",
                 "top_bar_on_top" => s.top_bar_on_top = v == "1",
                 "focus_minutes" => s.focus_minutes = v.parse::<u32>().unwrap_or(25).clamp(1, 180),
@@ -461,6 +470,7 @@ impl Settings {
                 ("wecom_notifications".into(),(self.wecom_notifications as u8).to_string()),
                 ("feishu_notifications".into(),(self.feishu_notifications as u8).to_string()),
                 ("dingtalk_notifications".into(),(self.dingtalk_notifications as u8).to_string()),
+                ("line_notifications".into(),(self.line_notifications as u8).to_string()),
                 ("wechat_tray_open".into(),(self.wechat_tray_open as u8).to_string()),
                 ("qq_only".into(),(self.qq_only as u8).to_string()),
                 ("notification_preview".into(),(self.notification_preview as u8).to_string()),
@@ -472,6 +482,7 @@ impl Settings {
                 ("island_lyrics".into(),(self.island_lyrics as u8).to_string()),
                 ("lyric_delay_ms".into(),self.lyric_delay_ms.to_string()),
                 ("hide_fullscreen".into(), (self.hide_fullscreen as u8).to_string()),
+                ("fullscreen_show_notices".into(), (self.fullscreen_show_notices as u8).to_string()),
                 ("avoid_top_bar".into(), (self.avoid_top_bar as u8).to_string()),
                 ("top_bar_on_top".into(), (self.top_bar_on_top as u8).to_string()),
                 ("focus_minutes".into(), self.focus_minutes.to_string()),
@@ -887,8 +898,12 @@ mod tests {
         assert_eq!(Settings::default().island_shape, IslandShape::Notch);
         let mut s = Settings::default();
         assert_eq!((s.skin, s.glass_blur, s.island_scale(), s.island_offset_ratio()), (Skin::Classic, true, 1.0, 0.0));
+        assert!(s.line_notifications && !s.fullscreen_show_notices);
+        /* s.skin = Skin::LiquidGlass; */ s.line_notifications = false; s.fullscreen_show_notices = true;
         s.island_size = 125; s.island_offset = -250;
         assert_eq!((s.island_scale(), s.island_offset_ratio()), (1.25, -1.0));
+        // assert_eq!(Skin::parse("liquid_glass"), Skin::LiquidGlass);
+        // assert!(Skin::LiquidGlass.is_glass() && Skin::LiquidGlass.is_liquid_glass());
     }
 
     #[test]

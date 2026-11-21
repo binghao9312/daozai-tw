@@ -559,6 +559,7 @@ impl Window {
         notice_hit: Option<(f32,f32,f32,f32)>,
         file_drop_zone: Option<(f32,f32,f32,f32)>,
         glass: Option<&[crate::app::GlassShape]>,
+        want_blur: bool,
         ppp: f32,
         editing: bool,
         expanded: bool,
@@ -587,7 +588,7 @@ impl Window {
         // 分層視窗顯示的是帶真實透明通道的畫面時，系統模糊同樣能透出來（模糊底板緊貼在島仔視窗下方，
         // 分層顯示視窗在上方）；只有輪廓裁剪或按輪廓補 alpha（內部不透明）時才關掉模糊。
         let layered_alpha=matches!(self.layering,Layering::Active(_)) && !self.outline.active;
-        match glass.filter(|g|!g.is_empty() && !self.blur_unavailable && (!self.opaque_surface || layered_alpha) && compositor_blur_allowed()) {
+        match glass.filter(|g|want_blur && !g.is_empty() && !self.blur_unavailable && (!self.opaque_surface || layered_alpha) && compositor_blur_allowed()) {
             Some(shapes) => {
                 if self.backdrop.is_none() {
                     match crate::composition::Backdrop::new() {
@@ -697,7 +698,7 @@ mod tests {
             {
                 let mut native=Window{hwnd,layering:Layering::Pending,region:(0,0,0,0),expanded:false,hook:HWINEVENTHOOK::default(),browser_state:(None,PollClock::now()),drag_capture:DragCapture::default(),glass:None,backdrop:None,blur:false,blur_unavailable,opaque_surface:surface_needs_outline_clip(backend,vendor,renderer),outline:ShapeAlpha::default()};
                 let shapes=[crate::app::GlassShape::Round(eframe::egui::Rect::from_min_max(eframe::egui::pos2(80.0,60.0),eframe::egui::pos2(320.0,160.0)),25.0)];
-                native.update((0.0,0.0,400.0,200.0),(80.0,60.0,240.0,100.0),None,None,Some(&shapes),ppp,false,false);
+                native.update((0.0,0.0,400.0,200.0),(80.0,60.0,240.0,100.0),None,None,Some(&shapes),true,ppp,false,false);
                 let region=CreateRectRgn(0,0,0,0);
                 GetWindowRgn(hwnd,region);
                 assert!(PtInRegion(region,px(200.0),px(100.0)).as_bool());
@@ -705,7 +706,7 @@ mod tests {
                 assert!(!PtInRegion(region,px(81.0),px(61.0)).as_bool(),"圓角外側必須透出桌面");
                 assert!(!native.blur);
                 assert!(native.backdrop.is_none(),"輪廓相容模式不能再啟用獨立模糊底板");
-                native.update((0.0,0.0,0.0,0.0),(0.0,0.0,0.0,0.0),None,None,None,ppp,false,false);
+                native.update((0.0,0.0,0.0,0.0),(0.0,0.0,0.0,0.0),None,None,None,false,ppp,false,false);
                 GetWindowRgn(hwnd,region);
                 assert!(!PtInRegion(region,px(200.0),px(100.0)).as_bool(),"隱藏時不能留下上一幀輪廓");
                 let _=DeleteObject(region);
@@ -734,7 +735,7 @@ mod tests {
                 let opaque=[0u8,0,0,255].repeat(w*h);
                 assert!(!native.present_frame([w,h],&opaque),"還沒收到輪廓時先保持輪廓裁剪");
                 assert!(matches!(native.layering,Layering::Pending));
-                native.update((0.0,0.0,w as f32,h as f32),(80.0,0.0,240.0,60.0),None,None,Some(&shapes),1.0,false,false);
+                native.update((0.0,0.0,w as f32,h as f32),(80.0,0.0,240.0,60.0),None,None,Some(&shapes),true,1.0,false,false);
                 assert!(native.wants_frames());
                 assert!(native.present_frame([w,h],&opaque),"讀不到透明通道也要切到分層視窗");
                 assert!(matches!(native.layering,Layering::Active(_)) && native.outline.active);
@@ -746,7 +747,7 @@ mod tests {
                 assert!(soft>=80,"圓角和肩部要有抗鋸齒過渡畫素，實際 {soft}");
                 assert!(frame.chunks_exact(4).all(|p|p[0]<=p[3]&&p[1]<=p[3]&&p[2]<=p[3]),"必須是合法的預乘顏色");
                 // 切到分層視窗後不再用輪廓裁剪島仔視窗本身。
-                native.update((0.0,0.0,w as f32,h as f32),(80.0,0.0,240.0,60.0),None,None,Some(&shapes),1.0,false,false);
+                native.update((0.0,0.0,w as f32,h as f32),(80.0,0.0,240.0,60.0),None,None,Some(&shapes),true,1.0,false,false);
                 let region=CreateRectRgn(0,0,0,0);
                 if GetWindowRgn(hwnd,region).0!=0 {assert!(PtInRegion(region,10,150).as_bool(),"分層顯示後視窗區域應回到矩形");}
                 let _=DeleteObject(region);
@@ -884,7 +885,7 @@ mod tests {
             let foreground=GetForegroundWindow();
             let saved=hit().lock().unwrap_or_else(|e|e.into_inner()).clone();
             let mut native=Window{hwnd:island.0,layering:Layering::Pending,region:(0,0,0,0),expanded:false,hook:HWINEVENTHOOK::default(),browser_state:(None,PollClock::now()),drag_capture:DragCapture::default(),glass:None,backdrop:None,blur:false,blur_unavailable:false,opaque_surface:false,outline:ShapeAlpha::default()};
-            let update=|native:&mut Window,expanded|native.update((0.0,0.0,416.0,140.0),(0.0,0.0,416.0,140.0),None,None,None,1.0,false,expanded);
+            let update=|native:&mut Window,expanded|native.update((0.0,0.0,416.0,140.0),(0.0,0.0,416.0,140.0),None,None,None,false,1.0,false,expanded);
             update(&mut native,true);
             assert!(above(island.0,cover.0),"展開時必須重新抬高實際視窗層級，不能只檢查置頂標記");
             assert_eq!(GetForegroundWindow(),foreground,"懸停展開不能搶走當前應用的輸入焦點");

@@ -82,7 +82,7 @@ impl NowPlaying {
         }
         let source=self.source.to_lowercase();
         if YTMUSIC_WEB_APP_SOURCES.contains(&source.as_str()){return MediaKind::Music;}
-        if (matches!(source.as_str(),"kugou"|"kugou.exe"|"cloudmusic.exe"|"汽水音乐"|"sodamusic.exe"|"spotify"|"spotify.exe"|"kwmusic.exe"|"bodian_pc.exe") || is_ytmusic(&source) || is_qqmusic(&source) || apple_music::is_source(&source)) && self.playback_type==MediaKind::Music{return MediaKind::Music;}
+        if (matches!(source.as_str(),"kugou"|"kugou.exe"|"cloudmusic.exe"|"汽水音乐"|"sodamusic.exe"|"kwmusic.exe"|"bodian_pc.exe") || is_spotify(&source) || is_ytmusic(&source) || is_qqmusic(&source) || apple_music::is_source(&source)) && self.playback_type==MediaKind::Music{return MediaKind::Music;}
         if ["chrome","msedge","firefox","brave","opera"].iter().any(|name|source.contains(name)) {
             let album=self.album.trim().to_lowercase();
             if ["youtube","bilibili","抖音","哔哩哔哩"].contains(&album.as_str()){return MediaKind::Video;}
@@ -295,6 +295,12 @@ pub(crate) fn is_ytmusic(source:&str)->bool {
 /// 進度拖動、音量都要認出它；會話查詢仍用原始身份名。
 pub(crate) fn is_qqmusic(source:&str)->bool {
     matches!(source.to_ascii_lowercase().as_str(),"qqmusic"|"qqmusic.exe"|"tencent.qqmusic")
+}
+
+/// Spotify（含桌面版、Microsoft Store 版 AUMID）。
+pub(crate) fn is_spotify(source:&str)->bool {
+    let lower=source.trim().to_ascii_lowercase();
+    matches!(lower.as_str(),"spotify"|"spotify.exe") || lower.starts_with("spotifyab.spotifymusic_")
 }
 
 pub type Shared = Arc<Mutex<NowPlaying>>;
@@ -1473,11 +1479,14 @@ mod tests {
 
     #[test]
     fn known_music_clients_accept_missing_artist_but_not_video(){
-        for source in ["kugou","QQMusic.exe","cloudmusic.exe","汽水音乐","SodaMusic.exe","Spotify.exe","kwmusic.exe","bodian_pc.exe","AppleMusic.exe","AppleInc.AppleMusicWin_nzyj5cx40ttqa!App"] {
+        for source in ["kugou","QQMusic.exe","cloudmusic.exe","汽水音乐","SodaMusic.exe","Spotify.exe","SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify","kwmusic.exe","bodian_pc.exe","AppleMusic.exe","AppleInc.AppleMusicWin_nzyj5cx40ttqa!App"] {
             let mut media=NowPlaying{source:source.into(),title:"歌曲".into(),playback_type:MediaKind::Music,..Default::default()};
             assert!(media.is_music(),"{source} 缺少歌手时仍应显示歌曲");
             media.playback_type=MediaKind::Video;assert!(!media.is_music());
         }
+        assert!(is_spotify("Spotify.exe"));
+        assert!(is_spotify("SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify"));
+        assert!(!is_spotify("msedge.exe"));
     }
 
     #[cfg(windows)]

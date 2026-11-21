@@ -367,7 +367,9 @@ impl App {
     }
     pub fn receive_messenger_reminder(&mut self,unread:crate::app::Unread){
         let client=unread.source;
-        if client.adapter().capture!=crate::messenger::Capture::Taskbar || !client.enabled(&self.settings){return;}
+        let dual_channel=matches!(client,crate::app::Messenger::Discord|crate::app::Messenger::Line);
+        if (client.adapter().capture!=crate::messenger::Capture::Taskbar && !dual_channel) || !client.enabled(&self.settings){return;}
+        if client.adapter().capture==crate::messenger::Capture::SystemToast && !self.notification_apps.observe(client.adapter().notification_id,client.name()){return;}
         let pending=self.pending_messengers.iter().any(|old|old.source==client && old.pid==unread.pid);
         self.mark_messenger(client,unread.pid,unread.window);
         if pending{return;}
@@ -383,12 +385,20 @@ impl App {
         if !self.settings.read_notifications || id.is_empty() || !crate::messenger::NotificationFilter::for_settings(&self.settings).allows(&id){return;}
         if crate::messenger::suppresses_toast(&app,&id,crate::messenger::toast_suppression(&self.settings)){return;}
         let client=crate::app::Messenger::from_notification_id(&id).filter(|client|client.adapter().capture==crate::messenger::Capture::SystemToast);
+        if let Some(c)=client{if !c.enabled(&self.settings){return;}}
         let id=client.map(|client|client.adapter().notification_id.to_string()).unwrap_or(id);
         // 島仔自己發出的系統提醒會被通知中心回傳；已在歷史裡的同一內容不再入隊，避免重複顯示。
         if crate::messenger::Messenger::from_notification_id(&id).is_none() && self.history.iter().any(|a|format!("{} · {}",a.title,a.body)==body){return;}
         if !self.notification_apps.observe(&id,&app) || !self.settings.notifications{return;}
         let unread=client.map(|client|unread.filter(|u|u.source==client && u.pid!=0).unwrap_or(crate::app::Unread::of(client)));
         if let Some(unread)=unread{self.mark_messenger(unread.source,unread.pid,unread.window);}
+        if let Some(c)=client{
+            // 若工作列閃動已先產生通用提醒，系統通知抵達時直接升級為帶內容的系統通知，不重複彈出兩條橫幅。
+            let generic=|a:&Alert| a.source==AlertSource::Messenger(c)
+                && unread.as_ref().is_none_or(|u|u.pid==0 || a.unread.is_some_and(|old|old.pid==u.pid || old.pid==0));
+            self.alerts.retain(|a|!generic(a));
+            if self.notice.as_ref().is_some_and(generic){self.notice=None;}
+        }
         self.notification_bell_at=self.t;
         self.notification_bell_until=self.t+4.5;
         let title=app.chars().filter(|c|!c.is_control()).take(80).collect();
@@ -406,12 +416,23 @@ impl App {
         self.notice=Some(Alert{source,title:unread.source.name().into(),body:body.into(),page:usize::MAX,at:self.t,duration:4.5,bluetooth:None,meeting:None,unread:Some(unread)});
         self.notification_bell_at=self.t;self.notification_bell_until=self.t+4.5;
     }
+    /// 全螢幕隱藏模式下，當開啟「仍彈出通知」時是否有非健康類通知需要浮現島體。
+    pub fn fullscreen_notice_visible(&self)->bool {
+        self.settings.fullscreen_show_notices
+            && (self.notice.as_ref().is_some_and(|a|a.health().is_none())
+                || self.alerts.iter().any(|a|a.health().is_none()))
+    }
+    /// 結合「全螢幕隱藏」設定與「仍彈出通知」狀態，決定島體視窗實際是否應隱藏。
+    pub fn should_hide_for_fullscreen(&self,fullscreen_covered:bool)->bool {
+        fullscreen_covered && !self.fullscreen_notice_visible()
+    }
     pub(crate) fn tick_alerts(&mut self) {
         self.pending_messengers.retain(|u|u.source.enabled(&self.settings) && (u.source.adapter().capture!=crate::messenger::Capture::SystemToast
-            || self.notification_apps.items.iter().any(|(key,_,on)|key==u.source.adapter().notification_id && *on)));
+            || !self.notification_apps.items.iter().any(|(key,_,on)|key==u.source.adapter().notification_id && !*on)));
         let allowed=|a:&Alert|match &a.source {
             AlertSource::Internal=>!self.fullscreen_hidden || a.health().is_none(),
-            AlertSource::Messenger(client)=>client.enabled(&self.settings),
+            AlertSource::Messenger(client)=>client.enabled(&self.settings)
+                && !self.notification_apps.items.iter().any(|(key,_,on)|key==client.adapter().notification_id && !*on),
             AlertSource::External(id)=>self.settings.read_notifications && crate::messenger::NotificationFilter::for_settings(&self.settings).allows(id) && self.settings.notifications && !crate::messenger::suppresses_toast(&a.title,id,crate::messenger::toast_suppression(&self.settings)) && self.notification_apps.items.iter().any(|(key,_,on)|key==id && *on),
         };
         self.alerts.retain(&allowed);
@@ -425,9 +446,9 @@ impl App {
                 if matches!(&a.source,AlertSource::External(_)){a.body="收到新通知 · 內容已隱藏".into();}
             }
         }
-        // 全螢幕隱藏期間島整個不顯示：訊息類通知（Discord 等）與鈴鐺先不倒數，離開全螢幕後才開始計時，
-        // 免得還沒被看到就過期。健康提醒在隱藏時本來就會丟掉，其他內部提醒維持原本的計時。
-        if self.fullscreen_hidden && self.notice.as_ref().is_some_and(|a|matches!(a.source,AlertSource::Messenger(_)|AlertSource::External(_))) {
+        // 全螢幕隱藏期間島整個不顯示：訊息類通知（Discord / LINE 等）與鈴鐺先不倒數，離開全螢幕後才開始計時，
+        // 免得還沒被看到就過期。若已開啟「全螢幕隱藏時仍彈出通知」，則正常計時並在顯示完畢後自動收起。
+        if self.fullscreen_hidden && !self.settings.fullscreen_show_notices && self.notice.as_ref().is_some_and(|a|matches!(a.source,AlertSource::Messenger(_)|AlertSource::External(_))) {
             if let Some(a)=self.notice.as_mut(){a.at=self.t;}
             self.notification_bell_at=self.t;self.notification_bell_until=self.t+4.5;
         }
@@ -1109,21 +1130,50 @@ pub(crate) fn settings_segmented<T:PartialEq+Copy>(ui:&mut egui::Ui,value:&mut T
     let mut changed=false;
     egui::Frame::new().fill(settings_color(ctx,Color32::from_rgb(28,28,30),Color32::from_rgb(230,233,238)))
         .corner_radius(8.0).inner_margin(3).show(ui,|ui|{
-            ui.horizontal(|ui|{
-                ui.spacing_mut().item_spacing.x=2.0;
-                for (option,label) in options {
-                    let selected=*value==*option;
-                    let text=egui::RichText::new(*label).size(12.0).color(if selected{settings_color(ctx,Color32::WHITE,Color32::from_rgb(30,34,41))}else{settings_color(ctx,Color32::from_gray(200),Color32::from_gray(70))});
-                    let button=egui::Button::new(text)
-                        .fill(if selected{settings_color(ctx,Color32::from_rgb(72,72,76),Color32::WHITE)}else{Color32::TRANSPARENT})
-                        .stroke(egui::Stroke::NONE).corner_radius(6.0);
-                    let width=item_w.max(ctx.fonts(|f|f.layout_no_wrap(label.to_string(),egui::FontId::proportional(12.0),Color32::WHITE).size().x)+20.0);
-                    if ui.add_sized([width,26.0],button).clicked() && !selected {*value=*option;changed=true;}
+            ui.spacing_mut().item_spacing.x=2.0;
+            for (option,label) in options {
+                let selected=*value==*option;
+                let text=egui::RichText::new(*label).size(12.0).color(if selected{settings_color(ctx,Color32::WHITE,Color32::from_rgb(30,34,41))}else{settings_color(ctx,Color32::from_gray(200),Color32::from_gray(70))});
+                let button=egui::Button::new(text)
+                    .fill(if selected{settings_color(ctx,Color32::from_rgb(72,72,76),Color32::WHITE)}else{Color32::TRANSPARENT})
+                    .stroke(egui::Stroke::NONE).corner_radius(6.0);
+                let width=item_w.max(ctx.fonts(|f|f.layout_no_wrap(label.to_string(),egui::FontId::proportional(12.0),Color32::WHITE).size().x)+20.0);
+                if ui.add_sized([width,26.0],button).clicked() && !selected {*value=*option;changed=true;}
+            }
+        });
+    changed
+}
+
+/*
+/// 分段選擇器，可依每行上限分成多行，確保多選項在小視窗寬度下不截斷或溢位。
+pub(crate) fn settings_segmented_rows<T:PartialEq+Copy>(ui:&mut egui::Ui,value:&mut T,options:&[(T,&str)],per_row:usize,item_w:f32)->bool{
+    let per_row=per_row.max(1);
+    if options.len()<=per_row { return settings_segmented(ui,value,options,item_w); }
+    let ctx=&ui.ctx().clone();
+    let mut changed=false;
+    egui::Frame::new().fill(settings_color(ctx,Color32::from_rgb(28,28,30),Color32::from_rgb(230,233,238)))
+        .corner_radius(8.0).inner_margin(3).show(ui,|ui|{
+            ui.vertical(|ui|{
+                ui.spacing_mut().item_spacing=egui::vec2(2.0,2.0);
+                for row in options.chunks(per_row) {
+                    ui.horizontal(|ui|{
+                        ui.spacing_mut().item_spacing.x=2.0;
+                        for (option,label) in row {
+                            let selected=*value==*option;
+                            let text=egui::RichText::new(*label).size(12.0).color(if selected{settings_color(ctx,Color32::WHITE,Color32::from_rgb(30,34,41))}else{settings_color(ctx,Color32::from_gray(200),Color32::from_gray(70))});
+                            let button=egui::Button::new(text)
+                                .fill(if selected{settings_color(ctx,Color32::from_rgb(72,72,76),Color32::WHITE)}else{Color32::TRANSPARENT})
+                                .stroke(egui::Stroke::NONE).corner_radius(6.0);
+                            let width=item_w.max(ctx.fonts(|f|f.layout_no_wrap(label.to_string(),egui::FontId::proportional(12.0),Color32::WHITE).size().x)+20.0);
+                            if ui.add_sized([width,26.0],button).clicked() && !selected {*value=*option;changed=true;}
+                        }
+                    });
                 }
             });
         });
     changed
 }
+*/
 
 /// 選項行：標籤列之後緊跟控制元件，同一卡片裡所有控制元件左緣對齊成一條豎線。
 pub(crate) fn settings_control_row_right(ui:&mut egui::Ui,title:&str,controls:impl FnOnce(&mut egui::Ui))->egui::Response{
@@ -1546,6 +1596,10 @@ impl App {
                             setting_row(ui,"提醒聲音","喝水、久坐、待辦和專注提醒",&mut self.settings.sound);
                             ui.separator();
                             setting_row(ui,"全屏時隱藏","全屏隱藏島仔，健康提醒靜默保留",&mut self.settings.hide_fullscreen);
+                            if self.settings.hide_fullscreen {
+                                ui.separator();
+                                setting_row(ui,"全螢幕隱藏時仍彈出通知","全螢幕看影片或遊戲時收起島體，但收到 LINE、Discord、郵件或行事曆等新通知時暫時浮現，顯示完畢後自動收起",&mut self.settings.fullscreen_show_notices);
+                            }
                         });
                     }
                     1=>{
@@ -1689,10 +1743,15 @@ impl App {
                             });
                         });
                         }
-                        settings_label(ui,"Discord 與 Windows 通知");
+                        settings_label(ui,"通訊軟體與 Windows 通知");
                         settings_card(ui,|ui|{
                             master_hint(ui);
                             ui.add_enabled_ui(master,|ui|{
+                            setting_row(ui,"LINE 新訊息提醒","同時監聽 LINE 工作列閃動與 Windows 通知；收到訊息時在島上提醒，點選喚起 LINE 主視窗",&mut self.settings.line_notifications);
+                            if master && self.settings.line_notifications && !self.messenger_status(crate::app::Messenger::Line).is_empty(){
+                                ui.label(egui::RichText::new(self.messenger_status(crate::app::Messenger::Line)).size(12.0));
+                            }
+                            ui.separator();
                             ui.label(egui::RichText::new(&self.listener_status).size(13.0));
                             if self.settings.read_notifications {
                                 if ui.button("斷開系統通知").clicked(){self.pending.push(Cmd::DisconnectNotifications);}
@@ -1701,7 +1760,7 @@ impl App {
                                     if ui.button("連線系統通知").clicked(){self.pending.push(Cmd::RequestNotifications);}
                                 });
                             }
-                            ui.label(egui::RichText::new("Discord 需開啟桌面通知；新通知在島上顯示約 4.5 秒，預設隱藏正文。點選提醒會喚起 Discord 主視窗。").size(12.0).color(settings_color(ctx,Color32::from_gray(180),Color32::from_gray(75))));
+                            ui.label(egui::RichText::new("Discord 與 LINE 系統通知需開啟「連線系統通知」與桌面通知；新通知在島上顯示約 4.5 秒，預設隱藏正文。點選提醒可喚起對應主視窗。").size(12.0).color(settings_color(ctx,Color32::from_gray(180),Color32::from_gray(75))));
                             ui.separator();
                             setting_row(ui,"顯示通知正文","可能包含私密訊息；螢幕共享時建議關閉",&mut self.settings.notification_preview);
                             ui.label(egui::RichText::new("只接收 Windows 通知中心可見的內容；應用會在收到通知後出現在下方。").size(12.0).color(settings_color(ctx,Color32::from_gray(180),Color32::from_gray(75))));

@@ -33,6 +33,8 @@ pub const CREAM: Palette = Palette { paper: [255, 243, 228], ink: [46, 32, 22], 
 pub const GLASS_LIGHT: Palette = Palette { paper: [255, 255, 255], ink: [22, 22, 26], accent: Some([10, 112, 230]), dark_alpha: 0.8, lift: 1.0, darken: 0.78, chip: 0.6 };
 /// 毛玻璃·深：保持黑底白字，只把灰色文字提亮、卡片底調透，適配更通透的深色玻璃。
 pub const GLASS_DARK: Palette = Palette { paper: [0, 0, 0], ink: [255, 255, 255], accent: None, dark_alpha: 0.5, lift: 0.6, darken: 1.0, chip: 1.0 };
+// /// 液態玻璃：極輕冷調底色配高對比亮字與字體黑邊、超通透內卡片，突顯背景穿透與曲面 Fresnel 彎月面。
+// pub const LIQUID_GLASS: Palette = Palette { paper: [10, 14, 22], ink: [255, 255, 255], accent: None, dark_alpha: 0.20, lift: 0.42, darken: 1.0, chip: 1.0 };
 
 /// 單色圖示紋理（白色圖形 + 透明度，如 AI 廠商標識）：和文字一樣參與換色。
 /// 其餘紋理（專輯封面、應用圖示、檔案預覽）保持原樣。
@@ -255,12 +257,147 @@ fn toned_spans(ctx: &egui::Context, layer: egui::LayerId) -> Vec<(usize, usize, 
         .unwrap_or_default()
 }
 
+/*
+fn unmultiplied_rgba(color: Color32) -> ([f32; 3], u8) {
+    let a = color.a();
+    if a == 0 { return ([0.0; 3], 0); }
+    let af = a as f32 / 255.0;
+    ([(color.r() as f32 / 255.0 / af).min(1.0), (color.g() as f32 / 255.0 / af).min(1.0), (color.b() as f32 / 255.0 / af).min(1.0)], a)
+}
+
+fn needs_dark_outline(color: Color32, min_alpha: u8) -> Option<u8> {
+    let (rgb, a) = unmultiplied_rgba(color);
+    if a < min_alpha { return None; }
+    let lum = luma(rgb);
+    let max = rgb[0].max(rgb[1]).max(rgb[2]);
+    (lum >= 0.26 || max >= 0.40).then_some(a)
+}
+
+fn dark_outline_color(alpha: u8, scale: f32) -> Color32 {
+    Color32::from_rgba_premultiplied(0, 0, 0, ((alpha as f32) * scale).round().clamp(0.0, 255.0) as u8)
+}
+
+/// 替液態玻璃中的淺色文字補上 8 向 1pt 細黑邊，保留可讀性並維持 `glyph_index_start` 冪等。
+pub(crate) fn outline_liquid_text(text_shape: &mut eframe::epaint::TextShape) {
+    if text_shape.galley.is_empty() { return; }
+    const OFFSETS: [(f32, f32, f32); 8] = [
+        (-1.0, 0.0, 0.92), (1.0, 0.0, 0.92), (0.0, -1.0, 0.92), (0.0, 1.0, 0.92),
+        (-0.85, -0.85, 0.78), (0.85, -0.85, 0.78), (-0.85, 0.85, 0.78), (0.85, 0.85, 0.78),
+    ];
+    let override_color = text_shape.override_text_color;
+    let fallback_color = text_shape.fallback_color;
+    let opacity_factor = text_shape.opacity_factor;
+    let galley = std::sync::Arc::make_mut(&mut text_shape.galley);
+    let mut changed = false;
+    for row in &mut galley.rows {
+        let expected_start = (row.visuals.glyph_vertex_range.start / 4) * 6;
+        if row.visuals.glyph_index_start > expected_start { continue; }
+        let v_range = row.visuals.glyph_vertex_range.clone();
+        let glyph_count = v_range.len() / 4;
+        let i_start = row.visuals.glyph_index_start;
+        if glyph_count == 0 || row.visuals.mesh.indices.len() < i_start + glyph_count * 6 { continue; }
+        let mut outline_indices: Vec<u32> = Vec::new();
+        for g in 0..glyph_count {
+            let v0 = v_range.start + g * 4;
+            let i0 = i_start + g * 6;
+            let v_col = row.visuals.mesh.vertices[v0].color;
+            let base_fg = if let Some(over) = override_color { over }
+                else if v_col == Color32::PLACEHOLDER { fallback_color }
+                else { v_col };
+            let effective_fg = if opacity_factor < 1.0 { base_fg.gamma_multiply(opacity_factor) } else { base_fg };
+            if needs_dark_outline(effective_fg, 20).is_none() { continue; }
+            let quad = [
+                row.visuals.mesh.vertices[v0],
+                row.visuals.mesh.vertices[v0 + 1],
+                row.visuals.mesh.vertices[v0 + 2],
+                row.visuals.mesh.vertices[v0 + 3],
+            ];
+            let rel = [
+                row.visuals.mesh.indices[i0] - v0 as u32,
+                row.visuals.mesh.indices[i0 + 1] - v0 as u32,
+                row.visuals.mesh.indices[i0 + 2] - v0 as u32,
+                row.visuals.mesh.indices[i0 + 3] - v0 as u32,
+                row.visuals.mesh.indices[i0 + 4] - v0 as u32,
+                row.visuals.mesh.indices[i0 + 5] - v0 as u32,
+            ];
+            let base_alpha = base_fg.a();
+            for (dx, dy, scale) in OFFSETS {
+                let outline_col = dark_outline_color(base_alpha, scale);
+                let base_v = row.visuals.mesh.vertices.len() as u32;
+                for mut v in quad {
+                    v.pos += egui::vec2(dx, dy);
+                    v.color = outline_col;
+                    row.visuals.mesh.vertices.push(v);
+                }
+                for r in rel {
+                    outline_indices.push(base_v + r);
+                }
+            }
+        }
+        if !outline_indices.is_empty() {
+            let added = outline_indices.len();
+            row.visuals.mesh.indices.splice(i_start..i_start, outline_indices);
+            row.visuals.glyph_index_start += added;
+            changed = true;
+        }
+    }
+    if changed {
+        galley.num_vertices = galley.rows.iter().map(|r| r.visuals.mesh.vertices.len()).sum();
+        galley.num_indices = galley.rows.iter().map(|r| r.visuals.mesh.indices.len()).sum();
+    }
+}
+
+fn outline_liquid_shape(shape: &mut Shape) {
+    match shape {
+        Shape::Vec(shapes) => shapes.iter_mut().for_each(outline_liquid_shape),
+        Shape::Text(t) => outline_liquid_text(t),
+        Shape::Rect(r) if r.brush.is_none() && r.rect.width() >= 18.0 && r.rect.height() >= 14.0 && r.stroke.width == 0.0 && (16..=90).contains(&r.fill.a()) => {
+            r.stroke = egui::Stroke::new(0.9_f32, Color32::from_rgba_unmultiplied(210, 238, 255, 56));
+        }
+        Shape::Circle(c) if c.fill.a() < 20 && c.stroke.width > 0.0 => {
+            if let Some(a) = needs_dark_outline(c.stroke.color, 40) {
+                let mut backing = *c;
+                backing.fill = Color32::TRANSPARENT;
+                backing.stroke.width += 1.4;
+                backing.stroke.color = dark_outline_color(a, 0.82);
+                let original = shape.clone();
+                *shape = Shape::Vec(vec![Shape::Circle(backing), original]);
+            }
+        }
+        Shape::Path(p) if (!p.closed || p.fill.a() < 20) && p.stroke.width > 0.0 => {
+            if let ColorMode::Solid(color) = p.stroke.color {
+                if let Some(a) = needs_dark_outline(color, 40) {
+                    let mut backing = p.clone();
+                    backing.fill = Color32::TRANSPARENT;
+                    backing.stroke.width += 1.4;
+                    backing.stroke.color = ColorMode::Solid(dark_outline_color(a, 0.82));
+                    let original = shape.clone();
+                    *shape = Shape::Vec(vec![Shape::Path(backing), original]);
+                }
+            }
+        }
+        Shape::LineSegment { points, stroke } if stroke.width > 0.0 => {
+            if let Some(a) = needs_dark_outline(stroke.color, 40) {
+                let backing = Shape::LineSegment {
+                    points: *points,
+                    stroke: egui::Stroke::new(stroke.width + 1.4, dark_outline_color(a, 0.82)),
+                };
+                let original = shape.clone();
+                *shape = Shape::Vec(vec![backing, original]);
+            }
+        }
+        _ => {}
+    }
+}
+*/
+
 /// 給某個圖層中 `ranges` 範圍內的圖形換色。
 ///
 /// 先找出這些範圍裡的實心彩色底塊；之後畫在它們上面的白字、白色圖示保持白色
 /// （「儲存」按鈕、播放鍵裡的三角、開關的滑塊），其餘照常換色。
 pub fn recolor_layer(ctx: &egui::Context, layer: egui::LayerId, ranges: &[(usize, usize)], p: &Palette) {
     let toned = toned_spans(ctx, layer);
+    // let liquid = *p == LIQUID_GLASS;
     ctx.graphics_mut(|g| {
         let list = g.entry(layer);
         let end = list.next_idx().0;
@@ -275,7 +412,10 @@ pub fn recolor_layer(ctx: &egui::Context, layer: egui::LayerId, ranges: &[(usize
         for &(from, to) in ranges {
             for i in from..to.min(end) {
                 if let Some(&(_, _, tone)) = toned.iter().rev().find(|&&(a, b, _)| i >= a && i < b) {
-                    list.mutate_shape(egui::layers::ShapeIdx(i), |s| recolor_with(&mut s.shape, p, tone));
+                    list.mutate_shape(egui::layers::ShapeIdx(i), |s| {
+                        recolor_with(&mut s.shape, p, tone);
+                        // if liquid { outline_liquid_shape(&mut s.shape); }
+                    });
                     continue;
                 }
                 list.mutate_shape(egui::layers::ShapeIdx(i), |s| {
@@ -283,7 +423,8 @@ pub fn recolor_layer(ctx: &egui::Context, layer: egui::LayerId, ranges: &[(usize
                         let center = s.shape.visual_bounding_rect().center();
                         if fills.iter().any(|&(at, rect)| at < i && rect.contains(center)) { return; }
                     }
-                    recolor(&mut s.shape, p)
+                    recolor(&mut s.shape, p);
+                    // if liquid { outline_liquid_shape(&mut s.shape); }
                 });
             }
         }
@@ -409,4 +550,44 @@ mod tests {
         let Shape::Mesh(mesh) = shape else { unreachable!() };
         assert_eq!(mesh.vertices[0].color, Color32::WHITE);
     }
+
+    /*
+    #[test]
+    fn liquid_glass_adds_black_outline_to_light_text_and_strokes() {
+        let ctx = egui::Context::default();
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            let layer = egui::LayerId::background();
+            let painter = ctx.layer_painter(layer);
+            painter.text(egui::Pos2::ZERO, egui::Align2::LEFT_TOP, "13:30 進行中", egui::FontId::proportional(14.0), Color32::WHITE);
+            painter.text(egui::pos2(0.0, 24.0), egui::Align2::LEFT_TOP, "深字", egui::FontId::proportional(14.0), Color32::from_rgb(20, 20, 24));
+            painter.line_segment([egui::pos2(0.0, 48.0), egui::pos2(20.0, 48.0)], egui::Stroke::new(2.0_f32, Color32::WHITE));
+            painter.rect_filled(egui::Rect::from_min_size(egui::pos2(0.0, 60.0), egui::vec2(120.0, 40.0)), 8.0, Color32::from_rgb(22, 22, 24));
+            recolor_layer(ctx, layer, &[(0, 4)], &LIQUID_GLASS);
+            let shapes: Vec<_> = ctx.graphics_mut(|g| g.entry(layer).all_entries().cloned().collect());
+
+            // 淺色文字應獲得 8 向黑邊且 glyph_index_start 前移，再呼一次維持冪等
+            let Shape::Text(mut light_text) = shapes[0].shape.clone() else { panic!() };
+            let row = &light_text.galley.rows[0];
+            assert!(row.visuals.glyph_index_start > 0, "應插入黑邊索引並推進 glyph_index_start");
+            assert_eq!(row.visuals.mesh.vertices.len(), row.visuals.glyph_vertex_range.len() * 9);
+            assert!(row.visuals.mesh.vertices[row.visuals.glyph_vertex_range.end..].iter().all(|v| v.color.r() == 0 && v.color.g() == 0 && v.color.b() == 0 && v.color.a() > 150));
+            let before_v = row.visuals.mesh.vertices.len();
+            outline_liquid_text(&mut light_text);
+            assert_eq!(light_text.galley.rows[0].visuals.mesh.vertices.len(), before_v, "重複勾邊應冪等");
+
+            // 深色文字不加黑邊
+            let Shape::Text(dark_text) = &shapes[1].shape else { panic!() };
+            assert_eq!(dark_text.galley.rows[0].visuals.glyph_index_start, 0);
+
+            // 淺色向量線段應包成背襯黑邊 + 原線段
+            let Shape::Vec(segs) = &shapes[2].shape else { panic!("線段應加上黑邊底襯：{:?}", shapes[2].shape) };
+            assert_eq!(segs.len(), 2);
+
+            // 內層卡片透明化並加上細微玻璃內描邊
+            let Shape::Rect(card) = &shapes[3].shape else { panic!() };
+            assert_eq!(card.fill.a(), 51);
+            assert!(card.stroke.width > 0.5 && card.stroke.color.a() > 0);
+        });
+    }
+    */
 }

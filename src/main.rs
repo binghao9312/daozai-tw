@@ -63,6 +63,8 @@ struct Shell {
     tray_opening:Option<(app::Unread,std::sync::mpsc::Receiver<Result<(),OpenError>>)>,
     #[cfg(windows)]
     hidden: bool,
+    #[cfg(windows)]
+    fullscreen_covered: bool,
     /// 毛玻璃皮膚的背景亮度取樣（僅毛玻璃皮膚執行）。
     #[cfg(windows)]
     backdrop: Option<daozai::backdrop::Sampler>,
@@ -239,6 +241,7 @@ impl Shell {
             #[cfg(windows)] opening_messenger:None,
             #[cfg(windows)] tray_opening:None,
             #[cfg(windows)] hidden:false,
+            #[cfg(windows)] fullscreen_covered:false,
             #[cfg(windows)] backdrop:None,
             #[cfg(windows)]
             native: daozai::native::Window::new(cc),
@@ -347,7 +350,7 @@ impl Shell {
                 #[cfg(not(windows))] {false}
             },
             fullscreen_hidden: {
-                #[cfg(windows)] {self.hidden}
+                #[cfg(windows)] {self.fullscreen_covered}
                 #[cfg(not(windows))] {false}
             },
             browser_at_top: {
@@ -473,7 +476,8 @@ impl eframe::App for Shell {
                 self.system_ready=true;
                 self.fullscreen=observation.fullscreen;
             }
-            self.hidden=daozai::display_layout::hide_for_fullscreen(self.app.settings.hide_fullscreen,self.fullscreen,daozai::display_layout::selected(&self.app.displays,&self.app.settings.display_id).map(|d|d.bounds));
+            self.fullscreen_covered=daozai::display_layout::hide_for_fullscreen(self.app.settings.hide_fullscreen,self.fullscreen,daozai::display_layout::selected(&self.app.displays,&self.app.settings.display_id).map(|d|d.bounds));
+            self.hidden=self.app.should_hide_for_fullscreen(self.fullscreen_covered);
             // 毛玻璃：在島體左右兩側和畫布底邊（都在視窗區域之外）取樣，估計島背後的明暗。
             if self.app.settings.skin.is_glass() && !self.hidden {
                 let sampler=self.backdrop.get_or_insert_with(daozai::backdrop::Sampler::start);
@@ -630,6 +634,10 @@ impl eframe::App for Shell {
 
         #[cfg(windows)]
         {
+            // frame() 剛推進 tick_alerts()：若有通知剛抵達或剛結束，本幀立即同步視窗顯示／隱藏狀態。
+            let was_hidden=self.hidden;
+            self.hidden=self.app.should_hide_for_fullscreen(self.fullscreen_covered);
+            if self.hidden!=was_hidden {ctx.request_repaint();}
             // 先處理本幀輸入和動畫，再決定是否移動，避免懸停或按下的首幀仍使用舊狀態。
             let hovering=env.cursor.is_some_and(|p|out.hit.contains(p)||out.notice_hit.is_some_and(|r|r.contains(p)));
             let shift=if !self.app.settings.oled_shift {(0,0)}
@@ -672,7 +680,8 @@ impl eframe::App for Shell {
             // 保留主視窗的事件迴圈，避免全屏隱藏後設定視窗無法關閉或重新開啟。
             let region=if self.hidden {(0.0,0.0,0.0,0.0)} else {r(out.region)};
             let hit=if self.hidden {(0.0,0.0,0.0,0.0)} else {r(out.hit)};
-            native.update(region, hit, if self.hidden{None}else{out.notice_hit.map(r)},if self.hidden{None}else{out.file_drop_zone.map(r)},if self.hidden{None}else{out.glass.as_deref()},ctx.pixels_per_point(), out.editing, !self.hidden && out.expanded);
+            let want_blur = self.app.settings.skin.is_glass() && self.app.settings.glass_blur;
+            native.update(region, hit, if self.hidden{None}else{out.notice_hit.map(r)},if self.hidden{None}else{out.file_drop_zone.map(r)},if self.hidden{None}else{out.glass.as_deref()},want_blur,ctx.pixels_per_point(), out.editing, !self.hidden && out.expanded);
             if !self.hidden && self.app.settings.avoids_top_bar() && self.app.settings.top_bar_on_top && !self.app.settings.dock.is_side() {
                 if let Some(display)=daozai::display_layout::selected(&self.app.displays,&self.app.settings.display_id) {
                     native.keep_above_top_bar(display.bounds);

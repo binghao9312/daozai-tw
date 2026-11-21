@@ -3813,7 +3813,7 @@ fn minimal_island_hides_messenger_notices_until_expanded(){
             Messenger::Wechat=>h.app.receive_wechat_reminder_from(4242,0x1234),
             Messenger::Qq=>h.app.receive_notification("QQ".into(),"QQ".into(),"QQ · 新訊息".into()),
             Messenger::WeCom|Messenger::Feishu|Messenger::DingTalk=>h.app.receive_messenger_reminder(crate::app::Unread::of(source)),
-            Messenger::Discord=>unreachable!("本測試只覆蓋舊版 IM 的極簡橫幅"),
+            Messenger::Discord|Messenger::Line=>unreachable!("本測試只覆蓋舊版 IM 的極簡橫幅"),
         }
         for _ in 0..30 {h.frame(vec![]);}
         assert!(h.app.notice.as_ref().and_then(|a|a.messenger())==Some(source),"{source:?} {shape:?}：極簡劉海照常彈橫幅");
@@ -7559,13 +7559,13 @@ fn qq_unknown_reminders_survive_viewing_other_accounts(){
 fn messenger_window_replacement_removes_stale_banner_targets_without_clearing_other_accounts(){
     use crate::app::{Cmd,Messenger,Unread};
     let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for source in Messenger::ALL.into_iter().filter(|source|*source!=Messenger::Discord){
+    for source in Messenger::ALL.into_iter().filter(|source|!matches!(source,Messenger::Discord|Messenger::Line)){
         let mut h=H::new();h.app.settings.read_notifications=true;h.app.settings.wechat_notifications=true;h.app.settings.wecom_notifications=true;h.app.settings.feishu_notifications=true;h.app.settings.dingtalk_notifications=true;
         let old=Unread{source,pid:100,window:11};let other=Unread{source,pid:200,window:22};let current=Unread{window:33,..old};
         let receive=|app:&mut App,unread:Unread|match source{
             Messenger::Wechat|Messenger::WeCom|Messenger::Feishu|Messenger::DingTalk=>app.receive_messenger_reminder(unread),
             Messenger::Qq=>app.receive_notification_from("QQ".into(),"QQ".into(),"有新訊息".into(),Some(unread)),
-            Messenger::Discord=>unreachable!("本測試只覆蓋舊版 IM"),
+            Messenger::Discord|Messenger::Line=>unreachable!("本測試只覆蓋舊版 IM"),
         };
         receive(&mut h.app,old);h.frame(vec![]);receive(&mut h.app,other);receive(&mut h.app,current);
         assert_eq!(h.app.pending_messengers,[current,other]);
@@ -9030,4 +9030,132 @@ fn multiple_ics_calendars_save_without_password_and_coexist_in_feeds() {
         h.shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Text(t) if t.galley.text().contains("已選 1 / 1"))),
         "單個日曆也應顯示勾選清單，方便停用或核對名稱"
     );
+}
+
+#[test]
+fn line_dual_channel_notifications_deduplicate_and_wake_main_window() {
+    use crate::app::{Cmd, Messenger, Unread};
+    let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut h = H::new();
+    h.app.settings.read_notifications = false;
+    h.app.settings.line_notifications = true;
+    let unread = Unread { source: Messenger::Line, pid: 4321, window: 0x5678 };
+
+    // 1. 即使 Windows 系統通知未連線，LINE 工作列閃動仍能建立提醒並保留未讀狀態。
+    h.app.receive_messenger_reminder(unread);
+    h.frame(vec![]);
+    assert_eq!(h.app.pending_messengers, vec![unread]);
+    assert!(h.app.notice.as_ref().is_some_and(|n| n.messenger() == Some(Messenger::Line)));
+
+    // 2. 若同一條訊息接著透過 Windows 系統通知送達，應平滑升級為帶正文的通知而不重複排隊兩條。
+    h.app.settings.read_notifications = true;
+    h.app.settings.notification_preview = true;
+    h.app.receive_notification_from(
+        "LINE".into(),
+        "NAVER.WIN32_LINEwin8_8ptj331gd3tyt!LINE".into(),
+        "王小明 · 今晚七點吃飯嗎".into(),
+        Some(unread),
+    );
+    h.frame(vec![]);
+    assert_eq!(h.app.alerts.iter().filter(|a| a.messenger() == Some(Messenger::Line)).count(), 0);
+    assert_eq!(h.app.notice.as_ref().map(|n| n.body.as_str()), Some("王小明 · 今晚七點吃飯嗎"));
+
+    for _ in 0..45 { h.frame(vec![]); }
+    h.click_text("檢視");
+    assert!(h.cmds.contains(&Cmd::ViewMessenger(unread)));
+
+    // 3. 關閉 LINE 開關後，兩通道皆不再提醒。
+    h.app.discard_unread(unread);
+    h.app.settings.line_notifications = false;
+    h.app.receive_messenger_reminder(unread);
+    h.app.receive_notification_from("LINE".into(), "LINE".into(), "新訊息".into(), Some(unread));
+    assert!(h.app.pending_messengers.is_empty());
+    assert!(h.app.alerts.is_empty() && h.app.notice.is_none());
+}
+
+#[test]
+fn fullscreen_show_notices_toggle_pops_island_for_alerts_while_keeping_health_silent() {
+    let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut h = H::new();
+    h.app.settings.hide_fullscreen = true;
+    h.app.settings.fullscreen_show_notices = true;
+    h.app.settings.read_notifications = true;
+    h.app.settings.notification_preview = true;
+    h.app.settings.lunch_rest = false;
+    h.app.settings.water_start = 0;
+    h.app.settings.water_end = 0;
+    h.fullscreen = true;
+    h.frame(vec![]);
+
+    // 閒置無通知時應保持隱藏。
+    assert!(h.app.fullscreen_hidden);
+    assert!(h.app.should_hide_for_fullscreen(true));
+
+    // 全螢幕期間健康提醒仍保持靜默，不會浮現島體。
+    h.app.alert("喝水時間到了", "喝點水吧", 2, true);
+    h.frame(vec![]);
+    assert!(h.app.notice.is_none());
+    assert!(h.app.should_hide_for_fullscreen(true));
+
+    // 收到 LINE / 外部通知時暫時浮現島體，並正常倒數 4.5 秒後自動重新隱藏。
+    h.app.receive_notification("LINE".into(), "NAVER.WIN32_LINEwin8_8ptj331gd3tyt!LINE".into(), "會議改期".into());
+    h.frame(vec![]);
+    assert!(h.app.notice.is_some());
+    assert!(!h.app.should_hide_for_fullscreen(true));
+    assert_eq!(h.app.notice.as_ref().map(|n| n.body.as_str()), Some("會議改期"));
+
+    h.app.t += 4.3;
+    h.app.tick_alerts();
+    assert!(h.app.notice.is_some());
+    assert!(!h.app.should_hide_for_fullscreen(true));
+
+    h.app.t += 0.3;
+    h.app.tick_alerts();
+    assert!(h.app.notice.is_none());
+    assert!(h.app.should_hide_for_fullscreen(true));
+}
+
+#[test]
+fn liquid_glass_and_settings_controls_persist_and_render_without_clipping() {
+    let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut h = H::new();
+    // h.app.settings.skin = crate::model::Skin::LiquidGlass;
+    h.app.settings.fullscreen_show_notices = true;
+    h.app.settings.line_notifications = false;
+    h.app.settings.save();
+    let loaded = crate::model::Settings::load();
+    // assert_eq!(loaded.skin, crate::model::Skin::LiquidGlass);
+    assert!(loaded.fullscreen_show_notices);
+    assert!(!loaded.line_notifications);
+
+    // 檢查常規頁（皮膚按鈕與全螢幕通知開關）與通知頁（LINE 開關）於預設設定視窗寬度下均無裁切。
+    h.ctx.set_embed_viewports(false);
+    let captured = std::sync::Arc::new(Mutex::new(None));
+    let capture = captured.clone();
+    egui::Context::set_immediate_viewport_renderer(move |ctx, mut viewport| {
+        let id = viewport.ids.this;
+        let raw = egui::RawInput {
+            viewport_id: id,
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(690.0, 2400.0))),
+            viewports: std::iter::once((id, egui::ViewportInfo { focused: Some(true), ..Default::default() })).collect(),
+            ..Default::default()
+        };
+        *capture.lock().unwrap() = Some(ctx.run(raw, |ctx| (viewport.viewport_ui_cb)(ctx)));
+    });
+    for (tab, expected_labels) in [
+        (0usize, vec!["經典", "奶油", "毛玻璃·淺", "毛玻璃·深", /* "液態玻璃", */ "懸浮雲", "全螢幕隱藏時仍彈出通知"]),
+        (6usize, vec!["LINE 新訊息提醒"]),
+    ] {
+        h.app.settings_tab = tab;
+        h.app.open_settings();
+        for _ in 0..3 { let _ = h.ctx.run(Default::default(), |ctx| h.app.settings_ui(ctx, false)); }
+        let out = captured.lock().unwrap().take().unwrap();
+        for label in expected_labels {
+            let found = out.shapes.iter().find_map(|s| match &s.shape {
+                egui::Shape::Text(t) if t.galley.text() == label => Some((s.clip_rect, t.visual_bounding_rect())),
+                _ => None,
+            }).unwrap_or_else(|| panic!("設定分頁 {tab} 缺少文字 {label}"));
+            assert!(found.0.contains_rect(found.1), "設定分頁 {tab} 文字 {label} 被裁切：{:?} vs {:?}", found.0, found.1);
+        }
+    }
 }
