@@ -119,10 +119,10 @@ impl ArtworkWorker {
 #[derive(Default)]
 struct ArtworkCache {
     #[cfg(windows)]
-    #[cfg(windows)]
     system:Option<(NowPlaying,std::time::Instant)>,
     #[cfg(windows)]
     manager:Option<windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager>,
+    chromium_shadows:ChromiumShadows,
     key: String,
     bytes: Vec<u8>,
     image: Option<Arc<eframe::egui::ColorImage>>,
@@ -255,10 +255,24 @@ fn read_artwork(props:&windows::Media::Control::GlobalSystemMediaTransportContro
 /// 瀏覽器分頁在系統媒體會話裡的來源名沒有 `.exe`（實測是「Chrome」），兩種寫法都列入。
 pub(crate) const YTMUSIC_SOURCE_IDS:&[&str]=&["chrome.exe","msedge.exe","brave.exe","chrome","msedge","brave","ytm-rs.exe","youtube music desktop app","pear desktop"];
 
-/// Chromium 系瀏覽器的一般分頁（不含 `Chrome._crx_<id>` 這種應用程式視窗）。
-#[cfg(windows)]
+/// Chromium 系瀏覽器分頁的 YouTube Music 狀態：在位、掃描中或已不在。
+#[derive(Debug,Clone,Copy,PartialEq,Eq)]
+pub(crate) enum TabPresence { Active, Pending, Absent }
+
+/// Chromium 系瀏覽器的一般分頁對應到執行檔名（不含 `Chrome._crx_<id>` 這種應用程式視窗）。
+pub(crate) fn chromium_browser_key(source:&str)->Option<&'static str> {
+    match source.to_ascii_lowercase().as_str() {
+        "chrome"|"chrome.exe"=>Some("chrome.exe"),
+        "msedge"|"msedge.exe"=>Some("msedge.exe"),
+        "brave"|"brave.exe"=>Some("brave.exe"),
+        "opera"|"opera.exe"=>Some("opera.exe"),
+        "vivaldi"|"vivaldi.exe"=>Some("vivaldi.exe"),
+        _=>None,
+    }
+}
+
 fn is_chromium_tab_source(source:&str)->bool {
-    matches!(source.to_ascii_lowercase().as_str(),"chrome"|"chrome.exe"|"msedge"|"msedge.exe"|"brave"|"brave.exe"|"opera"|"opera.exe"|"vivaldi"|"vivaldi.exe")
+    chromium_browser_key(source).is_some()
 }
 
 /// YouTube Music 桌面版（Chrome 應用程式）在系統媒體會話中的 SourceAppUserModelId，已全部小寫。
@@ -317,12 +331,82 @@ fn media_rank(media:&NowPlaying)->u8{
     match (media.is_music(),media.playing){(true,true)=>0,(true,false)=>1,(false,true)=>2,_=>3}
 }
 
-/// 會話選擇鍵：有來源正在播放時依 media_rank；全部暫停時優先保留上一個播放來源，
-/// 讓播放/暫停、上一首、下一首仍指向它，而不是任意一個暫停中的播放器。
-fn session_pick_key(media:&NowPlaying,previous:Option<&str>)->(u8,u8){
-    if media.playing{return (0,media_rank(media));}
-    if previous.is_some_and(|p|p.eq_ignore_ascii_case(&media.source)){return (1,0);}
-    (1,media_rank(media))
+/// 同一個 Chromium 瀏覽器只註冊一個系統媒體會話；若正在播網頁版 YouTube Music 的同時點擊別的分頁播放源，
+/// 系統會話會立刻被該分頁蓋掉。保留這份陰影並在背景分頁仍顯示歌名時沿用，直到分頁暫停、關閉或曲目超過時長。
+const SHADOW_PENDING_GRACE:Duration=Duration::from_secs(2);
+const SHADOW_END_MARGIN_SECS:f64=5.0;
+
+#[derive(Clone,Debug)]
+struct ChromiumShadow {
+    raw_title: String,
+    media: NowPlaying,
+    confirmed_at: std::time::Instant,
+    active: bool,
+}
+impl ChromiumShadow {
+    fn expired(&self,now:std::time::Instant)->bool {
+        if self.media.duration<=0.0{return false;}
+        let elapsed=self.media.sampled_at.map_or(0.0,|at|now.saturating_duration_since(at).as_secs_f64());
+        self.media.position+elapsed>self.media.duration+SHADOW_END_MARGIN_SECS
+    }
+}
+
+#[derive(Default)]
+struct ChromiumShadows(std::collections::HashMap<&'static str,ChromiumShadow>);
+impl ChromiumShadows {
+    fn prune_missing(&mut self,present_browsers:&[&'static str]) {
+        self.0.retain(|browser,_|present_browsers.contains(browser));
+    }
+    fn remember_live(&mut self,media:&NowPlaying,raw_title:&str,now:std::time::Instant) {
+        let Some(browser)=chromium_browser_key(&media.source) else {return;};
+        if media.is_music() && media.playing {
+            self.0.insert(browser,ChromiumShadow{raw_title:raw_title.to_string(),media:media.clone(),confirmed_at:now,active:false});
+        } else if media.is_music() {
+            self.0.remove(browser);
+        }
+    }
+    fn resolve(&mut self,media:NowPlaying,now:std::time::Instant,check_tab:impl FnOnce(&str,&str,bool)->TabPresence)->(NowPlaying,bool) {
+        if media.is_music() {
+            if !media.playing {
+                if let Some(browser)=chromium_browser_key(&media.source) {self.0.remove(browser);}
+            }
+            return (media,false);
+        }
+        let Some(browser)=chromium_browser_key(&media.source) else {return (media,false);};
+        let Some(shadow)=self.0.get_mut(browser) else {return (media,false);};
+        if shadow.expired(now) {self.0.remove(browser);return (media,false);}
+        let wait=!shadow.active;
+        match check_tab(&shadow.media.source,&shadow.raw_title,wait) {
+            TabPresence::Active=>{
+                shadow.confirmed_at=now;
+                shadow.active=true;
+                (shadow.media.clone(),true)
+            }
+            TabPresence::Pending=>{
+                if now.saturating_duration_since(shadow.confirmed_at)<=SHADOW_PENDING_GRACE {
+                    shadow.active=true;
+                    (shadow.media.clone(),true)
+                } else {
+                    self.0.remove(browser);
+                    (media,false)
+                }
+            }
+            TabPresence::Absent=>{
+                self.0.remove(browser);
+                (media,false)
+            }
+        }
+    }
+}
+
+/// 會話選擇鍵：音樂永遠優先於影片與未識別網頁媒體（影片不能遮擋音樂，也不能搶走暫停音樂的控制目標）；
+/// 同為音樂時：即時播放中 > 同瀏覽器背景分頁保留播放中 > 上一個暫停來源 > 其他暫停來源。
+fn session_pick_key(media:&NowPlaying,previous:Option<&str>,shadowed:bool)->(u8,u8,u8,u8){
+    let non_music=u8::from(!media.is_music());
+    let paused=u8::from(!media.playing);
+    let shadowed=u8::from(shadowed);
+    let not_previous=u8::from(!(paused==1 && previous.is_some_and(|p|p.eq_ignore_ascii_case(&media.source))));
+    (non_music,paused,shadowed,not_previous)
 }
 
 #[cfg(test)]
@@ -334,29 +418,138 @@ mod session_pick_tests {
             playback_type:if music{MediaKind::Music}else{MediaKind::Video},..Default::default()}
     }
 
-    fn pick<'a>(candidates:&'a [NowPlaying],previous:Option<&str>)->&'a NowPlaying{
-        candidates.iter().min_by_key(|m|session_pick_key(m,previous)).unwrap()
+    fn pick<'a>(candidates:&'a [(NowPlaying,bool)],previous:Option<&str>)->&'a NowPlaying{
+        &candidates.iter().min_by_key(|(m,shadowed)|session_pick_key(m,previous,*shadowed)).unwrap().0
     }
 
     #[test]
     fn paused_previous_source_stays_selected_over_other_paused_players(){
-        let c=[np("QQMusic.exe",false,true),np("Spotify.exe",false,true),np("chrome.exe",false,false)];
+        let c=[(np("QQMusic.exe",false,true),false),(np("Spotify.exe",false,true),false),(np("chrome.exe",false,false),false)];
         assert_eq!(pick(&c,Some("Spotify.exe")).source,"Spotify.exe");
-        assert_eq!(pick(&c,Some("chrome.exe")).source,"chrome.exe","暫停的影片也是上一個播放來源");
+        assert_eq!(pick(&c,Some("chrome.exe")).source,"QQMusic.exe","音樂永遠優先於暫停中的影片");
+        let videos=[(np("chrome.exe",false,false),false),(np("msedge.exe",false,false),false)];
+        assert_eq!(pick(&videos,Some("msedge.exe")).source,"msedge.exe","只有非音樂會話時保留上一個暫停來源");
     }
 
     #[test]
     fn any_playing_source_still_takes_over_from_a_paused_previous_one(){
-        let c=[np("Spotify.exe",false,true),np("QQMusic.exe",true,true)];
-        assert_eq!(pick(&c,Some("Spotify.exe")).source,"QQMusic.exe","別的播放器開始播放時照常切換");
-        let v=[np("Spotify.exe",false,true),np("chrome.exe",true,false)];
-        assert_eq!(pick(&v,Some("Spotify.exe")).source,"chrome.exe");
+        let c=[(np("Spotify.exe",false,true),false),(np("QQMusic.exe",true,true),false)];
+        assert_eq!(pick(&c,Some("Spotify.exe")).source,"QQMusic.exe","別的音樂播放器開始播放時照常切換");
+        let v=[(np("Spotify.exe",false,true),false),(np("chrome.exe",true,false),false)];
+        assert_eq!(pick(&v,Some("Spotify.exe")).source,"Spotify.exe","正在播放的影片不能搶走暫停中的音樂");
     }
 
     #[test]
     fn without_a_previous_source_music_still_ranks_before_video(){
-        let c=[np("chrome.exe",false,false),np("ytm-rs.exe",false,true)];
+        let c=[(np("chrome.exe",false,false),false),(np("ytm-rs.exe",false,true),false)];
         assert_eq!(pick(&c,None).source,"ytm-rs.exe");
+    }
+
+    #[test]
+    fn shadowed_playing_music_beats_paused_music_but_yields_to_live_playing_music(){
+        let pwa_paused=np("Chrome._crx_cinhimbnkkghhklpknlkffjgod",false,true);
+        let mut chrome_shadowed=np("Chrome",true,true);
+        chrome_shadowed.album="YouTube Music".into();
+        let c=[(pwa_paused.clone(),false),(chrome_shadowed.clone(),true)];
+        assert_eq!(pick(&c,Some("Chrome._crx_cinhimbnkkghhklpknlkffjgod")).source,"Chrome","背景分頁仍在播放的音樂優先於暫停中的播放器");
+
+        let spotify_playing=np("Spotify.exe",true,true);
+        let c=[(chrome_shadowed,true),(spotify_playing,false)];
+        assert_eq!(pick(&c,Some("Chrome")).source,"Spotify.exe","其他即時播放的音樂優先於被覆蓋的瀏覽器分頁");
+    }
+}
+
+#[cfg(test)]
+mod chromium_shadow_tests {
+    use super::*;
+
+    fn ytm_playing(title:&str)->NowPlaying {
+        NowPlaying{source:"Chrome".into(),title:title.into(),artist:"周杰倫".into(),album:"YouTube Music".into(),
+            playing:true,position:30.0,duration:200.0,playback_type:MediaKind::Music,
+            artwork:Some(Arc::new(eframe::egui::ColorImage::new([1,1],eframe::egui::Color32::RED))),..Default::default()}
+    }
+
+    fn hijacking_video(source:&str)->NowPlaying {
+        NowPlaying{source:source.into(),title:"Some Video".into(),artist:"Creator".into(),album:"YouTube".into(),
+            playing:true,playback_type:MediaKind::Video,..Default::default()}
+    }
+
+    #[test]
+    fn chromium_shadow_keeps_playing_ytmusic_when_another_tab_hijacks_smtc(){
+        let start=std::time::Instant::now();
+        let mut shadows=ChromiumShadows::default();
+        let mut song=ytm_playing("告白氣球");
+        song.sampled_at=Some(start);
+        shadows.remember_live(&song,"告白氣球",start);
+
+        let mut waits=Vec::new();
+        let (kept,shadowed)=shadows.resolve(hijacking_video("Chrome"),start+Duration::from_millis(250),|_,_,wait|{
+            waits.push(wait);
+            TabPresence::Active
+        });
+        assert!(shadowed);
+        assert_eq!(kept.title,"告白氣球");
+        assert_eq!(kept.source,"Chrome");
+        assert!(kept.artwork.is_some(),"保留被蓋住歌曲的封面");
+        assert_eq!(kept.sampled_at,Some(start));
+        assert_eq!(waits,vec![true],"首次被覆蓋時短暫等待掃描");
+
+        let (_,shadowed)=shadows.resolve(hijacking_video("Chrome"),start+Duration::from_millis(500),|_,_,wait|{
+            waits.push(wait);
+            TabPresence::Pending
+        });
+        assert!(shadowed,"Pending 在寬限期內應保留");
+        assert_eq!(waits,vec![true,false],"後續輪詢改為非同步刷新");
+
+        let (dropped,shadowed)=shadows.resolve(hijacking_video("Chrome"),start+Duration::from_millis(250)+SHADOW_PENDING_GRACE+Duration::from_millis(10),|_,_,_|TabPresence::Pending);
+        assert!(!shadowed,"Pending 超過寬限期後應失效");
+        assert_eq!(dropped.title,"Some Video");
+    }
+
+    #[test]
+    fn chromium_shadow_clears_when_tab_pauses_ends_or_browser_closes(){
+        let start=std::time::Instant::now();
+        let mut shadows=ChromiumShadows::default();
+        let mut song=ytm_playing("告白氣球");
+        song.sampled_at=Some(start);
+
+        shadows.remember_live(&song,"告白氣球",start);
+        let (_,shadowed)=shadows.resolve(hijacking_video("msedge"),start+Duration::from_millis(250),|_,_,_|TabPresence::Active);
+        assert!(!shadowed,"Chrome 的陰影不能串到 MSEdge");
+
+        let (dropped,shadowed)=shadows.resolve(hijacking_video("Chrome"),start+Duration::from_millis(250),|_,_,_|TabPresence::Absent);
+        assert!(!shadowed,"分頁暫停或關閉後應立即清除");
+        assert_eq!(dropped.title,"Some Video");
+
+        shadows.remember_live(&song,"告白氣球",start);
+        let (_,shadowed)=shadows.resolve(hijacking_video("Chrome"),start+Duration::from_secs(206),|_,_,_|TabPresence::Active);
+        assert!(!shadowed,"超過歌曲時長加寬限後應清除");
+
+        shadows.remember_live(&song,"告白氣球",start);
+        let paused=NowPlaying{playing:false,..song.clone()};
+        shadows.remember_live(&paused,"告白氣球",start+Duration::from_secs(1));
+        let (_,shadowed)=shadows.resolve(hijacking_video("Chrome"),start+Duration::from_secs(2),|_,_,_|TabPresence::Active);
+        assert!(!shadowed,"使用者在瀏覽器裡明確暫停後不得復活");
+
+        shadows.remember_live(&song,"告白氣球",start);
+        shadows.prune_missing(&["msedge.exe"]);
+        let (_,shadowed)=shadows.resolve(hijacking_video("Chrome"),start+Duration::from_secs(1),|_,_,_|TabPresence::Active);
+        assert!(!shadowed,"瀏覽器會話消失後應清除");
+    }
+
+    #[test]
+    fn chromium_shadow_matches_raw_title_when_cleaned_title_differs(){
+        let start=std::time::Instant::now();
+        let mut shadows=ChromiumShadows::default();
+        let song=ytm_playing("晴天");
+        shadows.remember_live(&song,"晴天 (Official MV)",start);
+        let mut seen=String::new();
+        let (_,shadowed)=shadows.resolve(hijacking_video("Chrome"),start+Duration::from_millis(100),|_,title,_|{
+            seen=title.to_string();
+            TabPresence::Active
+        });
+        assert!(shadowed);
+        assert_eq!(seen,"晴天 (Official MV)");
     }
 }
 
@@ -385,26 +578,40 @@ fn query_system(artwork:&mut ArtworkCache) -> Result<Option<NowPlaying>,()> {
     let mut sessions=current.iter().cloned().collect::<Vec<_>>();
     let all=mgr.GetSessions().map_err(|_|{artwork.manager=None;})?;
     for session in all{if !sessions.contains(&session){sessions.push(session);}}
-    if sessions.is_empty(){return Ok(None);}
+    if sessions.is_empty(){
+        artwork.chromium_shadows.prune_missing(&[]);
+        return Ok(None);
+    }
+    let now=std::time::Instant::now();
+    let present_browsers:Vec<&'static str>=sessions.iter()
+        .filter_map(|session|session.SourceAppUserModelId().ok().and_then(|id|chromium_browser_key(&id.to_string())))
+        .collect();
+    artwork.chromium_shadows.prune_missing(&present_browsers);
     // 先比較全部會話；影片不能遮擋音樂，封面只為最終選中的會話讀取。
     let previous=artwork.system.as_ref().map(|(media,_)|media.source.clone());
     let mut unreadable_previous=false;
-    let (session,mut media)=sessions.iter().filter_map(|session|{
-        let media=read_session(session,artwork);
-        if media.is_none() && session.SourceAppUserModelId().ok().is_some_and(|id|previous.as_deref()==Some(id.to_string().as_str())){unreadable_previous=true;}
-        media.map(|media|(session,media))
+    let (session,mut media,raw_title,shadowed)=sessions.iter().filter_map(|session|{
+        let read=read_session(session,artwork);
+        if read.is_none() && session.SourceAppUserModelId().ok().is_some_and(|id|previous.as_deref()==Some(id.to_string().as_str())){unreadable_previous=true;}
+        read.map(|(media,raw_title)|{
+            let (media,shadowed)=artwork.chromium_shadows.resolve(media,now,browser_tab::ytmusic_tab_presence);
+            (session,media,raw_title,shadowed)
+        })
     })
-        .min_by_key(|(_,media)|session_pick_key(media,previous.as_deref())).ok_or(())?;
+        .min_by_key(|(_,media,_,shadowed)|session_pick_key(media,previous.as_deref(),*shadowed)).ok_or(())?;
     music_log::player(&media.source);
     // 當前播放器正在過載時，不把暫停中的另一客戶端當成使用者切換了播放源。
     if media_rank(&media)>0 && unreadable_previous{return Err(());}
-    let key=format!("{}|{}|{}|{}",media.source,media.title,media.artist,media.album);
-    let session=session.clone();
-    let title=media.title.clone();
-    media.artwork=artwork.poll(key,move ||{
-        let props=artwork_result(||session.TryGetMediaPropertiesAsync())?;
-        if media_text(props.Title())?!=title{return None;}read_artwork(&props)
-    });
+    if !shadowed {
+        let key=format!("{}|{}|{}|{}",media.source,media.title,media.artist,media.album);
+        let session=session.clone();
+        let expected_title=raw_title.clone();
+        media.artwork=artwork.poll(key,move ||{
+            let props=artwork_result(||session.TryGetMediaPropertiesAsync())?;
+            if media_text(props.Title())?!=expected_title{return None;}read_artwork(&props)
+        });
+        artwork.chromium_shadows.remember_live(&media,&raw_title,now);
+    }
     Ok(Some(media))
 }
 
@@ -416,7 +623,7 @@ fn media_text(value:windows::core::Result<windows::core::HSTRING>)->Option<Strin
 }
 
 #[cfg(windows)]
-fn read_session(session:&windows::Media::Control::GlobalSystemMediaTransportControlsSession,_artwork:&mut ArtworkCache)->Option<NowPlaying>{
+fn read_session(session:&windows::Media::Control::GlobalSystemMediaTransportControlsSession,_artwork:&mut ArtworkCache)->Option<(NowPlaying,String)>{
     let props=media_result(||session.TryGetMediaPropertiesAsync())?;
     let raw_title = media_text(props.Title())?;
     let title = crate::lyrics::clean_ytmusic_title(&raw_title);
@@ -473,7 +680,7 @@ fn read_session(session:&windows::Media::Control::GlobalSystemMediaTransportCont
     if album.trim().is_empty() && playback_type!=MediaKind::Video && is_chromium_tab_source(&source) && browser_tab::is_ytmusic_page(&source,&raw_title,&artist) {
         album="YouTube Music".into();
     }
-    Some(NowPlaying { title, artist, album, source, song_id:None, playing, position, sampled_at, event_time_ms, duration, artwork:None, playback_type, volume:None })
+    Some((NowPlaying { title, artist, album, source, song_id:None, playing, position, sampled_at, event_time_ms, duration, artwork:None, playback_type, volume:None }, raw_title))
 }
 
 #[cfg(not(windows))]
@@ -1492,7 +1699,7 @@ mod tests {
         let snapshot=||{
             let mut rows=Vec::new();
             for session in manager.GetSessions().unwrap(){
-                if let Some(media)=read_session(&session,&mut ArtworkCache::default()) {rows.push(media);}
+                if let Some((media,_))=read_session(&session,&mut ArtworkCache::default()) {rows.push(media);}
             }
             if let Some(media)=netease_playback::Reader::default().poll(){rows.retain(|m|!m.source.eq_ignore_ascii_case("cloudmusic.exe"));rows.push(media);}
             rows

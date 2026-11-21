@@ -14,12 +14,16 @@ use std::{collections::HashMap,sync::Mutex,time::{Duration,Instant}};
 
 use windows::{core::Interface,Win32::{Foundation::*,System::Com::*,UI::{Accessibility::*,WindowsAndMessaging::*}}};
 
+use super::{chromium_browser_key,TabPresence};
+
 /// 會讀分頁的 Chromium 系瀏覽器；Electron 應用程式的視窗類別相同，所以還要核對執行檔名。
 const BROWSERS:&[&str]=&["chrome.exe","msedge.exe","brave.exe","opera.exe","vivaldi.exe"];
 /// 單一瀏覽器視窗最多讀多少個節點、往下幾層；分頁列在 BrowserView 底下約 11 層。
-const MAX_NODES:usize=600;
+const MAX_NODES:usize=1200;
 const MAX_DEPTH:usize=14;
 const CACHE_LIMIT:usize=16;
+/// 分頁快照的有效時間：足夠涵蓋多輪取樣，又能在分頁暫停或關閉後兩秒內反映出來。
+const SNAPSHOT_TTL:Duration=Duration::from_secs(2);
 /// 新歌第一次比對時最多等掃描多久；超過就先當成不是，等背景掃描把結果寫進快取。
 const FIRST_WAIT:Duration=Duration::from_millis(150);
 
@@ -75,6 +79,29 @@ fn with_verdicts<T>(run:impl FnOnce(&mut Verdicts)->T)->T {
     run(guard.get_or_insert_with(Verdicts::default))
 }
 
+/// 各瀏覽器最近一次的分頁標題快照（含視窗標題與所有分頁名稱），有短期 TTL。
+/// 與 `Verdicts` 分開：背景分頁暫停或關閉時必須很快失效，不能永久快取 `Yes`。
+#[derive(Default)]
+struct Snapshots(HashMap<String,(Instant,Vec<String>)>);
+impl Snapshots {
+    fn record(&mut self,exe:String,names:Vec<String>,now:Instant) {
+        if !self.0.contains_key(&exe) && self.0.len()>=CACHE_LIMIT {self.0.clear();}
+        self.0.insert(exe,(now,names));
+    }
+    fn fresh_match(&self,exe:&str,song:&str,now:Instant)->Option<bool> {
+        let (at,names)=self.0.get(exe)?;
+        if now.saturating_duration_since(*at)>=SNAPSHOT_TTL {return None;}
+        Some(names.iter().any(|name|names_ytmusic_page(name,song)))
+    }
+}
+
+static SNAPSHOTS:Mutex<Option<Snapshots>>=Mutex::new(None);
+
+fn with_snapshots<T>(run:impl FnOnce(&mut Snapshots)->T)->T {
+    let mut guard=SNAPSHOTS.lock().unwrap_or_else(|e|e.into_inner());
+    run(guard.get_or_insert_with(Snapshots::default))
+}
+
 /// 這個瀏覽器會話是不是正在播放網頁版 YouTube Music。
 ///
 /// 掃描在背景執行緒進行。換歌後第一次呼叫最多等 [`FIRST_WAIT`]（實測掃描約 20～70 毫秒，通常等得到），
@@ -88,16 +115,84 @@ pub(crate) fn is_ytmusic_page(source:&str,song:&str,artist:&str)->bool {
         Next::Scan=>{}
     }
     // 通道上限是 1：已有掃描在跑時直接放棄這次，等它跑完。
+    let target_exe=chromium_browser_key(source);
     let song=song.to_string();
     let (reply,result)=std::sync::mpsc::channel();
     let started=crate::resources::BROWSER_TABS.spawn(move||{
         let com=unsafe{CoInitializeEx(None,COINIT_MULTITHREADED)}.is_ok();
-        let found=std::panic::catch_unwind(||scan(&song)).unwrap_or(false);
+        let found=std::panic::catch_unwind(||{
+            let windows=browser_windows_for(target_exe);
+            if windows.is_empty() {
+                if let Some(exe)=target_exe {
+                    with_snapshots(|snapshots|snapshots.record(exe.to_string(),Vec::new(),Instant::now()));
+                }
+                return false;
+            }
+            if windows.iter().any(|(_,title)|names_ytmusic_page(title,&song)){return true;}
+            let Some(ui)=automation() else {return false};
+            let names=collect_names(&ui,&windows);
+            let found=names.iter().any(|name|names_ytmusic_page(name,&song));
+            if let Some(exe)=target_exe {
+                with_snapshots(|snapshots|snapshots.record(exe.to_string(),names,Instant::now()));
+            }
+            found
+        }).unwrap_or(false);
         if com{unsafe{CoUninitialize();}}
         with_verdicts(|verdicts|verdicts.record(key,found,Instant::now()));
         let _=reply.send(found);
     }).is_some();
     started && result.recv_timeout(FIRST_WAIT).unwrap_or(false)
+}
+
+/// 檢查指定瀏覽器裡是否仍有這首歌的 YouTube Music 分頁（受 `SNAPSHOT_TTL` 限制）。
+/// `wait` 為 true 時首次會短暫等待背景掃描，避免切到別的分頁那瞬間閃爍；
+/// 之後在前景輪詢時改走非同步刷新，不拖慢 SMTC 取樣執行緒。
+pub(crate) fn ytmusic_tab_presence(source:&str,song:&str,wait:bool)->TabPresence {
+    if song.trim().is_empty(){return TabPresence::Absent;}
+    let Some(exe)=chromium_browser_key(source) else {return TabPresence::Absent;};
+    match with_snapshots(|snapshots|snapshots.fresh_match(exe,song,Instant::now())) {
+        Some(true)=>return TabPresence::Active,
+        Some(false)=>return TabPresence::Absent,
+        None=>{}
+    }
+    let song=song.to_string();
+    let (reply,result)=if wait {
+        let (tx,rx)=std::sync::mpsc::channel();
+        (Some(tx),Some(rx))
+    } else {(None,None)};
+    let started=crate::resources::BROWSER_TABS.spawn(move||{
+        let com=unsafe{CoInitializeEx(None,COINIT_MULTITHREADED)}.is_ok();
+        let snapshot=std::panic::catch_unwind(||scan_browser_snapshot(Some(exe))).ok().flatten();
+        if com{unsafe{CoUninitialize();}}
+        let found=snapshot.map(|names|{
+            let matched=names.iter().any(|name|names_ytmusic_page(name,&song));
+            with_snapshots(|snapshots|snapshots.record(exe.to_string(),names,Instant::now()));
+            matched
+        });
+        if let Some(tx)=reply{let _=tx.send(found);}
+    }).is_some();
+    if !started {return TabPresence::Pending;}
+    let Some(result)=result else {return TabPresence::Pending;};
+    match result.recv_timeout(FIRST_WAIT) {
+        Ok(Some(true))=>TabPresence::Active,
+        Ok(Some(false))=>TabPresence::Absent,
+        Ok(None)|Err(_)=>TabPresence::Pending,
+    }
+}
+
+fn collect_names(ui:&IUIAutomation,windows:&[(HWND,String)])->Vec<String> {
+    let mut names:Vec<String>=windows.iter().map(|(_,title)|title.clone()).collect();
+    for (hwnd,_) in windows {
+        names.extend(tab_names(ui,*hwnd));
+    }
+    names
+}
+
+fn scan_browser_snapshot(target_exe:Option<&str>)->Option<Vec<String>> {
+    let windows=browser_windows_for(target_exe);
+    if windows.is_empty(){return Some(Vec::new());}
+    let ui=automation()?;
+    Some(collect_names(&ui,&windows))
 }
 
 fn scan(song:&str)->bool {
@@ -107,25 +202,32 @@ fn scan(song:&str)->bool {
     windows.iter().any(|(hwnd,_)|tab_names(&ui,*hwnd).iter().any(|name|names_ytmusic_page(name,song)))
 }
 
-/// 可見的 Chromium 系瀏覽器頂層視窗與其標題。
-fn browser_windows()->Vec<(HWND,String)> {
+/// 可見的 Chromium 系瀏覽器頂層視窗與其標題；`target_exe` 有指定時只收集該瀏覽器。
+fn browser_windows_for(target_exe:Option<&str>)->Vec<(HWND,String)> {
+    struct Context<'a> { target_exe:Option<&'a str>, found:Vec<(HWND,String)> }
     unsafe extern "system" fn visit(hwnd:HWND,param:LPARAM)->BOOL {
-        let found=&mut *(param.0 as *mut Vec<(HWND,String)>);
+        let ctx=&mut *(param.0 as *mut Context<'_>);
         if !IsWindowVisible(hwnd).as_bool(){return BOOL(1);}
         let mut class=[0u16;64];let n=GetClassNameW(hwnd,&mut class).max(0) as usize;
         if String::from_utf16_lossy(&class[..n])!="Chrome_WidgetWin_1"{return BOOL(1);}
         let mut pid=0;GetWindowThreadProcessId(hwnd,Some(&mut pid));
         let Some(path)=super::player_process::image_path(pid) else {return BOOL(1)};
         let exe=path.rsplit(['\\','/']).next().unwrap_or(&path);
-        if !BROWSERS.iter().any(|browser|exe.eq_ignore_ascii_case(browser)){return BOOL(1);}
+        let matched=match ctx.target_exe {
+            Some(target)=>exe.eq_ignore_ascii_case(target),
+            None=>BROWSERS.iter().any(|browser|exe.eq_ignore_ascii_case(browser)),
+        };
+        if !matched{return BOOL(1);}
         let mut title=[0u16;512];let n=GetWindowTextW(hwnd,&mut title).max(0) as usize;
-        found.push((hwnd,String::from_utf16_lossy(&title[..n])));
+        ctx.found.push((hwnd,String::from_utf16_lossy(&title[..n])));
         BOOL(1)
     }
-    let mut found=Vec::new();
-    let _=unsafe{EnumWindows(Some(visit),LPARAM(&mut found as *mut Vec<(HWND,String)> as isize))};
-    found
+    let mut ctx=Context{target_exe,found:Vec::new()};
+    let _=unsafe{EnumWindows(Some(visit),LPARAM(&mut ctx as *mut Context<'_> as isize))};
+    ctx.found
 }
+
+fn browser_windows()->Vec<(HWND,String)> {browser_windows_for(None)}
 
 fn automation()->Option<IUIAutomation> {
     unsafe {
@@ -137,6 +239,11 @@ fn automation()->Option<IUIAutomation> {
 
 /// 網頁內容的容器：不往裡面走，免得觸發瀏覽器為網頁開啟無障礙功能，也不讀網頁上的任何文字。
 fn is_page_content(class:&str)->bool {class.contains("WebView") || class.contains("RenderWidgetHost")}
+
+/// 不會包含子分頁的純葉節點控制項：跳過它們的子樹，把節點預算留給分頁列。
+fn is_leaf_control(kind:UIA_CONTROLTYPE_ID)->bool {
+    [UIA_ButtonControlTypeId,UIA_EditControlTypeId,UIA_TextControlTypeId,UIA_ImageControlTypeId,UIA_MenuItemControlTypeId,UIA_HyperlinkControlTypeId,UIA_SeparatorControlTypeId].contains(&kind)
+}
 
 /// 逐層（廣度優先）往下找 `TabItem` 並讀名稱；遇到網頁內容就停，節點與層數都有上限。
 fn tab_names(ui:&IUIAutomation,window:HWND)->Vec<String> {
@@ -158,7 +265,7 @@ fn tab_names(ui:&IUIAutomation,window:HWND)->Vec<String> {
                         continue;
                     }
                     let class=child.CurrentClassName().map(|class|class.to_string()).unwrap_or_default();
-                    if kind==UIA_DocumentControlTypeId || is_page_content(&class){continue;}
+                    if kind==UIA_DocumentControlTypeId || is_leaf_control(kind) || is_page_content(&class){continue;}
                     next.push(child);
                 }
             }
@@ -243,6 +350,23 @@ mod tests {
         for index in 0..CACHE_LIMIT*3 {verdicts.record(format!("song{index}"),true,now);}
         assert!(verdicts.0.len()<=CACHE_LIMIT);
         assert_eq!(verdicts.next(&format!("song{}",CACHE_LIMIT*3-1),now),Next::Yes,"最新的一筆還在");
+    }
+
+    #[test]
+    fn snapshots_reuse_fresh_tab_list_and_expire_after_ttl() {
+        let start=Instant::now();
+        let mut snapshots=Snapshots::default();
+        snapshots.record("chrome.exe".into(),vec!["告白氣球 | YouTube Music - 音訊播放中".into(),"影片 - YouTube".into()],start);
+        assert_eq!(snapshots.fresh_match("chrome.exe","告白氣球",start+Duration::from_millis(500)),Some(true));
+        assert_eq!(snapshots.fresh_match("chrome.exe","其他歌",start+Duration::from_millis(500)),Some(false));
+        assert_eq!(snapshots.fresh_match("msedge.exe","告白氣球",start+Duration::from_millis(500)),None,"不同瀏覽器分開快取");
+        assert_eq!(snapshots.fresh_match("chrome.exe","告白氣球",start+SNAPSHOT_TTL),None,"TTL 到期後需重新掃描");
+
+        for index in 0..CACHE_LIMIT*2 {
+            snapshots.record(format!("browser-{index}.exe"),vec![format!("Song{index} | YouTube Music")],start);
+        }
+        assert!(snapshots.0.len()<=CACHE_LIMIT);
+        assert_eq!(snapshots.fresh_match(&format!("browser-{}.exe",CACHE_LIMIT*2-1),&format!("Song{}",CACHE_LIMIT*2-1),start),Some(true));
     }
 
     /// 走實際使用的路徑：第一次呼叫最多等 FIRST_WAIT，有結果就直接回 true，之後直接讀快取；
