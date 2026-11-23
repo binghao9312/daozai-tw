@@ -827,6 +827,7 @@ impl eframe::App for Shell {
                 Cmd::GwsCheck => self.gws.check(false, true),
                 Cmd::GwsLogin => self.gws.login(),
                 Cmd::GwsSetup => self.gws.setup(),
+                Cmd::GwsImportSecret => self.gws.import_secret(),
                 Cmd::GwsInstall => self.gws.install(),
                 Cmd::Focus => ctx.send_viewport_cmd(egui::ViewportCommand::Focus),
             }

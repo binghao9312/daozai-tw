@@ -1,6 +1,6 @@
 [package]
 name = "daozai"
-version = "0.6.75"
+version = "0.6.76"
 edition = "2021"
 license = "MIT"
 description = "島仔：Windows 頂部的桌面夥伴與資訊島"

@@ -2239,6 +2239,10 @@ impl App {
                     "● 尚未設定 Google OAuth 用戶端".to_string(),
                     settings_color(ctx, Color32::from_rgb(240, 180, 110), Color32::from_rgb(145, 89, 12)),
                 ),
+                Phase::NeedsSetupFailed(_) => (
+                    "● 設定 Google OAuth 用戶端失敗".to_string(),
+                    settings_color(ctx, Color32::from_rgb(240, 96, 96), Color32::from_rgb(184, 34, 34)),
+                ),
                 Phase::NotInstalled => (
                     "● 本機未安裝 gws CLI".to_string(),
                     settings_color(ctx, Color32::from_gray(180), Color32::from_gray(75)),
@@ -2265,6 +2269,19 @@ impl App {
                 )
                 .wrap(),
             );
+            if matches!(self.gws.phase, Phase::Installing) {
+                let (done, total) = crate::gws_install::progress();
+                let mb = |b: u64| b as f64 / 1_048_576.0;
+                let (fraction, text) = match total {
+                    Some(t) => (done as f32 / t as f32, format!("{:.1} / {:.1} MB（{:.0}%）", mb(done), mb(t), done as f64 * 100.0 / t as f64)),
+                    None if done > 0 => (0.0, format!("已下載 {:.1} MB", mb(done))),
+                    None => (0.0, "正在連線到 GitHub…".to_string()),
+                };
+                ui.add_space(4.0);
+                let bar = egui::ProgressBar::new(fraction.clamp(0.0, 1.0)).text(text);
+                ui.add(if total.is_none() { bar.animate(true) } else { bar });
+                ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
+            }
             ui.add_space(4.0);
             ui.horizontal_wrapped(|ui| {
                 if matches!(self.gws.phase, Phase::NotInstalled | Phase::InstallFailed(_))
@@ -2284,8 +2301,15 @@ impl App {
                     self.gws.note = "正在檢查 Google Workspace CLI 登入狀態…".into();
                     self.pending.push(Cmd::GwsCheck);
                 }
-                if matches!(self.gws.phase, Phase::NeedsSetup) && ui.button("執行 gws auth setup").clicked() {
-                    self.pending.push(Cmd::GwsSetup);
+                if matches!(self.gws.phase, Phase::NeedsSetup | Phase::NeedsSetupFailed(_)) {
+                    if ui.button("匯入 client_secret.json").clicked() {
+                        self.gws.phase = Phase::Checking;
+                        self.gws.note = "正在從「下載」資料夾匯入 client_secret.json…".into();
+                        self.pending.push(Cmd::GwsImportSecret);
+                    }
+                    if ui.button("執行 gws auth setup").clicked() {
+                        self.pending.push(Cmd::GwsSetup);
+                    }
                 }
             });
             if !self.gws.note.is_empty() {

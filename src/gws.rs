@@ -38,6 +38,8 @@ pub enum Phase {
     Installing,
     /// 下載或安裝 gws 失敗（網路、雜湊不符、寫入失敗…），可再按一次重試。
     InstallFailed(String),
+    /// 設定 OAuth 用戶端失敗（沒有 gcloud、找不到或格式不對的 client_secret.json）。
+    NeedsSetupFailed(String),
     Failed(String),
 }
 
@@ -670,8 +672,84 @@ fn quote_cmd_arg(s: &str) -> String {
     format!("\"{}\"", s.replace('"', "\"\""))
 }
 
+/// gws 存放 OAuth 用戶端設定的資料夾（`%USERPROFILE%\.config\gws`，與 gws 本身一致）。
+fn gws_config_dir() -> Option<PathBuf> {
+    let home = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME"))?;
+    Some(PathBuf::from(home).join(".config").join("gws"))
+}
+
+fn downloads_dir() -> Option<PathBuf> {
+    let home = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME"))?;
+    Some(PathBuf::from(home).join("Downloads"))
+}
+
+fn has_gcloud() -> bool {
+    let Some(path_var) = std::env::var_os("PATH") else {
+        return false;
+    };
+    std::env::split_paths(&path_var).any(|dir| {
+        ["gcloud.cmd", "gcloud.exe", "gcloud"].iter().any(|name| dir.join(name).is_file())
+    })
+}
+
+/// 是不是 Google Cloud 下載的「桌面應用程式」OAuth 用戶端 JSON（有 `installed.client_id` 與 `client_secret`）。
+pub fn is_desktop_client_secret(raw: &str) -> bool {
+    let Ok(json) = serde_json::from_str::<serde_json::Value>(raw) else {
+        return false;
+    };
+    let Some(installed) = json.get("installed") else {
+        return false;
+    };
+    ["client_id", "client_secret"]
+        .iter()
+        .all(|k| installed.get(k).and_then(|v| v.as_str()).is_some_and(|v| !v.trim().is_empty()))
+}
+
+/// 在 `dir` 找最新的 `client_secret*.json`（Google Cloud 下載的檔名），驗證後複製到 gws 設定資料夾。
+fn import_client_secret_from(dir: &Path, config_dir: &Path) -> Result<PathBuf, String> {
+    let mut candidates: Vec<(std::time::SystemTime, PathBuf)> = std::fs::read_dir(dir)
+        .map_err(|e| format!("無法讀取下載資料夾：{e}"))?
+        .flatten()
+        .filter(|entry| {
+            let name = entry.file_name().to_string_lossy().to_lowercase();
+            name.starts_with("client_secret") && name.ends_with(".json")
+        })
+        .filter_map(|entry| {
+            let modified = entry.metadata().ok()?.modified().ok()?;
+            Some((modified, entry.path()))
+        })
+        .collect();
+    candidates.sort_by(|a, b| b.0.cmp(&a.0));
+    if candidates.is_empty() {
+        return Err("在「下載」資料夾找不到 client_secret*.json。請先到 Google Cloud 主控台建立「桌面應用程式」OAuth 用戶端並下載 JSON".into());
+    }
+    for (_, path) in candidates {
+        let Ok(raw) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        if !is_desktop_client_secret(&raw) {
+            continue;
+        }
+        std::fs::create_dir_all(config_dir).map_err(|e| format!("無法建立 gws 設定資料夾：{e}"))?;
+        let target = config_dir.join("client_secret.json");
+        std::fs::write(&target, raw).map_err(|e| format!("無法寫入 gws 設定：{e}"))?;
+        return Ok(target);
+    }
+    Err("找到的 client_secret*.json 不是「桌面應用程式」類型的 OAuth 用戶端，請重新建立並下載".into())
+}
+
+/// 把下載資料夾裡的 `client_secret*.json` 匯入 gws（沒有 gcloud 的電腦用這條路設定 OAuth 用戶端）。
+pub fn import_client_secret() -> Result<PathBuf, String> {
+    let dir = downloads_dir().ok_or_else(|| "找不到下載資料夾".to_string())?;
+    let config = gws_config_dir().ok_or_else(|| "找不到使用者資料夾".to_string())?;
+    import_client_secret_from(&dir, &config)
+}
+
 pub fn launch_setup_terminal() -> Result<(), String> {
     let exe = find_executable().ok_or_else(|| "找不到 Google Workspace CLI（gws）".to_string())?;
+    if !has_gcloud() {
+        return Err("這台電腦沒有安裝 gcloud，`gws auth setup` 無法執行。請改按「匯入 client_secret.json」，或先安裝 Google Cloud CLI".into());
+    }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -1155,6 +1233,7 @@ enum ServiceCmd {
     Check { auto_login: bool, auto_bind: bool },
     Login,
     Setup,
+    ImportSecret,
     Install,
 }
 
@@ -1189,6 +1268,11 @@ impl Service {
 
     pub fn setup(&self) {
         let _ = self.cmd.send(ServiceCmd::Setup);
+    }
+
+    /// 匯入下載資料夾裡的 `client_secret*.json`，成功後直接進入瀏覽器登入。
+    pub fn import_secret(&self) {
+        let _ = self.cmd.send(ServiceCmd::ImportSecret);
     }
 
     /// 從官方發行頁下載並安裝 gws，裝好後自動重新檢查。
@@ -1238,7 +1322,7 @@ fn service_loop(cmd_rx: Receiver<ServiceCmd>, ev: Sender<Event>, ctx: egui::Cont
             } => run_check(&ev, &ctx, auto_login, auto_bind),
             ServiceCmd::Install => {
                 send_event(&ev, &ctx, Phase::Installing, false);
-                match crate::gws_install::install() {
+                match crate::gws_install::install(&|| ctx.request_repaint()) {
                     // 裝好就接著檢查登入狀態；已經登入過的帳號直接綁定，不再自動開瀏覽器。
                     Ok(_) => run_check(&ev, &ctx, false, true),
                     Err(err) => send_event(&ev, &ctx, Phase::InstallFailed(err), false),
@@ -1265,9 +1349,13 @@ fn service_loop(cmd_rx: Receiver<ServiceCmd>, ev: Sender<Event>, ctx: egui::Cont
                 }
                 Err(err) => send_event(&ev, &ctx, Phase::Failed(err), false),
             },
+            ServiceCmd::ImportSecret => match import_client_secret() {
+                Ok(_) => run_check(&ev, &ctx, true, true),
+                Err(err) => send_event(&ev, &ctx, Phase::NeedsSetupFailed(err), false),
+            },
             ServiceCmd::Setup => {
                 if let Err(err) = launch_setup_terminal() {
-                    send_event(&ev, &ctx, Phase::Failed(err), false);
+                    send_event(&ev, &ctx, Phase::NeedsSetupFailed(err), false);
                 }
             }
         }
@@ -1491,5 +1579,28 @@ mod tests {
         assert_eq!(parsed.events.len(), 1);
         assert_eq!(parsed.events[0].title, "Sync");
         assert_eq!(ev_token.as_deref(), Some("ev-next"));
+    }
+
+    #[test]
+    fn client_secret_import_picks_newest_valid_desktop_client() {
+        let good = r#"{"installed":{"client_id":"1.apps.googleusercontent.com","client_secret":"s","project_id":"p"}}"#;
+        let web = r#"{"web":{"client_id":"1","client_secret":"s"}}"#;
+        assert!(is_desktop_client_secret(good));
+        assert!(!is_desktop_client_secret(web));
+        assert!(!is_desktop_client_secret("not json"));
+        assert!(!is_desktop_client_secret(r#"{"installed":{"client_id":"","client_secret":"s"}}"#));
+
+        let root = std::env::temp_dir().join(format!("daozai-gws-secret-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let (downloads, config) = (root.join("Downloads"), root.join("cfg"));
+        std::fs::create_dir_all(&downloads).unwrap();
+        assert!(import_client_secret_from(&downloads, &config).unwrap_err().contains("找不到"));
+        std::fs::write(downloads.join("client_secret_web.json"), web).unwrap();
+        assert!(import_client_secret_from(&downloads, &config).unwrap_err().contains("桌面應用程式"));
+        assert!(!config.join("client_secret.json").exists());
+        std::fs::write(downloads.join("client_secret_123.apps.googleusercontent.com.json"), good).unwrap();
+        let target = import_client_secret_from(&downloads, &config).unwrap();
+        assert_eq!(std::fs::read_to_string(target).unwrap(), good);
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

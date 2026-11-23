@@ -214,6 +214,8 @@ pub enum Cmd {
     GwsLogin,
     /// 開啟終端機執行 `gws auth setup --login`。
     GwsSetup,
+    /// 匯入「下載」資料夾裡的 client_secret*.json 作為 gws 的 OAuth 用戶端。
+    GwsImportSecret,
     /// 從官方發行頁下載並安裝 Google Workspace CLI（gws）。
     GwsInstall,
     /// 重啟島仔（切換渲染方式後生效）。
@@ -1273,7 +1275,10 @@ impl App {
                 self.gws.note = "偵測到 gws CLI，尚未登入。點下方按鈕開啟瀏覽器完成授權。".into();
             }
             Phase::NeedsSetup => {
-                self.gws.note = "尚未設定 gws 的 Google OAuth 用戶端，請先執行 gws auth setup。".into();
+                self.gws.note = "尚未設定 gws 的 Google OAuth 用戶端。有安裝 gcloud 可按「執行 gws auth setup」；沒有的話，到 Google Cloud 主控台「API 和服務 → 憑證」建立「桌面應用程式」OAuth 用戶端（並在同意畫面把自己的 Gmail 加入測試使用者、啟用 Gmail API 與 Google Calendar API），下載 JSON 到「下載」資料夾後按「匯入 client_secret.json」。".into();
+            }
+            Phase::NeedsSetupFailed(err) => {
+                self.gws.note = format!("設定 Google OAuth 用戶端失敗：{err}");
             }
             Phase::NotInstalled => {
                 self.gws.note = format!(

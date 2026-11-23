@@ -9,7 +9,18 @@
 //! 要升級時改 [`VERSION`]、[`URL`]、[`SHA256`]（雜湊取自官方發行頁的 `.sha256` 檔）。
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
+
+/// 下載進度（位元組）：背景執行緒寫入、設定頁每畫格讀取。`TOTAL` 為 0 表示伺服器沒給大小。
+static DONE: AtomicU64 = AtomicU64::new(0);
+static TOTAL: AtomicU64 = AtomicU64::new(0);
+
+/// 目前下載進度：`(已下載, 總大小)`；總大小未知時為 `None`。
+pub fn progress() -> (u64, Option<u64>) {
+    let total = TOTAL.load(Ordering::Relaxed);
+    (DONE.load(Ordering::Relaxed), (total > 0).then_some(total))
+}
 
 /// 釘住的 gws 版本（與 `gws --version` 回報一致）。
 pub const VERSION: &str = "v0.22.5";
@@ -156,29 +167,53 @@ fn install_into(zip: &[u8], expected_sha256: &str, dir: &Path) -> Result<PathBuf
     Ok(target)
 }
 
-fn download() -> Result<Vec<u8>, String> {
+/// 下載官方壓縮檔；每讀一段就呼叫 `on_progress`（用來刷新畫面）。
+fn download(on_progress: &dyn Fn()) -> Result<Vec<u8>, String> {
     let agent = ureq::AgentBuilder::new()
         .timeout_connect(Duration::from_secs(15))
-        .timeout(Duration::from_secs(180))
+        // 不設整體逾時：慢網路下 6 MB 可能超過幾分鐘；改成每次讀取 30 秒沒資料才算中斷。
+        .timeout_read(Duration::from_secs(30))
         .user_agent("Daozai")
         .build();
+    DONE.store(0, Ordering::Relaxed);
+    TOTAL.store(0, Ordering::Relaxed);
+    on_progress();
     let response = agent.get(URL).call().map_err(|e| format!("下載失敗：{e}"))?;
+    let total = response.header("Content-Length").and_then(|v| v.trim().parse::<u64>().ok()).unwrap_or(0);
+    if total > MAX_ZIP {
+        return Err("下載的檔案大小異常，已拒絕".into());
+    }
+    TOTAL.store(total, Ordering::Relaxed);
+    let mut reader = response.into_reader().take(MAX_ZIP + 1);
     let mut zip = Vec::new();
-    response
-        .into_reader()
-        .take(MAX_ZIP + 1)
-        .read_to_end(&mut zip)
-        .map_err(|e| format!("下載中斷：{e}"))?;
+    let mut chunk = [0u8; 32 * 1024];
+    let mut last_paint = std::time::Instant::now();
+    loop {
+        let n = reader.read(&mut chunk).map_err(|e| format!("下載中斷：{e}"))?;
+        if n == 0 {
+            break;
+        }
+        zip.extend_from_slice(&chunk[..n]);
+        DONE.store(zip.len() as u64, Ordering::Relaxed);
+        if last_paint.elapsed() >= Duration::from_millis(100) {
+            last_paint = std::time::Instant::now();
+            on_progress();
+        }
+    }
+    on_progress();
     if zip.len() as u64 > MAX_ZIP {
         return Err("下載的檔案大小異常，已拒絕".into());
+    }
+    if total > 0 && zip.len() as u64 != total {
+        return Err("下載不完整，請重試".into());
     }
     Ok(zip)
 }
 
 /// 下載、驗證並安裝；返回安裝後的 `gws.exe` 路徑。在背景執行緒呼叫。
-pub fn install() -> Result<PathBuf, String> {
+pub fn install(on_progress: &dyn Fn()) -> Result<PathBuf, String> {
     let dir = install_dir().ok_or_else(|| "找不到本機應用程式資料夾（LOCALAPPDATA）".to_string())?;
-    let zip = download()?;
+    let zip = download(on_progress)?;
     install_into(&zip, SHA256, &dir)
 }
 
@@ -328,7 +363,7 @@ mod tests {
     #[ignore]
     fn real_release_downloads_verifies_installs_and_runs() {
         let dir = temp_dir("real");
-        let zip = download().expect("下載官方發行檔");
+        let zip = download(&|| {}).expect("下載官方發行檔");
         let path = install_into(&zip, SHA256, &dir).expect("雜湊相符並安裝");
         let out = std::process::Command::new(&path).arg("--version").output().expect("執行 gws");
         let text = String::from_utf8_lossy(&out.stdout);
