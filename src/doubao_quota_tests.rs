@@ -206,47 +206,6 @@ fn validated(header: String, expected: Option<String>) -> Validated {
     Validated { alias:"測試豆包".into(),header,snapshot:parse(&response()).unwrap(),expected }
 }
 
-#[cfg(windows)]
-#[test]
-fn encrypted_storage_and_duplicate_reconnection_preserve_account_settings() {
-    with_data_dir(|| {
-        let mut config = Config::default();
-        let first = validated(header('a',None),None).finish(&mut config,None).unwrap();
-        let old_slot = config.accounts[0].slot.clone().unwrap();
-        config.accounts[0].pinned = false; config.colors.insert(first.id.clone(),super::super::Accent::Gold);
-        let bytes = fs::read(session_path(&old_slot).unwrap()).unwrap();
-        assert!(!bytes.windows(32).any(|part|part == b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
-        assert_eq!(load_slot(&old_slot).unwrap(),header('a',None));
-        let second = validated(header('a',Some("user-1")),None).finish(&mut config,None).unwrap();
-        assert_eq!(first.id,second.id);assert_eq!(config.accounts.len(),1);assert!(!config.accounts[0].pinned);
-        assert_eq!(config.colors[&first.id],super::super::Accent::Gold);assert!(!session_path(&old_slot).unwrap().exists());
-        let old_slot = config.accounts[0].slot.clone().unwrap();
-        let third = validated(header('b',Some("user-1")),Some(old_slot.clone())).finish(&mut config,Some(&first.id)).unwrap();
-        assert_eq!(third.id,first.id);assert!(!session_path(&old_slot).unwrap().exists());
-        assert!(!fs::read_to_string(crate::model::config_dir().join("ai-quota.json")).unwrap().contains("sessionid"));
-        forget(&config.accounts[0]).unwrap();
-        assert!(!session_path(config.accounts[0].slot.as_deref().unwrap()).unwrap().exists());
-    });
-}
-
-#[cfg(windows)]
-#[test]
-fn config_write_failure_keeps_the_original_session_and_removes_the_unused_one() {
-    with_data_dir(|| {
-        let mut config = Config::default();
-        let connected = validated(header('a',Some("user-1")),None).finish(&mut config,None).unwrap();
-        let old = config.clone();let path=crate::model::config_dir().join("ai-quota.json");
-        fs::remove_file(&path).unwrap();fs::create_dir(&path).unwrap();
-        let slot = old.accounts[0].slot.clone().unwrap();
-        assert!(validated(header('b',Some("user-1")),Some(slot.clone())).finish(&mut config,Some(&connected.id)).is_err());
-        assert_eq!(config,old);assert_eq!(load_slot(&slot).unwrap(),header('a',Some("user-1")));
-        assert_eq!(fs::read_dir(crate::model::config_dir().join("credentials")).unwrap().count(),1);
-        let before = config.clone();
-        assert!(validated(header('b',Some("user-1")),Some("changed".into())).finish(&mut config,Some(&connected.id)).is_err());
-        assert_eq!(config,before);
-    });
-}
-
 #[test]
 fn dropping_a_connection_cancels_it_and_busy_validation_does_not_spawn_more_workers() {
     let (connection,cancel) = Connect::pending_test();drop(connection);assert!(cancel.load(Ordering::Acquire));

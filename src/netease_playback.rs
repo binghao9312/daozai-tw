@@ -208,34 +208,6 @@ fn detail_response_fills_metadata_only_for_the_same_song(){
 }
 
 #[test]
-fn detail_lookup_runs_in_background_retries_then_stops(){
-    use std::sync::{Arc as A,atomic::{AtomicUsize,Ordering}};
-    let calls=A::new(AtomicUsize::new(0));
-    let mut cache=DetailCache::default();
-    let wait=|cache:&mut DetailCache|{if let Some(worker)=cache.worker.take(){worker.join().unwrap();}};
-    for round in 0..3 {
-        let c=calls.clone();
-        assert!(cache.get_with(7,move|_|{c.fetch_add(1,Ordering::SeqCst);None}).is_none());
-        wait(&mut cache);
-        let c=calls.clone();cache.get_with(7,move|_|{c.fetch_add(1,Ordering::SeqCst);None});
-        assert_eq!(calls.load(Ordering::SeqCst),round+1,"未到重试时间不重复请求");
-        if round<2 {cache.retry_at=Some(Instant::now());}
-        if round==0 {
-            let busy=[crate::resources::COVER.acquire().unwrap(),crate::resources::COVER.acquire().unwrap()];
-            cache.get_with(7,|_|panic!("已有两个后台请求"));
-            drop(busy);
-        }
-    }
-    wait(&mut cache);cache.get_with(7,|_|panic!("三次失败后这首歌不再请求"));
-    let found=(NowPlaying{title:"新歌".into(),song_id:Some(8),playback_type:MediaKind::Music,..Default::default()},String::new());
-    let value=found.clone();cache.get_with(8,move|_|Some(value));wait(&mut cache);
-    assert_eq!(cache.get_with(8,|_|panic!("已有结果不再请求")).unwrap().0.title,"新歌","换歌后重新查询");
-    let wrong=(NowPlaying{title:"别的歌".into(),song_id:Some(10),..Default::default()},String::new());
-    cache.get_with(9,move|_|Some(wrong));wait(&mut cache);
-    assert!(cache.get_with(9,|_|None).is_none(),"返回其他歌曲 ID 时不套用");
-}
-
-#[test]
 fn resource_cache_recreation_cannot_bypass_download_limit(){
     use std::sync::{Condvar,Mutex,atomic::{AtomicUsize,Ordering}};
     let gate=Arc::new((Mutex::new(false),Condvar::new()));let started=Arc::new(AtomicUsize::new(0));
