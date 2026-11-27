@@ -2734,7 +2734,7 @@ fn kiro_ring_uses_logo_for_all_point_balances_and_skins(){
         let center=H::local(103.0,105.0);
         let logo=h.shapes.iter().find_map(|shape|match &shape.shape{egui::Shape::Mesh(mesh)=>{let rect=mesh.calc_bounds();(rect.center().distance(center)<0.8&&(30.0..36.0).contains(&rect.width())).then_some(rect)},_=>None}).expect("圓環中心應顯示 Kiro 標識");
         for corner in [logo.left_top(),logo.right_top(),logo.left_bottom(),logo.right_bottom()]{assert!(corner.distance(center)<27.5,"{skin:?} 的標識應位於圓環內");}
-        assert!(!find("月度用量剩餘").intersects(find(&full)),"{skin:?} {remaining} 點的標籤重疊");
+        assert!(!find("月度額度剩餘").intersects(find(&full)),"{skin:?} {remaining} 點的標籤重疊");
     }}
 }
 
@@ -2747,7 +2747,7 @@ fn kiro_logo_and_point_details_fit_the_card(){
     h.app.quota.config.selected="kiro".into();
     let reset=Some((chrono::Local::now()+chrono::Duration::days(20)).timestamp());
     h.app.quota_event(Event{id:"kiro".into(),result:Ok(Snapshot{kiro:kiro_snapshot(904.09,1000.0).kiro,plan:"KIRO PRO".into(),at:chrono::Utc::now().timestamp(),
-        windows:vec![Window{label:"月度用量".into(),seconds:None,remaining:90.4,reset,amount:Some(Amount::new(904.09,1000.0))}],..Default::default()})});
+        windows:vec![Window{label:"月度額度".into(),seconds:None,remaining:90.4,reset,amount:Some(Amount::new(904.09,1000.0))}],..Default::default()})});
     h.app.show_page(6);h.hover(H::local(300.0,60.0),1.0);
     let center=H::local(103.0,105.0);
     let inner=h.shapes.iter().filter_map(|shape|match &shape.shape{
@@ -2759,7 +2759,7 @@ fn kiro_logo_and_point_details_fit_the_card(){
     for corner in [logo.left_top(),logo.right_top(),logo.left_bottom(),logo.right_bottom()]{assert!(corner.distance(center)+0.5<inner,"標識應位於用量環內");}
     let center_area=Rect::from_center_size(center,Vec2::splat(40.0));
     assert!(!h.shapes.iter().any(|shape|matches!(&shape.shape,egui::Shape::Text(t) if center_area.intersects(t.visual_bounding_rect()))),"圓環中心應只顯示 Kiro 標識");
-    let label=text("月度用量剩餘").expect("週期說明");let value=text("904.1 / 1000 點").expect("剩餘量與總額");
+    let label=text("月度額度剩餘").expect("週期說明");let value=text("904.1 / 1000 點").expect("剩餘量與總額");
     assert!(!label.intersects(value),"說明與數值不得重疊");
     assert!(h.shapes.iter().any(|shape|matches!(&shape.shape,egui::Shape::Text(text) if text.galley.text()=="Kiro · KIRO PRO")),"套餐名應顯示");
     if let Some(dest)=std::env::var_os("DAOZAI_KIRO_PREVIEW_DIR"){
@@ -2785,7 +2785,7 @@ fn kiro_credits_follow_the_ring_on_the_resident_bar(){
     h.app.quota.config.accounts.push(crate::quota::Account{id:"kiro".into(),provider:Provider::Kiro,alias:"Kiro".into(),source:"kiro.json".into(),slot:None,enabled:true,pinned:true});
     h.app.quota.config.selected="kiro".into();
     h.app.quota_event(Event{id:"kiro".into(),result:Ok(Snapshot{kiro:kiro_snapshot(904.09,1000.0).kiro,plan:"KIRO PRO".into(),at:chrono::Utc::now().timestamp(),
-        windows:vec![Window{label:"月度用量".into(),seconds:None,remaining:90.4,reset:None,amount:Some(Amount::new(904.09,1000.0))}],..Default::default()})});
+        windows:vec![Window{label:"月度額度".into(),seconds:None,remaining:90.4,reset:None,amount:Some(Amount::new(904.09,1000.0))}],..Default::default()})});
     for _ in 0..60{h.frame(vec![]);}
     assert_eq!(h.app.quota_bar_indices().len(),1,"點數的 Kiro 帳號應常駐");
     let slot=crate::bar_layout::quota_slot(0);
@@ -2830,7 +2830,7 @@ fn kiro_resident_bar_preview(){
     let mut h=H::new();h.app.settings.pet=false;h.app.settings.show_battery=true;h.quota_accounts(1);
     h.app.quota.config.accounts.push(crate::quota::Account{id:"kiro".into(),provider:Provider::Kiro,alias:"Kiro".into(),source:"kiro.json".into(),slot:None,enabled:true,pinned:true});
     h.app.quota_event(Event{id:"kiro".into(),result:Ok(Snapshot{kiro:kiro_snapshot(904.09,1000.0).kiro,plan:"KIRO PRO".into(),at:chrono::Utc::now().timestamp(),
-        windows:vec![Window{label:"月度用量".into(),seconds:None,remaining:90.4,reset:None,amount:Some(Amount::new(904.09,1000.0))}],..Default::default()})});
+        windows:vec![Window{label:"月度額度".into(),seconds:None,remaining:90.4,reset:None,amount:Some(Amount::new(904.09,1000.0))}],..Default::default()})});
     let wb=h.app.quota.config.connect_workbuddy("preview".into(),"WorkBuddy".into());
     h.app.quota_event(Event{id:wb,result:crate::quota::parse(Provider::WorkBuddy,&serde_json::json!({"code":0,"data":{"Packages":[{"CycleRemainCapacity":"1970"}],"CreditGroups":[{"Kind":"plan_base","CycleRemainCapacity":"1970"}]}}))});
     let mut raster=crate::preview_raster::Raster::new(1280,380);
@@ -2899,7 +2899,7 @@ fn kiro_simulated_states_gallery(){
                 for frame in 0..8{
                     let root=h.ctx.run(egui::RawInput::default(),|ctx|h.app.settings_ui(ctx,false));raster.update_textures(&root.textures_delta);let child=output.lock().unwrap().take().unwrap();raster.update_textures(&child.textures_delta);
                     if frame==7{
-                        if scene=="identity"{let count=child.shapes.iter().filter_map(|s|match &s.shape{egui::Shape::Text(t)=>Some(t.galley.text().matches("月度用量").count()),_=>None}).sum::<usize>();assert_eq!(count,1,"普通套餐只顯示一行月度用量");}
+                        if scene=="identity"{let count=child.shapes.iter().filter_map(|s|match &s.shape{egui::Shape::Text(t)=>Some(t.galley.text().matches("月度額度").count()),_=>None}).sum::<usize>();assert_eq!(count,1,"普通套餐只顯示一行月度額度");}
                         raster.buf.fill([0.20,0.24,0.32,1.0]);raster.draw(&h.ctx.tessellate(child.shapes,child.pixels_per_point),child.pixels_per_point);let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);image::save_buffer(dest.join(format!("{theme}-{scene}.png")),&rgba,1035,930,image::ColorType::Rgba8).unwrap();}
                     raster.free_textures(&root.textures_delta);raster.free_textures(&child.textures_delta);
                 }
@@ -8492,7 +8492,7 @@ fn quota_acceptance_monthly_limit_is_visible_on_the_card() {
     let snapshot=plans::parse(plans::PlanProvider::OpenCodeGo,&serde_json::json!({"usage":{"rolling":{"percent":20},"weekly":{"percent":30},"monthly":{"percent":100}}})).unwrap();
     h.app.quota.config.accounts=vec![Account{id:"preview".into(),provider:Provider::OpenCodeGo,alias:"OpenCode Go".into(),source:Default::default(),slot:None,enabled:true,pinned:false}];
     h.app.quota.config.selected="preview".into();h.app.quota.rows.insert("preview".into(),Ok(snapshot));h.app.show_page(6);h.hover(H::local(230.0,65.0),1.0);
-    assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text().contains("本月"))),"月用量已經用完，但卡片沒有直接顯示本月限制");
+    assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text().contains("本月"))),"月額度已經用完，但卡片沒有直接顯示本月限制");
 }
 
 #[test]
@@ -8514,7 +8514,7 @@ fn quota_acceptance_relay_subscription_exhausted_week_is_visible() {
     let snapshot=relay::parse_sub2api(&serde_json::json!({"mode":"unrestricted","isValid":true,"unit":"USD","remaining":0,"subscription":{"daily_limit_usd":10,"daily_usage_usd":2,"weekly_limit_usd":20,"weekly_usage_usd":20}})).unwrap();
     h.app.quota.config.accounts=vec![Account{id:"relay".into(),provider:Provider::Sub2Api,alias:"工作中轉".into(),source:"https://relay.example".into(),slot:None,enabled:true,pinned:false}];h.app.quota.config.selected="relay".into();h.app.quota.rows.insert("relay".into(),Ok(snapshot));h.app.show_page(6);h.hover(H::local(230.0,65.0),1.0);
     assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text().contains("每週"))),"卡片必須顯示已耗盡的套餐週期");
-    assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="0%")),"套餐剩餘用量應顯示百分比");
+    assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="0%")),"套餐剩餘額度應顯示百分比");
 }
 
 #[test]
@@ -8709,7 +8709,7 @@ fn quota_acceptance_period_colors_match_the_drawn_rings() {
         for (i,color) in expected.into_iter().enumerate(){
             let center=egui::pos2(159.0,79.0+i as f32*23.0);
             let dot=output.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Circle(c)if(c.radius-2.5).abs()<0.01&&c.center.distance(center)<0.01=>Some(c.fill),_=>None}).expect("應顯示週期色點");
-            assert_eq!(dot,color,"週期色點應對應實際圓環，未畫入圓環的工具用量使用灰色");
+            assert_eq!(dot,color,"週期色點應對應實際圓環，未畫入圓環的工具額度使用灰色");
         }
     }
 }
@@ -9166,13 +9166,15 @@ fn quota_local_accounts_gallery(){
     use crate::quota::{Config,Event,Snapshot};
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let dest=std::path::PathBuf::from(std::env::var_os("DAOZAI_QUOTA_PREVIEW_DIR").expect("需指定預覽目錄"));std::fs::create_dir_all(&dest).unwrap();
-    let config=Config::load();assert!(!config.accounts.is_empty(),"本機尚未設定用量帳號");
+    let mut config=Config::load();
     let cache:serde_json::Value=serde_json::from_slice(&std::fs::read(crate::model::config_dir().join("ai-quota-cache.json")).unwrap()).unwrap();
+    // 只匯出啟用且有快取的帳號，缺資料的帳號略過而不是中斷。
+    config.accounts.retain(|a|a.enabled&&cache[&a.id]["snapshot"].is_object());assert!(!config.accounts.is_empty(),"本機沒有可匯出的用量帳號快取");
     let mut scenes:Vec<Option<String>>=config.accounts.iter().map(|a|Some(a.id.clone())).collect();scenes.push(None);
     for scene in scenes{
         let mut h=H::new();h.app.settings.skin=crate::model::Skin::Classic;h.app.settings.pet=false;
         h.app.quota.config=config.clone();if let Some(id)=&scene{h.app.quota.config.selected=id.clone();}
-        for a in &config.accounts{let snapshot:Snapshot=serde_json::from_value(cache[&a.id]["snapshot"].clone()).expect("快取中應有該帳號用量");h.app.quota_event(Event{id:a.id.clone(),result:Ok(snapshot)});}
+        for a in &config.accounts{let Ok(snapshot)=serde_json::from_value::<Snapshot>(cache[&a.id]["snapshot"].clone()) else{continue;};h.app.quota_event(Event{id:a.id.clone(),result:Ok(snapshot)});}
         let Some(id)=scene else{
             h.app.settings.settings_theme=crate::settings_theme::SettingsTheme::Dark;h.app.settings_tab=11;h.app.open_settings();h.ctx.set_embed_viewports(false);
             let size=egui::vec2(690.0,620.0);let ppp=1.5;let output=std::sync::Arc::new(Mutex::new(None));let capture=output.clone();
@@ -9185,7 +9187,8 @@ fn quota_local_accounts_gallery(){
             }
             continue;
         };
-        let name=config.accounts.iter().find(|a|a.id==id).unwrap().provider.name().to_lowercase();
+        // 同一服務可能有多個帳號：檔名加上序號，避免互相覆蓋。
+        let index=config.accounts.iter().position(|a|a.id==id).unwrap();let name=format!("{}-{}",index+1,config.accounts[index].provider.name().to_lowercase());
         h.app.show_page(6);let mut raster=feature_raster();
         for frame in 0..75{
             h.t+=1.0/60.0;let cursor=Some(H::local(300.0,60.0));

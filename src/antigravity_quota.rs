@@ -1,11 +1,14 @@
-//! Antigravity 額度：呼叫官方 `agy -p /usage --output-format json` 取得各模型組的 5 小時與每週額度。
-//! 斜線指令由 CLI 本機處理，不送出對話、不消耗額度；登入與續期完全交給 agy，島仔不讀取任何令牌。
+//! Antigravity 用量：呼叫官方 `agy -p /usage --output-format json` 取得各模型組的 5 小時與每週額度。
+//! 斜線指令由 CLI 本機處理，不送出對話、不消耗額度；萬一被當成對話送出，會停止查詢直到 agy 更新或使用者重新連線；登入與續期完全交給 agy，島仔不讀取任何令牌。
 use super::{Account,Config,Provider,Snapshot,Window};
 use serde_json::Value;
-use std::{io::Read,path::{Path,PathBuf},process::{Command,Stdio},time::{Duration,Instant}};
+use std::{io::Read,path::{Path,PathBuf},process::{Command,Stdio},sync::mpsc,time::{Duration,Instant}};
 
 const TIMEOUT:Duration=Duration::from_secs(60);
 const MAX_OUTPUT:u64=1024*1024;
+/// 逾時通常代表網路卡住，但也可能是 /usage 被當成對話送出；拉長重試間隔，避免每輪都可能消耗額度。
+const TIMEOUT_WAIT:u64=1800;
+const TRIPPED:&str="agy 把 /usage 當成一般對話處理，已停止查詢以免消耗額度；請更新 agy 後重新連線";
 
 /// 本機 agy 執行檔：優先官方安裝位置，其次 PATH。
 pub fn path()->Option<PathBuf>{
@@ -16,6 +19,8 @@ pub fn path()->Option<PathBuf>{
 pub(crate) fn add(config:&mut Config,source:&Path,alias:&str)->Result<(),String>{
     if !source.is_file(){return Err("未找到 Antigravity CLI（agy），請先安裝並登入".into());}
     let source=std::fs::canonicalize(source).unwrap_or_else(|_|source.to_owned());
+    // 使用者重新連線代表要再試一次：解除先前的誤耗額度保護。
+    clear_guard(&guard_path());
     if let Some(a)=config.accounts.iter_mut().find(|a|a.provider==Provider::Antigravity){a.source=source;a.enabled=true;if !alias.trim().is_empty(){a.alias=alias.trim().into();}return Ok(());}
     let id=format!("Antigravity-{}",std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos());
     let pinned=config.pinned_indices().len()<3;if config.accounts.is_empty(){config.selected=id.clone();}
@@ -29,15 +34,14 @@ fn label(group:&str)->String{
 }
 
 pub fn parse(v:&Value)->Result<Snapshot,String>{
+    if v["status"].as_str().is_some_and(|s|s!="SUCCESS"){return Err("Antigravity 尚未登入或無法取得用量，請在 agy 中登入".into());}
     let data=&v["command"]["data"];
-    if v["command"]["name"].as_str()!=Some("usage")||!data.is_object(){
-        return Err(if v["status"].as_str().is_some_and(|s|s!="SUCCESS"){"Antigravity 尚未登入或無法取得用量，請在 agy 中登入"}else{"Antigravity CLI 沒有返回用量資料，請更新 agy"}.into());
-    }
+    if v["command"]["name"].as_str()!=Some("usage")||!data.is_object(){return Err("Antigravity CLI 沒有返回用量資料，請更新 agy".into());}
     let mut groups=Vec::new();
     for group in data["groups"].as_array().into_iter().flatten(){
         let name=label(group["name"].as_str().unwrap_or_default());let mut windows=Vec::new();
         for bucket in group["buckets"].as_array().into_iter().flatten(){
-            let Some(fraction)=bucket["remaining_fraction"].as_f64().filter(|f|f.is_finite()) else{continue;};
+            let Some(fraction)=bucket["remaining_fraction"].as_f64().filter(|f|f.is_finite()&&*f>=0.0) else{continue;};
             let seconds=match bucket["window"].as_str(){Some("5h")=>Some(18000),Some("weekly")=>Some(604800),Some("daily")=>Some(86400),_=>None};
             let reset=bucket["reset_time"].as_str().and_then(|s|chrono::DateTime::parse_from_rfc3339(s).ok()).map(|d|d.timestamp()).filter(|t|*t>0);
             windows.push(Window{label:format!("{name} · {}",super::cadence(seconds)),seconds,remaining:(fraction*100.0).clamp(0.0,100.0) as f32,reset,amount:None});
@@ -60,28 +64,73 @@ fn run(agy:&Path)->Result<Vec<u8>,(String,u64)>{
     #[cfg(windows)]{use std::os::windows::process::CommandExt;command.creation_flags(0x08000000);}
     let mut child=command.spawn().map_err(|_|("無法啟動 Antigravity CLI（agy）".to_owned(),60))?;
     let mut stdout=child.stdout.take().ok_or(("無法讀取 Antigravity CLI 輸出".to_owned(),60))?;
-    let reader=std::thread::spawn(move||{let mut out=Vec::new();let _=(&mut stdout).take(MAX_OUTPUT+1).read_to_end(&mut out);out});
+    // 讀取放在獨立執行緒並經 channel 回傳：agy 的子程序若繼承 stdout 不結束，也不會卡死查詢執行緒。
+    let(tx,rx)=mpsc::channel();
+    std::thread::spawn(move||{let mut out=Vec::new();let _=(&mut stdout).take(MAX_OUTPUT+1).read_to_end(&mut out);let _=tx.send(out);});
     let start=Instant::now();
     loop{
         match child.try_wait(){
             Ok(Some(_))=>break,
             Ok(None) if start.elapsed()<TIMEOUT=>std::thread::sleep(Duration::from_millis(100)),
-            _=>{let _=child.kill();let _=child.wait();return Err(("Antigravity CLI 回應逾時，稍後自動重試".into(),120));}
+            _=>{kill_tree(&mut child);return Err(("Antigravity CLI 回應逾時，稍後自動重試".into(),TIMEOUT_WAIT));}
         }
     }
-    let out=reader.join().map_err(|_|("讀取 Antigravity CLI 輸出失敗".to_owned(),60))?;
+    let out=rx.recv_timeout(Duration::from_secs(5)).map_err(|_|("讀取 Antigravity CLI 輸出逾時".to_owned(),TIMEOUT_WAIT))?;
     if out.len() as u64>MAX_OUTPUT{return Err(("Antigravity CLI 輸出過大".into(),300));}
     Ok(out)
 }
 
+fn kill_tree(child:&mut std::process::Child){
+    #[cfg(windows)]{
+        use std::os::windows::process::CommandExt;
+        let _=Command::new("taskkill.exe").args(["/PID",&child.id().to_string(),"/T","/F"]).creation_flags(0x08000000).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status();
+    }
+    let _=child.kill();let _=child.wait();
+}
+
+/// 回應是否顯示 /usage 被當成一般對話送出（會消耗額度）：有回合、有 token、建立了對話，或成功但不是 usage 指令。
+fn consumed(v:&Value)->bool{
+    v["num_turns"].as_i64().is_some_and(|n|n>0)
+        ||v["usage"]["total_tokens"].as_i64().is_some_and(|n|n>0)
+        ||v["conversation_id"].as_str().is_some_and(|id|!id.trim().is_empty())
+        ||(v["status"].as_str()==Some("SUCCESS")&&v["command"]["name"].as_str()!=Some("usage"))
+}
+
+/// 解析 agy 輸出；`Err((_,None))` 代表必須啟動誤耗額度保護。
+fn decode(out:&[u8])->Result<Snapshot,(String,Option<u64>)>{
+    let text=String::from_utf8_lossy(out);let text=text.trim_start_matches('\u{feff}').trim();
+    let v:Value=serde_json::from_str(text).map_err(|_|("Antigravity CLI 沒有返回有效的 JSON，請更新 agy".to_owned(),Some(300)))?;
+    if consumed(&v){return Err((TRIPPED.into(),None));}
+    parse(&v).map_err(|e|(e,Some(120)))
+}
+
+fn guard_path()->PathBuf{crate::model::config_dir().join("antigravity-guard.json")}
+fn stamp(agy:&Path)->Option<String>{
+    let modified=std::fs::metadata(agy).ok()?.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?;
+    Some(format!("{}:{}",modified.as_secs(),modified.subsec_nanos()))
+}
+/// 保護仍有效時返回提示：同一個 agy 且執行檔沒有更新過。agy 更新後自動解除；記在檔案裡，重啟島仔也不會再次觸發。
+fn guarded(guard:&Path,agy:&Path)->Option<String>{
+    let v:Value=serde_json::from_slice(&std::fs::read(guard).ok()?).ok()?;
+    if v["agy"].as_str()==agy.to_str()&&v["stamp"].as_str()==stamp(agy).as_deref(){return Some(TRIPPED.into());}
+    clear_guard(guard);None
+}
+fn trip_guard(guard:&Path,agy:&Path){
+    if let Some(parent)=guard.parent(){let _=std::fs::create_dir_all(parent);}
+    let _=std::fs::write(guard,serde_json::json!({"agy":agy.to_str(),"stamp":stamp(agy)}).to_string());
+}
+fn clear_guard(guard:&Path){let _=std::fs::remove_file(guard);}
+
 pub fn fetch(account:&Account)->Result<Snapshot,(String,u64)>{
     let agy=if account.source.is_file(){account.source.clone()}else{path().ok_or(("未找到 Antigravity CLI（agy），請先安裝並登入".to_owned(),300))?};
-    let out=run(&agy)?;
-    let text=String::from_utf8_lossy(&out);let text=text.trim_start_matches('\u{feff}').trim();
-    let v:Value=serde_json::from_str(text).map_err(|_|("Antigravity CLI 沒有返回有效的 JSON，請更新 agy".to_owned(),300))?;
-    // 保險：斜線指令若被當成一般提示詞送出就會消耗額度，此時拒絕並拉長重試間隔。
-    if v["num_turns"].as_i64().is_some_and(|n|n>0){return Err(("agy 未把 /usage 當成指令處理，已暫停查詢，請更新 agy".into(),3600));}
-    parse(&v).map_err(|e|(e,120))
+    let guard=guard_path();
+    // 保護期間不再啟動 agy；回傳 0 讓服務不另設冷卻，agy 一更新下一輪就能恢復。
+    if let Some(message)=guarded(&guard,&agy){return Err((message,0));}
+    match decode(&run(&agy)?){
+        Ok(snapshot)=>Ok(snapshot),
+        Err((message,Some(wait)))=>Err((message,wait)),
+        Err((message,None))=>{trip_guard(&guard,&agy);Err((message,0))}
+    }
 }
 
 #[cfg(test)] mod tests {
@@ -101,9 +150,32 @@ pub fn fetch(account:&Account)->Result<Snapshot,(String,u64)>{
     }
     #[test] fn antigravity_rejects_non_command_or_empty_output(){
         assert!(parse(&json!({"status":"SUCCESS","response":"hello","num_turns":1})).is_err());
+        assert!(parse(&json!({"status":"ERROR","command":{"name":"usage","data":{}}})).unwrap_err().contains("登入"),"失敗狀態優先提示登入");
+        let mut negative=usage(0.5,1.0,"2026-11-28T00:00:00Z");negative["command"]["data"]["groups"][0]["buckets"][0]["remaining_fraction"]=json!(-1);
+        let s=parse(&negative).unwrap();assert!(s.windows.iter().chain(s.extra.iter()).all(|w|w.remaining>0.0),"負值代表未知，不能顯示成 0%");
         assert!(parse(&json!({"status":"ERROR"})).unwrap_err().contains("登入"));
         assert!(parse(&json!({"command":{"name":"usage","data":{"groups":[]}}})).is_err());
         assert!(parse(&json!({"command":{"name":"usage","data":{"groups":[{"name":"X","buckets":[{"window":"5h","remaining_fraction":"bad"}]}]}}})).is_err());
+    }
+    #[test] fn antigravity_usage_sent_as_chat_trips_the_guard(){
+        let ok=serde_json::to_vec(&usage(0.9,1.0,"2026-11-28T00:00:00Z")).unwrap();assert!(decode(&ok).is_ok());
+        for chat in [json!({"status":"SUCCESS","num_turns":1,"conversation_id":"","response":"hi"}),
+            json!({"status":"SUCCESS","num_turns":0,"conversation_id":"","usage":{"total_tokens":42},"command":{"name":"usage","data":{"groups":[]}}}),
+            json!({"status":"SUCCESS","num_turns":0,"conversation_id":"abc","response":"hi"}),
+            json!({"status":"SUCCESS","response":"usage path does not exist"})]{
+            assert!(matches!(decode(&serde_json::to_vec(&chat).unwrap()),Err((_,None))),"應啟動保護：{chat}");
+        }
+        assert!(matches!(decode(b"not json"),Err((_,Some(_)))),"非 JSON 只是暫時錯誤");
+    }
+    #[test] fn antigravity_guard_survives_restart_and_clears_after_agy_update(){
+        let dir=std::env::temp_dir().join(format!("daozai-agy-guard-{}",std::process::id()));std::fs::create_dir_all(&dir).unwrap();
+        let agy=dir.join("agy.exe");let guard=dir.join("guard.json");std::fs::write(&agy,b"v1").unwrap();
+        assert!(guarded(&guard,&agy).is_none());trip_guard(&guard,&agy);
+        assert!(guarded(&guard,&agy).is_some(),"同一版 agy 應持續停止查詢；記在檔案裡，重啟後也一樣");
+        let file=std::fs::File::options().write(true).open(&agy).unwrap();file.set_modified(std::time::SystemTime::now()+Duration::from_secs(5)).unwrap();drop(file);
+        assert!(guarded(&guard,&agy).is_none(),"agy 更新後自動解除");assert!(!guard.exists());
+        trip_guard(&guard,&agy);clear_guard(&guard);assert!(guarded(&guard,&agy).is_none(),"重新連線可手動解除");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
     #[test] fn antigravity_add_is_single_and_idempotent(){
         let path=std::env::temp_dir().join(format!("daozai-agy-{}.exe",std::process::id()));std::fs::write(&path,b"x").unwrap();

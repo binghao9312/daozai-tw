@@ -69,7 +69,7 @@ fn glm_error(v:&Value,http:Option<u16>)->(String,u64){
         Some(1113)=>("GLM 帳號當前欠費，請在所選地區控制檯核對賬戶狀態",60),
         Some(429|1302)=>("GLM 用量查詢過於頻繁，請稍後重試",180),
         Some(1305)=>("GLM 服務當前繁忙，請稍後重試",180),
-        Some(1308|1310|1316..=1321)=>("GLM 當前套餐用量已用盡，請在控制檯檢視恢復時間",180),
+        Some(1308|1310|1316..=1321)=>("GLM 當前套餐額度已用盡，請在控制檯檢視恢復時間",180),
         _ if ["不存在coding plan","不存在 coding plan","no coding plan","coding plan not found","未開通coding plan","套餐不存在"].iter().any(|s|reason.contains(s))=>("GLM 未查詢到有效的 Coding Plan，請確認套餐已開通並使用套餐 Key",60),
         _ if reason.contains("token expired")||reason.contains("invalid api key")=>("GLM 金鑰無效或已過期，請重新獲取套餐 Key 並核對所選地區",0),
         _=>return match http{
@@ -109,7 +109,7 @@ pub fn parse(provider: PlanProvider, v: &Value) -> Result<Snapshot, String> {
         PlanProvider::GlmChina | PlanProvider::GlmGlobal => parse_glm(v, &mut snapshot)?,
     }
     if snapshot.windows.is_empty() && snapshot.extra.is_empty() {
-        return Err("服務未返回可識別的有限套餐用量；未知或無限用量不顯示為零".into());
+        return Err("服務未返回可識別的有限套餐額度；未知或無限額度不顯示為零".into());
     }
     Ok(snapshot)
 }
@@ -155,7 +155,7 @@ fn parse_minimax(v: &Value, s: &mut Snapshot) -> Result<(), String> {
         if let Some(mut p) = minimax_percent(row, prefix) {
             if prefix == "current_weekly" && !row["weekly_boost_permille"].is_null() {
                 let boost = number(&row["weekly_boost_permille"]).filter(|n| *n > 0.0 && *n <= 10000.0)
-                    .ok_or("MiniMax 週用量倍率無效")?;
+                    .ok_or("MiniMax 週額度倍率無效")?;
                 p *= (boost / 1000.0) as f32;
             }
             let reset = millis(&row[end]);
@@ -173,7 +173,7 @@ fn parse_glm(v: &Value, s: &mut Snapshot) -> Result<(), String> {
     let rows = data["limits"].as_array().ok_or("GLM 用量響應缺少限制列表")?;
     if rows.len()>16{return Err("GLM 返回過多用量視窗，請檢查響應版本".into());}
     if !rows.iter().any(|row|matches!(row["type"].as_str(),Some("TOKENS_LIMIT"|"CREDIT_LIMIT")) && percent(&row["percentage"]).is_some()){
-        return Err("GLM 未返回可識別的程式設計用量（工具用量不能代替程式設計用量）".into());
+        return Err("GLM 未返回可識別的程式設計額度（工具額度不能代替程式設計額度）".into());
     }
     // 複用原 ZCode 已支援的週期和重置時間解析，保留兩種登入來源的相同口徑。
     *s=super::zcode::coding(&serde_json::json!({"data":data}))?;

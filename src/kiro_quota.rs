@@ -158,21 +158,21 @@ pub(super) fn parse(v:&Value)->Result<Snapshot,String>{
     let limit=amount_field(credit,"usageLimitWithPrecision","usageLimit")?;let used=amount_field(credit,"currentUsageWithPrecision","currentUsage")?;
     let overage=if credit["currentOveragesWithPrecision"].is_null()&&credit["currentOverages"].is_null(){0.0}else{amount_field(credit,"currentOveragesWithPrecision","currentOverages")?};
     let reset=timestamp(&credit["nextDateReset"]).or_else(||timestamp(&v["nextDateReset"]));
-    let mut pools=vec![Pool{label:"月度用量".into(),amount:Amount::new((limit-(used-overage).max(0.0)).max(0.0),limit),reset,expires:None}];
-    if let Some(p)=active_pool(&credit["freeTrialInfo"],"freeTrialStatus","freeTrialExpiry","試用用量")?{pools.push(p);}
+    let mut pools=vec![Pool{label:"月度額度".into(),amount:Amount::new((limit-(used-overage).max(0.0)).max(0.0),limit),reset,expires:None}];
+    if let Some(p)=active_pool(&credit["freeTrialInfo"],"freeTrialStatus","freeTrialExpiry","試用額度")?{pools.push(p);}
     let bonuses=match &credit["bonuses"]{
         Value::Null=>&[][..],
         Value::Array(items)=>items.as_slice(),
         item @ Value::Object(_)=>std::slice::from_ref(item),
-        _=>return Err("Kiro 贈送用量格式異常，暫時無法顯示完整點數".into()),
+        _=>return Err("Kiro 贈送額度格式異常，暫時無法顯示完整點數".into()),
     };
     for bonus in bonuses{
-        if !bonus.is_object(){return Err("Kiro 贈送用量明細無效，暫時無法顯示完整點數".into());}
-        if let Some(p)=active_pool(bonus,"status","expiresAt",bonus["displayName"].as_str().filter(|s|!s.trim().is_empty()).unwrap_or("贈送 / 加購用量"))?{pools.push(p);}
+        if !bonus.is_object(){return Err("Kiro 贈送額度明細無效，暫時無法顯示完整點數".into());}
+        if let Some(p)=active_pool(bonus,"status","expiresAt",bonus["displayName"].as_str().filter(|s|!s.trim().is_empty()).unwrap_or("贈送 / 加購額度"))?{pools.push(p);}
     }
     let total=Amount::new(pools.iter().map(|p|p.amount.remaining).sum(),pools.iter().map(|p|p.amount.limit).sum());
     if !total.limit.is_finite()||!total.remaining.is_finite(){return Err("Kiro 用量總量無效".into());}
-    snapshot.windows.push(Window{label:if pools.len()>1{"可用點數"}else{"月度用量"}.into(),seconds:None,remaining:if total.limit>0.0{(total.remaining/total.limit*100.0) as f32}else{0.0},reset:if pools.len()>1{None}else{reset},amount:Some(total)});
+    snapshot.windows.push(Window{label:if pools.len()>1{"可用點數"}else{"月度額度"}.into(),seconds:None,remaining:if total.limit>0.0{(total.remaining/total.limit*100.0) as f32}else{0.0},reset:if pools.len()>1{None}else{reset},amount:Some(total)});
     if v["overageConfiguration"]["overageStatus"].as_str().is_some_and(|s|s.eq_ignore_ascii_case("ENABLED")){
         if !credit["overageCapWithPrecision"].is_null()||!credit["overageCap"].is_null(){
             let cap=amount_field(credit,"overageCapWithPrecision","overageCap")?;
@@ -214,9 +214,9 @@ mod tests{
         let s=parse(&json!({"userInfo":{"userId":"test-user"},"usageBreakdownList":[{"resourceType":"CREDIT","currentUsageWithPrecision":130.5,"usageLimitWithPrecision":1000.0,
             "currentOveragesWithPrecision":30.5,"overageCapWithPrecision":200.0,"nextDateReset":1900000000.0}],"overageConfiguration":{"overageStatus":"ENABLED"}})).unwrap();
         assert_eq!(s.windows.len(),2);
-        assert_eq!(s.windows[0].label,"月度用量");assert_eq!(s.windows[0].remaining,90.0);assert_eq!(s.windows[0].reset,Some(1900000000));
+        assert_eq!(s.windows[0].label,"月度額度");assert_eq!(s.windows[0].remaining,90.0);assert_eq!(s.windows[0].reset,Some(1900000000));
         assert_eq!(s.windows[0].amount,Some(Amount::new(900.0,1000.0)));
-        assert_eq!(s.windows[0].summary(),"月度用量剩餘 900 / 1000");
+        assert_eq!(s.windows[0].summary(),"月度額度剩餘 900 / 1000");
         assert_eq!(s.windows[1].label,"超額上限餘量");assert_eq!(s.windows[1].remaining,84.75);
         assert_eq!(s.windows[1].amount,Some(Amount::new(169.5,200.0)));assert_eq!(s.windows[1].summary(),"超額上限餘量剩餘 169.5 / 200");
     }
@@ -248,7 +248,7 @@ mod tests{
         let s=parse(&json!({"userInfo":{"userId":"test-user"},"subscriptionInfo":{"subscriptionTitle":"KIRO PRO"},"usageBreakdownList":[{"resourceType":"CREDIT",
             "currentUsageWithPrecision":95.91,"usageLimitWithPrecision":1000.0,"nextDateReset":1796083200.0}]})).unwrap();
         assert_eq!(s.plan,"KIRO PRO");assert!((s.windows[0].remaining-90.409).abs()<0.001);assert_eq!(s.windows[0].reset,Some(1796083200));
-        assert_eq!(s.windows[0].summary(),"月度用量剩餘 904.1 / 1000");
+        assert_eq!(s.windows[0].summary(),"月度額度剩餘 904.1 / 1000");
     }
     #[test]fn server_identity_survives_token_refresh_and_separates_idc_users(){
         let a=owner(&json!({"accessToken":"old","clientIdHash":"same-client","userInfo":{"userId":"user-a"}})).unwrap();

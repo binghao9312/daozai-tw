@@ -47,7 +47,7 @@ pub fn parse_result(value:&Value,source:&str)->Result<Snapshot,String>{
         for name in ["remaining","total","used"]{if !row[name].is_null()&&super::numeric(&row[name]).is_none(){return Err("查詢指令碼返回的用量欄位無效".into());}}
         for name in ["unit","planName","extra","invalidMessage"]{if !row[name].is_null()&&!row[name].is_string(){return Err("查詢指令碼返回的說明欄位無效".into());}}
         let unit=row["unit"].as_str().unwrap_or("站點單位");validate_unit(unit)?;
-        let label=row["planName"].as_str().filter(|s|!s.is_empty()).unwrap_or("剩餘用量");
+        let label=row["planName"].as_str().filter(|s|!s.is_empty()).unwrap_or("剩餘額度");
         if label.chars().count()>128||label.chars().any(char::is_control){return Err("查詢指令碼返回的套餐名稱無效".into());}
         let total=super::numeric(&row["total"]);let used=super::numeric(&row["used"]);
         let remaining=super::numeric(&row["remaining"]).or_else(||total.zip(used).map(|(t,u)|t-u)).filter(|n|n.is_finite());

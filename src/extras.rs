@@ -1420,7 +1420,7 @@ impl App {
                         });
                         settings_label(ui,"功能頁面");
                         settings_card(ui,|ui|{
-                            let descriptions=["播放控制與同步歌詞","番茄鍾與休息計時","喝水與久坐提醒","臨時收納檔案位置","任務清單與到期提醒","郵件摘要與驗證碼","Agent 剩餘用量和帳號切換","月曆、郵件邀請與工作日程","當地天氣與七日預報"];
+                            let descriptions=["播放控制與同步歌詞","番茄鍾與休息計時","喝水與久坐提醒","臨時收納檔案位置","任務清單與到期提醒","郵件摘要與驗證碼","Agent 剩餘額度和帳號切換","月曆、郵件邀請與工作日程","當地天氣與七日預報"];
                             ui.label(egui::RichText::new("拖動左側手柄調整順序；關閉的功能不在後臺執行，不同步也不提醒，已有資料保留。").size(11.5).color(settings_color(ctx,Color32::from_gray(180),Color32::from_gray(75))));
                             #[derive(Clone)]
                             struct PageDrag(usize);

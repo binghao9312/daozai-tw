@@ -45,7 +45,7 @@ fn window(limit: &Value) -> Option<Window> {
     let used = used_percent(limit)?;
     let reset = seconds.and_then(|_| integer(&limit["end_time"])).filter(|time| *time > 0)
         .map(|time| if time >= 100_000_000_000 { time / 1000 } else { time });
-    let label = match seconds { Some(18000) => "5 小時", Some(604800) => "本週", _ => "其他用量" };
+    let label = match seconds { Some(18000) => "5 小時", Some(604800) => "本週", _ => "其他額度" };
     Some(Window { label: label.into(), seconds, remaining: (100.0 - used).clamp(0.0, 100.0) as f32, reset, amount: None })
 }
 
@@ -64,7 +64,7 @@ pub fn parse(value: &Value) -> Result<Snapshot, String> {
             for limit in group["window_limits"].as_array().into_iter().flatten() {
                 let Some(mut window) = window(limit) else { continue };
                 if section == "incentive_quota_section" {
-                    window.label = if window.seconds.is_some() { format!("活動 · {}", window.label) } else { "活動用量".into() };
+                    window.label = if window.seconds.is_some() { format!("活動 · {}", window.label) } else { "活動額度".into() };
                 }
                 if let Some(name) = group["feature_group_name"].as_str().map(str::trim).filter(|name| !name.is_empty()) {
                     window.label = format!("{name} · {}", window.label);

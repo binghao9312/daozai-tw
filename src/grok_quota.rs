@@ -19,7 +19,7 @@ pub fn parse(v:&Value)->Result<Snapshot,String>{
     let reset=super::reset(&v["nextResetTimestampUtc"]);
     let seconds=super::reset(&v["currentPeriodStart"]).zip(reset).and_then(|(start,end)|end.checked_sub(start)).filter(|n|*n>0);
     let plan=["grokPlanLabel","cursorPlanName"].iter().find_map(|key|v[key].as_str().filter(|s|!s.trim().is_empty())).unwrap_or_default().to_owned();
-    Ok(Snapshot{kiro:None,relay:None,credits:None,wallet:None,plan,at:chrono::Utc::now().timestamp(),windows:vec![Window{label:if v["isUnified"].as_bool()==Some(true){"共享週用量"}else{"本週"}.into(),seconds,remaining:(100.0-used) as f32,reset,amount:None}],extra:vec![]})
+    Ok(Snapshot{kiro:None,relay:None,credits:None,wallet:None,plan,at:chrono::Utc::now().timestamp(),windows:vec![Window{label:if v["isUnified"].as_bool()==Some(true){"共享週額度"}else{"本週"}.into(),seconds,remaining:(100.0-used) as f32,reset,amount:None}],extra:vec![]})
 }
 
 pub fn native_path()->Option<PathBuf>{std::env::var_os("APPDATA").map(|p|PathBuf::from(p).join("Grok Bot/sand-secrets.json")).filter(|p|p.is_file())}
@@ -208,7 +208,7 @@ mod tests {
         let s=parse(&value).unwrap();assert!((s.windows[0].remaining-80.84922).abs()<0.001);assert_eq!(s.windows[0].seconds,Some(604800));assert_eq!(s.windows.len(),1);assert_eq!(s.plan,"Super");
         value["usagePercent"]=json!(0);assert_eq!(parse(&value).unwrap().windows[0].remaining,100.0);
         value["usagePercent"]=json!("100");assert_eq!(parse(&value).unwrap().windows[0].remaining,0.0);
-        value["isUnified"]=json!(true);assert_eq!(parse(&value).unwrap().windows[0].label,"共享週用量");
+        value["isUnified"]=json!(true);assert_eq!(parse(&value).unwrap().windows[0].label,"共享週額度");
     }
     #[test]
     fn missing_or_invalid_readings_are_never_an_unused_allowance(){

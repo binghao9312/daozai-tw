@@ -109,16 +109,16 @@ pub(super) fn coding(v:&Value)->Result<Snapshot,String>{
 }
 fn start(v:&Value)->Result<Snapshot,String>{
     let mut snapshot=Snapshot{plan:"Start Plan".into(),at:chrono::Utc::now().timestamp(),..Default::default()};
-    let buckets=v["data"]["balances"].as_array().ok_or("ZCode 響應缺少體驗用量明細")?;
-    if buckets.is_empty(){snapshot.plan="暫無體驗用量".into();return Ok(snapshot);}
+    let buckets=v["data"]["balances"].as_array().ok_or("ZCode 響應缺少體驗額度明細")?;
+    if buckets.is_empty(){snapshot.plan="暫無體驗額度".into();return Ok(snapshot);}
     for bucket in buckets{
         let Some(total)=super::number(&bucket["total_units"]).filter(|n|*n>0.0) else{continue;};
         let Some(left)=super::number(&bucket["remaining_units"]).filter(|n|*n>=0.0) else{continue;};
         let reset=super::number(&bucket["expires_at"]).map(|n|n as i64);
         if reset.is_some_and(|t|t<=snapshot.at){continue;}
-        snapshot.windows.push(Window{label:bucket["show_name"].as_str().filter(|s|!s.is_empty()).unwrap_or("體驗用量").into(),seconds:None,remaining:(left/total*100.0).clamp(0.0,100.0) as f32,reset,amount:None});
+        snapshot.windows.push(Window{label:bucket["show_name"].as_str().filter(|s|!s.is_empty()).unwrap_or("體驗額度").into(),seconds:None,remaining:(left/total*100.0).clamp(0.0,100.0) as f32,reset,amount:None});
     }
-    if snapshot.windows.is_empty(){return Err("當前 ZCode 帳號暫無有效體驗用量".into());}
+    if snapshot.windows.is_empty(){return Err("當前 ZCode 帳號暫無有效體驗額度".into());}
     Ok(snapshot)
 }
 pub(super) fn fetch(agent:&ureq::Agent,a:&Account)->Result<Snapshot,String>{
@@ -148,7 +148,7 @@ pub(super) fn fetch(agent:&ureq::Agent,a:&Account)->Result<Snapshot,String>{
     let device=super::login_json(&telemetry).ok();
     let mid=device.as_ref().and_then(|v|v["deviceMid"].as_str()).filter(|s|!s.is_empty() && s.bytes().all(|b|b.is_ascii_graphic())).ok_or("請開啟 ZCode，等待客戶端初始化裝置訊息")?;
     let v=read(agent,url.as_str(),&format!("Bearer {}",l.jwt),Some(mid)).map_err(|e|if no_coding_plan{format!("未開通 Coding Plan；體驗套餐查詢失敗：{e}")}else{e})?;
-    if !success(&v){return Err(format!("ZCode 體驗用量暫不可用（{}）",v["code"]));}
+    if !success(&v){return Err(format!("ZCode 體驗額度暫不可用（{}）",v["code"]));}
     start(&v)
 }
 #[cfg(test)]

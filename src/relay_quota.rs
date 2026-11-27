@@ -116,19 +116,19 @@ fn amount(label:&str,unit:&str,remaining:Option<f64>,limit:Option<f64>,used:Opti
 }
 
 pub fn parse_new_api(v:&Value)->Result<Snapshot,String> {
-    if (v["code"]!=true&&v["object"]!="token_usage")||v["code"]==false||v["success"]==false||!v["error"].is_null() { return Err("站點未返回有效的令牌用量".into()); }
+    if (v["code"]!=true&&v["object"]!="token_usage")||v["code"]==false||v["success"]==false||!v["error"].is_null() { return Err("站點未返回有效的令牌額度".into()); }
     let d=if v["object"]=="token_usage"{v}else{&v["data"]};
-    if d["object"]!="token_usage" { return Err("該站點版本不支援 New API 令牌用量介面".into()); }
+    if d["object"]!="token_usage" { return Err("該站點版本不支援 New API 令牌額度介面".into()); }
     if !d["unit"].is_null()&&d["unit"]!="quota"{return Err("站點用量單位與 New API 令牌協議不一致".into());}
     let unlimited=d["unlimited_quota"].as_bool().ok_or("站點未返回令牌限額狀態")?;
     let used=nonnegative(d,"total_used")?;
     let (remaining,limit)=if unlimited {(None,None)}else{(Some(required(d,"total_available")?),Some(nonnegative(d,"total_granted")?))};
-    let windows=match (remaining,limit) { (Some(r),Some(l))=>window("令牌用量",l,r,None,None).into_iter().collect(),_=>vec![] };
-    let mut amounts=vec![amount("令牌用量","站點配額",remaining,limit,Some(used),unlimited,Scope::Key)];
+    let windows=match (remaining,limit) { (Some(r),Some(l))=>window("令牌額度",l,r,None,None).into_iter().collect(),_=>vec![] };
+    let mut amounts=vec![amount("令牌額度","站點配額",remaining,limit,Some(used),unlimited,Scope::Key)];
     if d["user_quota"].is_object() {
         let u=&d["user_quota"];
-        if !u["unit"].is_null()&&u["unit"]!="quota"{return Err("站點賬戶用量單位與令牌用量不一致".into());}
-        amounts.push(amount("賬戶用量","站點配額",Some(required(u,"total_available")?),None,Some(nonnegative(u,"total_used")?),false,Scope::Account));
+        if !u["unit"].is_null()&&u["unit"]!="quota"{return Err("站點賬戶額度單位與令牌額度不一致".into());}
+        amounts.push(amount("賬戶額度","站點配額",Some(required(u,"total_available")?),None,Some(nonnegative(u,"total_used")?),false,Scope::Account));
     }
     Ok(snapshot(Kind::NewApi,amounts,expiry(&d["expires_at"]),windows))
 }
@@ -151,7 +151,7 @@ pub fn parse_new_api_user(v:&Value,status:&Value)->Result<Snapshot,String>{
         (rate>0.0&&factor.is_finite()&&factor>0.0&&(remaining*factor).is_finite()&&(used*factor).is_finite()).then_some((factor,unit))
     })();
     let (factor,unit)=conversion.unwrap_or((1.0,"站點配額"));
-    Ok(snapshot(Kind::NewApi,vec![amount(if conversion.is_some(){"賬戶餘額"}else{"賬戶用量"},unit,Some(remaining*factor),None,Some(used*factor),false,Scope::Account)],None,vec![]))
+    Ok(snapshot(Kind::NewApi,vec![amount(if conversion.is_some(){"賬戶餘額"}else{"賬戶額度"},unit,Some(remaining*factor),None,Some(used*factor),false,Scope::Account)],None,vec![]))
 }
 
 pub fn parse_one_api(subscription:&Value,usage:&Value)->Result<Snapshot,String> {
@@ -186,8 +186,8 @@ pub fn parse_sub2api(v:&Value)->Result<Snapshot,String> {
                 let q=&v["quota"];
                 if q["unit"]!="USD" {return Err("站點返回了未知的用量單位".into());}
                 let limit=nonnegative(q,"limit")?;let used=nonnegative(q,"used")?;let remaining=required(q,"remaining")?;
-                amounts.push(amount("API Key 總用量","USD",Some(remaining),Some(limit),Some(used),false,Scope::Key));
-                if let Some(w)=window("總用量",limit,remaining,None,None){windows.push(w);}
+                amounts.push(amount("API Key 總額度","USD",Some(remaining),Some(limit),Some(used),false,Scope::Key));
+                if let Some(w)=window("總額度",limit,remaining,None,None){windows.push(w);}
             }
             if let Some(rows)=v["rate_limits"].as_array() {
                 if rows.len()>3 {return Err("站點返回了重複或過多的限額週期".into());}
@@ -233,7 +233,7 @@ pub fn parse_sub2api(v:&Value)->Result<Snapshot,String> {
     }
     if amounts.is_empty(){return Err("站點未返回可用的用量明細".into());}
     if v["mode"]=="quota_limited"{
-        if let Some(remaining)=numeric(&v["remaining"]).filter(|n|*n>=0.0){amounts.insert(0,amount("API Key 剩餘用量","USD",Some(remaining),None,None,false,Scope::Reported));}
+        if let Some(remaining)=numeric(&v["remaining"]).filter(|n|*n>=0.0){amounts.insert(0,amount("API Key 剩餘額度","USD",Some(remaining),None,None,false,Scope::Reported));}
     }
     let expires=expiry(&v["expires_at"]).or_else(||expiry(&v["subscription"]["expires_at"]));
     Ok(snapshot(Kind::Sub2Api,amounts,expires,windows))
@@ -274,7 +274,7 @@ fn read_response(request:ureq::Request)->Result<Value,ProbeError>{
 fn read_response_result(response:Result<ureq::Response,ureq::Error>)->Result<Value,ProbeError>{
     let response=response.map_err(|e|match e{
         ureq::Error::Status(s,_)=>if matches!(s,404|405){ProbeError::Unsupported(response_error(s))}else{ProbeError::Stop(response_error(s))},
-        _=>ProbeError::Stop(("無法連線用量站點，請檢查網路與地址".into(),30)),
+        _=>ProbeError::Stop(("無法連線中轉站，請檢查網路與地址".into(),30)),
     })?;
     if !(200..300).contains(&response.status()){return Err(ProbeError::Stop(response_error(response.status())));}
     const MAX:u64=1024*1024;
@@ -489,8 +489,8 @@ mod tests {
         let mut paths=vec![];let mut value=new_fixture();value["data"]["user_quota"]=json!({"total_available":12,"total_used":8});
         let (kind,snapshot)=detect_with(|path,timeout|{assert!(timeout<=PROBE_TIMEOUT);paths.push(path.to_owned());Ok(value.clone())},||false,AUTO_TIMEOUT).unwrap();
         assert_eq!(kind,Kind::NewApi);assert_eq!(paths,["/user/balance","/api/usage/token/"]);
-        let q=snapshot.relay.unwrap();assert_eq!(q.amounts[0].label,"令牌用量");assert_eq!(q.amounts[0].remaining,Some(250000.0));
-        assert_eq!(q.amounts[1].label,"賬戶用量");assert_eq!(q.amounts[1].remaining,Some(12.0));assert!(q.amounts.iter().all(|a|a.unit=="站點配額"));
+        let q=snapshot.relay.unwrap();assert_eq!(q.amounts[0].label,"令牌額度");assert_eq!(q.amounts[0].remaining,Some(250000.0));
+        assert_eq!(q.amounts[1].label,"賬戶額度");assert_eq!(q.amounts[1].remaining,Some(12.0));assert!(q.amounts.iter().all(|a|a.unit=="站點配額"));
     }
     #[test]
     fn auto_falls_back_to_sub2api_before_compatible_billing(){
@@ -626,10 +626,10 @@ mod tests {
             let mut v=new_fixture();v["data"]["unlimited_quota"]=json!(value);
             let q=parse_new_api(&v).unwrap().relay.unwrap();
             assert_eq!(q.compact(),"餘額暫不可查詢");
-            assert!(!q.full().contains("令牌用量")&&!q.full().contains("不限額"));
+            assert!(!q.full().contains("令牌額度")&&!q.full().contains("不限額"));
         }
         let q=parse_sub2api(&json!({"mode":"quota_limited","isValid":true,"quota":{"limit":10,"used":2,"remaining":8,"unit":"USD"},"rate_limits":[{"window":"7d","limit":20,"used":20,"remaining":0}]})).unwrap().relay.unwrap();
-        assert_eq!(q.compact(),"餘額暫不可查詢");assert!(!q.full().contains("API Key 總用量"));
+        assert_eq!(q.compact(),"餘額暫不可查詢");assert!(!q.full().contains("API Key 總額度"));
         let q=parse_one_api(&json!({"object":"billing_subscription","hard_limit_usd":100}),&json!({"object":"list","total_usage":2500})).unwrap().relay.unwrap();
         assert_eq!(q.compact(),"餘額暫不可查詢");
     }
@@ -638,7 +638,7 @@ mod tests {
             let mut v=new_fixture();v["data"]["total_available"]=json!(1);v["data"]["user_quota"]=json!({"total_available":remaining,"total_used":8});
             let q=parse_new_api(&v).unwrap().relay.unwrap();
             assert_eq!(q.compact(),format!("{remaining} 站點配額"));
-            assert!(q.full().contains("賬戶用量"));assert!(!q.full().contains("令牌用量"));
+            assert!(q.full().contains("賬戶額度"));assert!(!q.full().contains("令牌額度"));
         }
     }
     #[test] fn balance_display_subscription_uses_remaining_percentages(){

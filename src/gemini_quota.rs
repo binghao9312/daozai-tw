@@ -158,7 +158,7 @@ mod tests {
         let _g=crate::ui_tests::ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
         let config=super::super::Config::load();let a=config.accounts.iter().find(|a|a.enabled&&a.provider==super::super::Provider::Gemini).expect("需要已有 Gemini 帳號");
         let snapshot=fetch(&super::super::http_agent(),a).unwrap();assert!(!snapshot.windows.is_empty());
-        println!("已有 Gemini 加密會話讀取成功，返回 {} 個用量週期",snapshot.windows.len());
+        println!("已有 Gemini 加密會話讀取成功，返回 {} 個額度週期",snapshot.windows.len());
     }
     #[cfg(windows)] #[test]
     #[ignore="使用指定隔離目錄驗證捕獲會話，寫入隔離帳號配置"]

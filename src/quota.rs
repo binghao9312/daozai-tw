@@ -266,7 +266,7 @@ impl Account {
 }
 fn number(v:&Value)->Option<f64>{v.as_f64().or_else(||v.as_str()?.parse().ok()).filter(|n|n.is_finite())}
 fn reset(v:&Value)->Option<i64>{v.as_i64().filter(|n|*n>0).or_else(||chrono::DateTime::parse_from_rfc3339(v.as_str()?).ok().map(|d|d.timestamp()))}
-fn cadence(seconds:Option<i64>)->String{match seconds{Some(18000)=>"5 小時".into(),Some(604800)=>"本週".into(),Some(86400)=>"今日".into(),Some(s)if s>0 && s%86400==0=>format!("{} 天",s/86400),Some(s)if s>0 && s%3600==0=>format!("{} 小時",s/3600),Some(s)if s>0=>format!("{} 分鐘",s/60),_=>"用量週期".into()}}
+fn cadence(seconds:Option<i64>)->String{match seconds{Some(18000)=>"5 小時".into(),Some(604800)=>"本週".into(),Some(86400)=>"今日".into(),Some(s)if s>0 && s%86400==0=>format!("{} 天",s/86400),Some(s)if s>0 && s%3600==0=>format!("{} 小時",s/3600),Some(s)if s>0=>format!("{} 分鐘",s/60),_=>"額度週期".into()}}
 fn codex_window(v:&Value)->Option<Window>{
     let used=number(&v["used_percent"])?;let seconds=v["limit_window_seconds"].as_i64().filter(|s|*s>0);
     Some(Window{label:cadence(seconds),seconds,remaining:(100.0-used).clamp(0.0,100.0) as f32,reset:reset(&v["reset_at"]),amount:None})
@@ -286,7 +286,7 @@ pub fn parse(provider:Provider,v:&Value)->Result<Snapshot,String>{
             let rate=&v["rate_limit"];if !rate.is_object(){return Err("服務沒有返回用量訊息".into());}
             for key in ["primary_window","secondary_window"]{if !rate[key].is_null(){let w=codex_window(&rate[key]).ok_or("用量欄位不完整，暫時無法判斷週期")?;s.windows.push(w);}}
             for a in v["additional_rate_limits"].as_array().into_iter().flatten(){
-                for key in ["primary_window","secondary_window"]{if let Some(mut w)=codex_window(&a["rate_limit"][key]){let label=a["limit_name"].as_str().or_else(||a["limit_id"].as_str()).unwrap_or("額外用量");w.label=format!("{label} · {}",w.label);s.extra.push(w);}}
+                for key in ["primary_window","secondary_window"]{if let Some(mut w)=codex_window(&a["rate_limit"][key]){let label=a["limit_name"].as_str().or_else(||a["limit_id"].as_str()).unwrap_or("額外額度");w.label=format!("{label} · {}",w.label);s.extra.push(w);}}
             }
         }
         Provider::Claude=>{
@@ -294,7 +294,7 @@ pub fn parse(provider:Provider,v:&Value)->Result<Snapshot,String>{
         }
         Provider::Kimi=>{
             if let Some(usages)=v["usages"].as_object(){
-                for (key,label,seconds) in [("limit_5h","5 小時",Some(18000)),("limit_7d","本週",Some(604800)),("limit_month_total","本月總用量",None),("limit_month_code","本月程式設計",None)]{
+                for (key,label,seconds) in [("limit_5h","5 小時",Some(18000)),("limit_7d","本週",Some(604800)),("limit_month_total","本月總額度",None),("limit_month_code","本月程式設計",None)]{
                     let Some(entry)=usages.get(key) else{continue;};
                     let Some(used)=number(&entry["used_ratio"]).filter(|n|(0.0..=1.0).contains(n)) else{continue;};
                     s.windows.push(Window{label:label.into(),seconds,remaining:((1.0-used)*100.0) as f32,reset:reset(&entry["reset_time"]),amount:None});
@@ -455,6 +455,11 @@ fn fetch(agent:&ureq::Agent,account:&Account)->Result<Snapshot,(String,u64)>{
 
 #[cfg(test)] mod tests {
     use super::*;
+    #[test] fn antigravity_runs_in_its_own_service_group(){
+        let group=service_group(Provider::Antigravity);
+        assert!(Provider::ALL.into_iter().filter(|p|*p!=Provider::Antigravity).all(|p|service_group(p)!=group),"Antigravity 呼叫 CLI 較慢，不能和其他服務排在同一組");
+        assert!(Provider::ALL.into_iter().all(|p|service_group(p)<11),"服務分組數量要和 refresh_with 的分組表一致");
+    }
     #[test] fn lightweight_quota_startup_has_no_unused_workers(){
         let mut service=Service::start();assert!(service.workers.is_empty(),"未啟用用量來源時不應建立後臺執行緒");
         assert!(service.refresh(vec![]));assert!(service.workers.is_empty());

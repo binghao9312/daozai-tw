@@ -89,10 +89,10 @@ fn activity_only_and_empty_plan_names_are_supported() {
         "incentive_quota_section":{"window_limit_groups":[{"window_limits":[{"window_type":3,"used_percent":30}]}]}}});
     let snapshot = parse(&value).unwrap();
     assert_eq!(snapshot.plan, "Plus");
-    assert_eq!(snapshot.rings()[0].label, "活動用量");
+    assert_eq!(snapshot.rings()[0].label, "活動額度");
     assert_eq!(snapshot.rings()[0].remaining, 70.0);
     let unclassified = parse(&one_limit(json!({"window_type":3,"used_percent":30,"end_time":1900000000000i64}))).unwrap();
-    assert_eq!(unclassified.windows[0].label,"其他用量","未知視窗不能僅按數字推斷為活動或月用量");
+    assert_eq!(unclassified.windows[0].label,"其他額度","未知視窗不能僅按數字推斷為活動或月額度");
     assert_eq!(unclassified.windows[0].reset,None);
 }
 

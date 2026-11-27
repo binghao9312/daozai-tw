@@ -78,7 +78,7 @@ fn desktop_record(path:&Path,account:Option<&Account>,verified_cache:&Path)->Res
             a.cached_snapshot(&serde_json::from_slice(&raw).ok()?)
         }).ok_or("請在 Claude 桌面版開啟用量頁面，等待當前帳號產生新記錄")?;
     }
-    if snapshot.windows.is_empty(){return Err("Claude 本地記錄暫無可用用量".into());}
+    if snapshot.windows.is_empty(){return Err("Claude 本地記錄暫無可用額度".into());}
     if desktop_identity(path)?!=(owner,login_stamp){return Err("Claude 帳號配置已變化，請重新整理重試".into());}
     Ok((account_slot,snapshot))
 }
