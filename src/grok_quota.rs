@@ -13,13 +13,13 @@ const CLIENT_ID:&str="KbZUR41cY7W6zRSdpSUJ7I7mLYBKOCmB";
 const LOGIN_ERROR:&str="Grok Bot 登入不可用，請使用瀏覽器重新連線";
 
 pub fn parse(v:&Value)->Result<Snapshot,String>{
-    if v["usesPooledEnterpriseAllowance"].as_bool()==Some(true){return Err("企業共享額度未提供個人百分比".into());}
-    if v["hasNonZeroIncludedLimit"].as_bool()==Some(false){return Err("此帳號沒有可顯示的套餐額度".into());}
-    let used=super::number(&v["usagePercent"]).filter(|n|(0.0..=100.0).contains(n)).ok_or("服務未返回有效的額度百分比")?;
+    if v["usesPooledEnterpriseAllowance"].as_bool()==Some(true){return Err("企業共享用量未提供個人百分比".into());}
+    if v["hasNonZeroIncludedLimit"].as_bool()==Some(false){return Err("此帳號沒有可顯示的套餐用量".into());}
+    let used=super::number(&v["usagePercent"]).filter(|n|(0.0..=100.0).contains(n)).ok_or("服務未返回有效的用量百分比")?;
     let reset=super::reset(&v["nextResetTimestampUtc"]);
     let seconds=super::reset(&v["currentPeriodStart"]).zip(reset).and_then(|(start,end)|end.checked_sub(start)).filter(|n|*n>0);
     let plan=["grokPlanLabel","cursorPlanName"].iter().find_map(|key|v[key].as_str().filter(|s|!s.trim().is_empty())).unwrap_or_default().to_owned();
-    Ok(Snapshot{kiro:None,relay:None,credits:None,wallet:None,plan,at:chrono::Utc::now().timestamp(),windows:vec![Window{label:if v["isUnified"].as_bool()==Some(true){"共享週額度"}else{"本週"}.into(),seconds,remaining:(100.0-used) as f32,reset,amount:None}],extra:vec![]})
+    Ok(Snapshot{kiro:None,relay:None,credits:None,wallet:None,plan,at:chrono::Utc::now().timestamp(),windows:vec![Window{label:if v["isUnified"].as_bool()==Some(true){"共享週用量"}else{"本週"}.into(),seconds,remaining:(100.0-used) as f32,reset,amount:None}],extra:vec![]})
 }
 
 pub fn native_path()->Option<PathBuf>{std::env::var_os("APPDATA").map(|p|PathBuf::from(p).join("Grok Bot/sand-secrets.json")).filter(|p|p.is_file())}
@@ -112,9 +112,9 @@ fn read_json(response:ureq::Response)->Result<Value,String>{
 }
 fn http_error(error:ureq::Error)->(String,u64){match error{
     ureq::Error::Status(401,_)=>("Grok Bot 登入已失效（401），請重新連線".into(),0),
-    ureq::Error::Status(403,_)=>("Grok Bot 額度請求被拒絕（403），請檢查帳號許可權或網路代理".into(),60),
+    ureq::Error::Status(403,_)=>("Grok Bot 用量請求被拒絕（403），請檢查帳號許可權或網路代理".into(),60),
     ureq::Error::Status(429,response)=>("請求過於頻繁，稍後自動重試".into(),response.header("Retry-After").and_then(|s|s.parse().ok()).unwrap_or(180).clamp(30,3600)),
-    ureq::Error::Status(code,_)=>(format!("Grok Bot 額度服務暫不可用（{code}）"),60),
+    ureq::Error::Status(code,_)=>(format!("Grok Bot 用量服務暫不可用（{code}）"),60),
     _=>("無法連線 Grok Bot，請檢查網路或代理".into(),30),
 }}
 fn checksum(machine:&str,millis:i64)->String{
@@ -154,7 +154,7 @@ pub fn fetch(agent:&ureq::Agent,account:&Account)->Result<Snapshot,(String,u64)>
         auth=renew(agent,&auth).map_err(|e|(e,0))?;save_session(slot,&auth).map_err(|e|(e,0))?;result=usage_request(agent,&url,&auth.token);
     }
     let value=read_json(result.map_err(http_error)?).map_err(|e|(e,60))?;
-    if !own && stamp!=fs::metadata(&account.source).and_then(|m|m.modified()).ok(){return Err(("Grok Bot 登入已更新，請重新整理額度".into(),0));}
+    if !own && stamp!=fs::metadata(&account.source).and_then(|m|m.modified()).ok(){return Err(("Grok Bot 登入已更新，請重新整理用量".into(),0));}
     parse(&value).map_err(|e|(e,60))
 }
 
@@ -208,7 +208,7 @@ mod tests {
         let s=parse(&value).unwrap();assert!((s.windows[0].remaining-80.84922).abs()<0.001);assert_eq!(s.windows[0].seconds,Some(604800));assert_eq!(s.windows.len(),1);assert_eq!(s.plan,"Super");
         value["usagePercent"]=json!(0);assert_eq!(parse(&value).unwrap().windows[0].remaining,100.0);
         value["usagePercent"]=json!("100");assert_eq!(parse(&value).unwrap().windows[0].remaining,0.0);
-        value["isUnified"]=json!(true);assert_eq!(parse(&value).unwrap().windows[0].label,"共享週額度");
+        value["isUnified"]=json!(true);assert_eq!(parse(&value).unwrap().windows[0].label,"共享週用量");
     }
     #[test]
     fn missing_or_invalid_readings_are_never_an_unused_allowance(){

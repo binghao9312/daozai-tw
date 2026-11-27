@@ -31,9 +31,9 @@ fn has_text(h: &H, expected: &str) -> bool {
 fn doubao_activity_is_visible_on_the_island_and_in_account_details() {
     let _guard=ENV_LOCK.lock().unwrap_or_else(|error|error.into_inner());let mut h=H::new();fixture(&mut h);
     h.app.show_page(6);h.hover(H::local(260.0,60.0),1.0);
-    for label in ["5 小時","本週","活動額度","75%"] { assert!(has_text(&h,label),"額度面板缺少 {label}"); }
+    for label in ["5 小時","本週","活動用量","75%"] { assert!(has_text(&h,label),"用量面板缺少 {label}"); }
     for _ in 0..5 { settings_frame(&mut h,vec![]); }
-    assert!(has_text(&h,"活動額度：剩餘 75.0%"),"帳號明細應保留活動額度");
+    assert!(has_text(&h,"活動用量：剩餘 75.0%"),"帳號明細應保留活動用量");
     assert!(has_text(&h,"5 小時：剩餘 72.0%") && has_text(&h,"本週：剩餘 44.0%"));
 }
 

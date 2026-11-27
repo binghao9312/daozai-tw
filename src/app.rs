@@ -78,7 +78,7 @@ fn pill_shadow(painter:&egui::Painter,rect:Rect,radius:f32,strength:f32){
         painter.rect_filled(r,radius+grow*0.8,Color32::from_black_alpha((255.0*a*strength) as u8));
     }
 }
-pub(crate) const PAGE_NAMES: [&str; 9] = ["音樂", "專注", "健康", "置物架", "待辦", "信箱", "AI 額度", "日程", "天氣"];
+pub(crate) const PAGE_NAMES: [&str; 9] = ["音樂", "專注", "健康", "置物架", "待辦", "信箱", "AI 用量", "日程", "天氣"];
 pub(crate) const PAGE_SETTINGS_TABS: [usize; 9] = [1,2,3,5,4,7,11,8,12];
 
 // ---------- 動效引數 ----------
@@ -3502,7 +3502,7 @@ impl App {
             3 => return,
             4 => ("待辦", "清單", theme::GREEN),
             5 => ("信箱", "", theme::CYAN),
-            6 => ("AI", "額度", theme::SOFT_GREEN),
+            6 => ("AI", "用量", theme::SOFT_GREEN),
             8 if self.weather.solar_open => ("日出", "日落", theme::YELLOW),
             8 => ("當地", "天氣", theme::CYAN),
             _ => ("島仔", "設定", theme::WHITE),

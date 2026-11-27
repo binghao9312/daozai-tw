@@ -142,7 +142,7 @@ mod tests{
     fn desktop_cache_reads_official_reset_times_without_changing_files(){
         let path=dir();let now=chrono::Utc::now().timestamp();fixture(&path,"local-org",now-10,&body(now-10));
         let files=std::fs::read_dir(&path).unwrap().map(|e|{let path=e.unwrap().path();let bytes=std::fs::read(&path).unwrap();(path,bytes)}).collect::<Vec<_>>();
-        let snapshot=read(&path,"local-org",now-20,now).expect("應讀取已有快取中的額度和重置時間");assert_eq!(snapshot.at,now-10);assert_eq!(snapshot.windows.iter().map(|w|w.remaining).collect::<Vec<_>>(),vec![76.0,16.0]);assert_eq!(snapshot.windows[0].reset,Some(now-10+3600));assert_eq!(snapshot.windows[1].reset,Some(now-10+86400));
+        let snapshot=read(&path,"local-org",now-20,now).expect("應讀取已有快取中的用量和重置時間");assert_eq!(snapshot.at,now-10);assert_eq!(snapshot.windows.iter().map(|w|w.remaining).collect::<Vec<_>>(),vec![76.0,16.0]);assert_eq!(snapshot.windows[0].reset,Some(now-10+3600));assert_eq!(snapshot.windows[1].reset,Some(now-10+86400));
         for(path,bytes)in files{assert_eq!(std::fs::read(path).unwrap(),bytes);}let _=std::fs::remove_dir_all(path);
     }
     #[test]
@@ -154,7 +154,7 @@ mod tests{
     fn desktop_cache_keeps_missing_expired_and_unzoned_resets_unknown(){
         let path=dir();let now=chrono::Utc::now().timestamp();
         for reset in [serde_json::Value::Null,json!("not-a-date"),json!("2030-01-01T12:00:00"),json!(chrono::DateTime::from_timestamp(now-1,0).unwrap().to_rfc3339()),json!(chrono::DateTime::from_timestamp(now+7*86400,0).unwrap().to_rfc3339())]{
-            fixture(&path,"local-org",now-10,&serde_json::to_vec(&json!({"five_hour":{"utilization":24,"resets_at":reset}})).unwrap());let snapshot=read(&path,"local-org",now-20,now).expect("缺少有效重置時間不能影響額度");assert_eq!(snapshot.windows[0].remaining,76.0);assert_eq!(snapshot.windows[0].reset,None);
+            fixture(&path,"local-org",now-10,&serde_json::to_vec(&json!({"five_hour":{"utilization":24,"resets_at":reset}})).unwrap());let snapshot=read(&path,"local-org",now-20,now).expect("缺少有效重置時間不能影響用量");assert_eq!(snapshot.windows[0].remaining,76.0);assert_eq!(snapshot.windows[0].reset,None);
         }let _=std::fs::remove_dir_all(path);
     }
     #[test]

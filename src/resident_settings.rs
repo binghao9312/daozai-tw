@@ -49,7 +49,7 @@ impl crate::app::App {
         let pointer=ui.ctx().pointer_interact_pos();
         let dragged=egui::DragAndDrop::payload::<usize>(ui.ctx());
         let mut movement=None;
-        let label=|slot|match slot{CLOCK=>"時間",BATTERY=>"電量",WEATHER=>"天氣",QUOTA=>"AI 額度",MUSIC=>"音樂",FOCUS=>"專注",_=>"吉祥物"};
+        let label=|slot|match slot{CLOCK=>"時間",BATTERY=>"電量",WEATHER=>"天氣",QUOTA=>"AI 用量",MUSIC=>"音樂",FOCUS=>"專注",_=>"吉祥物"};
         for (index,&slot) in order.iter().enumerate(){
             let x=cx+layout.x[slot].unwrap();
             let width=match slot{CLOCK=>layout.widths[CLOCK],BATTERY=>20.0,WEATHER=>layout.widths[WEATHER],PET=>32.0,MUSIC=>14.0,FOCUS=>crate::focus_bar::WIDTH,_=>{

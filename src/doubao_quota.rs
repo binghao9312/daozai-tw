@@ -11,7 +11,7 @@ pub enum LoginSource { Browser, Local, Cookie(String) }
 
 const ENDPOINT: &str = "https://www.doubao.com/alice/commerce/sale/subscription/quota/summary/";
 const LOGIN_ERROR: &str = "豆包登入已失效，請重新連線瀏覽器帳號";
-const PARSE_ERROR: &str = "豆包額度介面已變化，暫時無法讀取";
+const PARSE_ERROR: &str = "豆包用量介面已變化，暫時無法讀取";
 const MAX_BODY: u64 = 1024 * 1024;
 const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36";
 
@@ -45,7 +45,7 @@ fn window(limit: &Value) -> Option<Window> {
     let used = used_percent(limit)?;
     let reset = seconds.and_then(|_| integer(&limit["end_time"])).filter(|time| *time > 0)
         .map(|time| if time >= 100_000_000_000 { time / 1000 } else { time });
-    let label = match seconds { Some(18000) => "5 小時", Some(604800) => "本週", _ => "其他額度" };
+    let label = match seconds { Some(18000) => "5 小時", Some(604800) => "本週", _ => "其他用量" };
     Some(Window { label: label.into(), seconds, remaining: (100.0 - used).clamp(0.0, 100.0) as f32, reset, amount: None })
 }
 
@@ -53,7 +53,7 @@ pub fn parse(value: &Value) -> Result<Snapshot, String> {
     if let Some(code) = value.get("code") {
         let code = integer(code).ok_or(PARSE_ERROR)?;
         if code == 710012001 { return Err(LOGIN_ERROR.into()); }
-        if code != 0 { return Err(format!("豆包額度服務返回錯誤（{code}）")); }
+        if code != 0 { return Err(format!("豆包用量服務返回錯誤（{code}）")); }
     }
     let data = value.get("data").filter(|data| data.is_object()).ok_or(LOGIN_ERROR)?;
     let mut windows = Vec::new();
@@ -64,7 +64,7 @@ pub fn parse(value: &Value) -> Result<Snapshot, String> {
             for limit in group["window_limits"].as_array().into_iter().flatten() {
                 let Some(mut window) = window(limit) else { continue };
                 if section == "incentive_quota_section" {
-                    window.label = if window.seconds.is_some() { format!("活動 · {}", window.label) } else { "活動額度".into() };
+                    window.label = if window.seconds.is_some() { format!("活動 · {}", window.label) } else { "活動用量".into() };
                 }
                 if let Some(name) = group["feature_group_name"].as_str().map(str::trim).filter(|name| !name.is_empty()) {
                     window.label = format!("{name} · {}", window.label);
@@ -85,7 +85,7 @@ pub fn parse(value: &Value) -> Result<Snapshot, String> {
         else { primary.push(window); }
     }
     if primary.is_empty() {
-        if extra.is_empty() { return Err("豆包帳號暫未提供可讀取的訂閱額度".into()); }
+        if extra.is_empty() { return Err("豆包帳號暫未提供可讀取的訂閱用量".into()); }
         primary = std::mem::take(&mut extra);
     }
     let plan = ["/current_subscription/display/short_name", "/current_subscription/display/product_name"]
@@ -164,12 +164,12 @@ fn request(agent: &ureq::Agent, url: &str, header: &str) -> Result<Snapshot, (St
             ureq::Error::Status(401 | 403, _) => (LOGIN_ERROR.into(), 0),
             ureq::Error::Status(429, response) => ("豆包請求過於頻繁，稍後自動重試".into(),
                 response.header("Retry-After").and_then(|value| value.parse().ok()).unwrap_or(180).clamp(30, 3600)),
-            ureq::Error::Status(code, _) => (format!("豆包額度服務暫不可用（{code}）"), 60),
-            _ => ("無法連線豆包額度服務，請檢查網路或代理".into(), 30),
+            ureq::Error::Status(code, _) => (format!("豆包用量服務暫不可用（{code}）"), 60),
+            _ => ("無法連線豆包用量服務，請檢查網路或代理".into(), 30),
         })?;
     if (300..400).contains(&response.status()) { return Err((LOGIN_ERROR.into(), 0)); }
     let mut body = Vec::new();
-    response.into_reader().take(MAX_BODY + 1).read_to_end(&mut body).map_err(|_| ("讀取豆包額度失敗".into(), 30))?;
+    response.into_reader().take(MAX_BODY + 1).read_to_end(&mut body).map_err(|_| ("讀取豆包用量失敗".into(), 30))?;
     if body.len() as u64 > MAX_BODY { return Err((PARSE_ERROR.into(), 60)); }
     let value: Value = serde_json::from_slice(&body).map_err(|_| (PARSE_ERROR.into(), 60))?;
     parse(&value).map_err(|error| { let retry = if error == LOGIN_ERROR { 0 } else { 60 }; (error, retry) })

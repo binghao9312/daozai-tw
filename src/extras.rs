@@ -762,7 +762,7 @@ mod tests {
 
     #[test]
     fn settings_groups_keep_every_page_reachable() {
-        let groups = ["常規", "音樂與歌詞", "專注與飲水", "專注與飲水", "待辦與置物", "待辦與置物", "通知、信箱與日程", "通知、信箱與日程", "通知、信箱與日程", "關於", "頁面管理", "AI 額度", "天氣"];
+        let groups = ["常規", "音樂與歌詞", "專注與飲水", "專注與飲水", "待辦與置物", "待辦與置物", "通知、信箱與日程", "通知、信箱與日程", "通知、信箱與日程", "關於", "頁面管理", "AI 用量", "天氣"];
         for (tab, expected) in groups.iter().enumerate() {
             let matches: Vec<_> = SETTINGS_GROUPS.iter().filter(|(_,start,end)| (*start..=*end).contains(&tab)).collect();
             assert_eq!(matches.len(), 1, "頁面 {tab} 必須且只能屬於一個分組");
@@ -1282,7 +1282,7 @@ fn setting_choices(ui:&mut egui::Ui,title:&str,value:&mut u32,values:[u32;3],uni
 }
 const SETTINGS_GROUPS: [(&str,usize,usize);9] = [
     ("常規",0,0), ("頁面管理",10,10), ("音樂與歌詞",1,1), ("專注與飲水",2,3),
-    ("待辦與置物",4,5), ("通知、信箱與日程",6,8), ("AI 額度",11,11), ("天氣",12,12), ("關於",9,9),
+    ("待辦與置物",4,5), ("通知、信箱與日程",6,8), ("AI 用量",11,11), ("天氣",12,12), ("關於",9,9),
 ];
 
 impl App {
@@ -1365,7 +1365,7 @@ impl App {
                     }
                 }
                 ui.visuals_mut().selection.bg_fill=settings_color(ctx,Color32::from_rgb(45,105,165),Color32::from_rgb(209,226,248));
-                let titles=["常規","音樂與歌詞","專注","健康提醒","待辦","置物","通知","信箱","日程","關於","頁面管理","AI 額度","天氣"];
+                let titles=["常規","音樂與歌詞","專注","健康提醒","待辦","置物","通知","信箱","日程","關於","頁面管理","AI 用量","天氣"];
                 ui.label(egui::RichText::new(titles[self.settings_tab.min(12)]).size(18.0).strong().color(settings_color(ctx,Color32::WHITE,Color32::from_rgb(30,34,41))));
                 if let Some((_,start,end))=SETTINGS_GROUPS.iter().find(|(_,start,end)|(*start..=*end).contains(&self.settings_tab)) {
                     if start!=end {
@@ -1420,7 +1420,7 @@ impl App {
                         });
                         settings_label(ui,"功能頁面");
                         settings_card(ui,|ui|{
-                            let descriptions=["播放控制與同步歌詞","番茄鍾與休息計時","喝水與久坐提醒","臨時收納檔案位置","任務清單與到期提醒","郵件摘要與驗證碼","Agent 剩餘額度和帳號切換","月曆、郵件邀請與工作日程","當地天氣與七日預報"];
+                            let descriptions=["播放控制與同步歌詞","番茄鍾與休息計時","喝水與久坐提醒","臨時收納檔案位置","任務清單與到期提醒","郵件摘要與驗證碼","Agent 剩餘用量和帳號切換","月曆、郵件邀請與工作日程","當地天氣與七日預報"];
                             ui.label(egui::RichText::new("拖動左側手柄調整順序；關閉的功能不在後臺執行，不同步也不提醒，已有資料保留。").size(11.5).color(settings_color(ctx,Color32::from_gray(180),Color32::from_gray(75))));
                             #[derive(Clone)]
                             struct PageDrag(usize);
@@ -1535,7 +1535,7 @@ impl App {
                                 if settings_segmented(ui,&mut self.settings.dock,&docks,64.0) {self.settings.island_offset=0;}
                             });
                             if self.settings.dock.is_side() {
-                                ui.label(egui::RichText::new("收起時豎向排列時間、電池、播放、專注和 AI 額度；展開面板從螢幕邊緣滑出。吉祥物和島上歌詞只在頂部停靠時顯示。").size(11.0).color(ui.visuals().weak_text_color()));
+                                ui.label(egui::RichText::new("收起時豎向排列時間、電池、播放、專注和 AI 用量；展開面板從螢幕邊緣滑出。吉祥物和島上歌詞只在頂部停靠時顯示。").size(11.0).color(ui.visuals().weak_text_color()));
                             }
                             ui.add_space(4.0);
                             let side=self.settings.dock.is_side();

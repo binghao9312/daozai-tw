@@ -246,7 +246,7 @@ mod tests {
                 boxes.sort_by(|a,b|a.0.total_cmp(&b.0));
                 assert!(boxes.windows(2).all(|p|p[1].0-p[0].1>=6.9));
                 assert!(boxes.last().unwrap().1<=layout.width/2.0-15.9);
-                assert!(layout.clearance(WEATHER)>0.99,"天氣與額度環不應對撞：{layout:?}");
+                assert!(layout.clearance(WEATHER)>0.99,"天氣與用量環不應對撞：{layout:?}");
             }}
         }
     }

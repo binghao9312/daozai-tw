@@ -39,15 +39,15 @@ pub fn validate_unit(unit:&str)->Result<(),String>{
     if unit.is_empty()||unit.chars().count()>16||unit.chars().any(char::is_control){return Err("查詢結果的單位無效".into());}Ok(())
 }
 pub fn parse_result(value:&Value,source:&str)->Result<Snapshot,String>{
-    let rows:Vec<_>=match value.as_array(){Some(rows)if !rows.is_empty()&&rows.len()<=32=>rows.iter().collect(),Some(_)=>return Err("查詢指令碼返回的額度列表為空或過多".into()),None=>vec![value]};
+    let rows:Vec<_>=match value.as_array(){Some(rows)if !rows.is_empty()&&rows.len()<=32=>rows.iter().collect(),Some(_)=>return Err("查詢指令碼返回的用量列表為空或過多".into()),None=>vec![value]};
     let mut amounts=Vec::new();let mut windows=Vec::new();
     for row in rows{
         if !row.is_object(){return Err("查詢指令碼應返回物件或物件陣列".into());}
         if !row["isValid"].is_null()&&row["isValid"].as_bool()!=Some(true){return Err("查詢指令碼返回的帳號狀態無效，請檢查憑據與介面".into());}
-        for name in ["remaining","total","used"]{if !row[name].is_null()&&super::numeric(&row[name]).is_none(){return Err("查詢指令碼返回的額度欄位無效".into());}}
+        for name in ["remaining","total","used"]{if !row[name].is_null()&&super::numeric(&row[name]).is_none(){return Err("查詢指令碼返回的用量欄位無效".into());}}
         for name in ["unit","planName","extra","invalidMessage"]{if !row[name].is_null()&&!row[name].is_string(){return Err("查詢指令碼返回的說明欄位無效".into());}}
         let unit=row["unit"].as_str().unwrap_or("站點單位");validate_unit(unit)?;
-        let label=row["planName"].as_str().filter(|s|!s.is_empty()).unwrap_or("剩餘額度");
+        let label=row["planName"].as_str().filter(|s|!s.is_empty()).unwrap_or("剩餘用量");
         if label.chars().count()>128||label.chars().any(char::is_control){return Err("查詢指令碼返回的套餐名稱無效".into());}
         let total=super::numeric(&row["total"]);let used=super::numeric(&row["used"]);
         let remaining=super::numeric(&row["remaining"]).or_else(||total.zip(used).map(|(t,u)|t-u)).filter(|n|n.is_finite());
@@ -68,7 +68,7 @@ pub fn request(agent:&ureq::Agent,base:&str,credential:&Credential,cancelled:imp
     let origin=url::Url::parse(&base).unwrap();
     if url.scheme()!="https"||url.origin()!=origin.origin()||!url.username().is_empty()||url.password().is_some()||url.fragment().is_some(){return Err(("查詢指令碼必須請求所填站點的 HTTPS 介面".into(),0));}
     let method=config["method"].as_str().unwrap_or("GET");
-    if !matches!(method,"GET"|"POST"){return Err(("額度查詢指令碼僅支援 GET 或 POST".into(),0));}
+    if !matches!(method,"GET"|"POST"){return Err(("用量查詢指令碼僅支援 GET 或 POST".into(),0));}
     let mut request=agent.request(method,url.as_str()).set("Accept","application/json").timeout(Duration::from_secs(15));
     if !config["headers"].is_null(){
         let headers=config["headers"].as_object().ok_or(("查詢指令碼的 headers 應為物件".into(),0))?;

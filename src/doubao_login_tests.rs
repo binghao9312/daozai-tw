@@ -139,10 +139,10 @@ fn doubao_browser_transport_local() {
 }
 
 #[test]
-#[ignore = "只讀驗證本機豆包當前登入及額度，不儲存憑據"]
+#[ignore = "只讀驗證本機豆包當前登入及用量，不儲存憑據"]
 fn doubao_local_live_read_only() {
     let header = local().expect("讀取本機豆包當前登入");
-    let snapshot = super::super::request(&super::super::super::http_agent(), ENDPOINT, &header).map_err(|error|error.0).expect("只讀查詢豆包額度");
+    let snapshot = super::super::request(&super::super::super::http_agent(), ENDPOINT, &header).map_err(|error|error.0).expect("只讀查詢豆包用量");
     assert!(!snapshot.windows.is_empty());
-    println!("本機豆包識別及額度查詢透過：{} 個週期，{} 項額外額度", snapshot.windows.len(), snapshot.extra.len());
+    println!("本機豆包識別及用量查詢透過：{} 個週期，{} 項額外用量", snapshot.windows.len(), snapshot.extra.len());
 }

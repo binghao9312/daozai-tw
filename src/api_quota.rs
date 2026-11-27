@@ -95,12 +95,12 @@ fn retained_cleanup(slots:Vec<String>,active:&[&str],mut delete:impl FnMut(&str)
     slots.into_iter().filter(|s|!active.contains(&s.as_str())&&delete(s).is_err()).collect()
 }
 fn persisted_active_slots(value:&serde_json::Value)->Result<Vec<String>,String>{
-    let accounts=value["accounts"].as_array().ok_or("額度配置不完整，已暫停憑據清理")?;
+    let accounts=value["accounts"].as_array().ok_or("用量配置不完整，已暫停憑據清理")?;
     let mut active=Vec::new();
     for row in accounts{
-        let provider=row["provider"].as_str().and_then(Provider::parse).ok_or("額度配置含未知帳號，已暫停憑據清理")?;
-        if row["id"].as_str().is_none()||row["alias"].as_str().is_none()||row["source"].as_str().is_none(){return Err("額度帳號配置不完整，已暫停憑據清理".into());}
-        if provider.api_key(){active.push(row["slot"].as_str().filter(|s|!s.is_empty()).ok_or("額度憑據引用缺失，已暫停清理")?.into());}
+        let provider=row["provider"].as_str().and_then(Provider::parse).ok_or("用量配置含未知帳號，已暫停憑據清理")?;
+        if row["id"].as_str().is_none()||row["alias"].as_str().is_none()||row["source"].as_str().is_none(){return Err("用量帳號配置不完整，已暫停憑據清理".into());}
+        if provider.api_key(){active.push(row["slot"].as_str().filter(|s|!s.is_empty()).ok_or("用量憑據引用缺失，已暫停清理")?.into());}
     }
     Ok(active)
 }
@@ -108,7 +108,7 @@ pub fn cleanup_pending(config:&Config)->Result<(),String>{
     let slots=journal_read()?;if slots.is_empty(){return Ok(());}
     // Never interpret Config::load's recovery default as evidence of no accounts.
     let raw=std::fs::read(crate::model::config_dir().join("ai-quota.json")).map_err(|_|"無法確認已儲存帳號，已暫停憑據清理")?;
-    let value=serde_json::from_slice(&raw).map_err(|_|"額度配置損壞，已暫停憑據清理")?;
+    let value=serde_json::from_slice(&raw).map_err(|_|"用量配置損壞，已暫停憑據清理")?;
     let persisted=persisted_active_slots(&value)?;
     let mut active:Vec<_>=config.accounts.iter().filter(|a|a.provider.api_key()).filter_map(|a|a.slot.as_deref()).collect();
     active.extend(persisted.iter().map(String::as_str));

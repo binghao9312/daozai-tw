@@ -2576,11 +2576,11 @@ fn resident_quota_moves_left_and_releases_battery_space(){
     for _ in 0..90 {h.frame(vec![]);}
     let before=h.quota_centers()[0];let width=h.app.current_width();assert!(before>WIN_W/2.0);
     h.app.settings.show_battery=false;for _ in 0..90 {h.frame(vec![]);}
-    let after=h.quota_centers()[0];assert!(after<WIN_W/2.0,"關閉電量後，額度應補到時間左側");
+    let after=h.quota_centers()[0];assert!(after<WIN_W/2.0,"關閉電量後，用量應補到時間左側");
     assert!(h.app.current_width()<width-20.0,"關閉元件後應釋放實際佔位");
     h.app.settings.show_battery=true;h.power=(None,false);for _ in 0..90 {h.frame(vec![]);}
     assert!((h.quota_centers()[0]-after).abs()<0.2,"無電池裝置應採用相同補位佈局");
-    h.click(Pos2::new(after,15.0));assert_eq!(h.app.page(),6,"補位後仍可點選額度圓環");
+    h.click(Pos2::new(after,15.0));assert_eq!(h.app.page(),6,"補位後仍可點選用量圓環");
 }
 
 #[test]
@@ -2589,7 +2589,7 @@ fn resident_quotas_coexist_with_music_and_focus(){
     h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};
     h.app.pomo.running=true;h.app.pomo.remaining=600.0;
     for _ in 0..90 {h.frame(vec![]);}
-    assert_eq!(h.quota_centers().len(),3,"播放和專注狀態不應擠掉常駐額度");
+    assert_eq!(h.quota_centers().len(),3,"播放和專注狀態不應擠掉常駐用量");
     assert!(h.app.current_width()<PW,"多元件應在單行內排布");
     h.app.settings.minimal=true;for _ in 0..90 {h.frame(vec![]);}
     assert!(h.quota_centers().is_empty());assert!(h.region.height()<20.0,"仍須尊重極簡開關");
@@ -2679,7 +2679,7 @@ fn quota_text_stays_inside_the_inner_ring_at_zero_and_full_usage() {
             let rect=text.visual_bounding_rect();
             if rect.center().distance(center)<35.0 {
                 for corner in [rect.left_top(),rect.right_top(),rect.left_bottom(),rect.right_bottom()] {
-                    assert!(corner.distance(center)+0.5<inner,"{} 的文字不得碰到額度環，雙週期={dual}，剩餘={remaining}",text.galley.text());
+                    assert!(corner.distance(center)+0.5<inner,"{} 的文字不得碰到用量環，雙週期={dual}，剩餘={remaining}",text.galley.text());
                 }
             }
         }}
@@ -2734,7 +2734,7 @@ fn kiro_ring_uses_logo_for_all_point_balances_and_skins(){
         let center=H::local(103.0,105.0);
         let logo=h.shapes.iter().find_map(|shape|match &shape.shape{egui::Shape::Mesh(mesh)=>{let rect=mesh.calc_bounds();(rect.center().distance(center)<0.8&&(30.0..36.0).contains(&rect.width())).then_some(rect)},_=>None}).expect("圓環中心應顯示 Kiro 標識");
         for corner in [logo.left_top(),logo.right_top(),logo.left_bottom(),logo.right_bottom()]{assert!(corner.distance(center)<27.5,"{skin:?} 的標識應位於圓環內");}
-        assert!(!find("月度額度剩餘").intersects(find(&full)),"{skin:?} {remaining} 點的標籤重疊");
+        assert!(!find("月度用量剩餘").intersects(find(&full)),"{skin:?} {remaining} 點的標籤重疊");
     }}
 }
 
@@ -2747,7 +2747,7 @@ fn kiro_logo_and_point_details_fit_the_card(){
     h.app.quota.config.selected="kiro".into();
     let reset=Some((chrono::Local::now()+chrono::Duration::days(20)).timestamp());
     h.app.quota_event(Event{id:"kiro".into(),result:Ok(Snapshot{kiro:kiro_snapshot(904.09,1000.0).kiro,plan:"KIRO PRO".into(),at:chrono::Utc::now().timestamp(),
-        windows:vec![Window{label:"月度額度".into(),seconds:None,remaining:90.4,reset,amount:Some(Amount::new(904.09,1000.0))}],..Default::default()})});
+        windows:vec![Window{label:"月度用量".into(),seconds:None,remaining:90.4,reset,amount:Some(Amount::new(904.09,1000.0))}],..Default::default()})});
     h.app.show_page(6);h.hover(H::local(300.0,60.0),1.0);
     let center=H::local(103.0,105.0);
     let inner=h.shapes.iter().filter_map(|shape|match &shape.shape{
@@ -2756,10 +2756,10 @@ fn kiro_logo_and_point_details_fit_the_card(){
         _=>None}).reduce(f32::min).unwrap_or(35.0);
     let text=|wanted:&str|h.shapes.iter().find_map(|shape|match &shape.shape{egui::Shape::Text(text)if text.galley.text()==wanted=>Some(text.visual_bounding_rect()),_=>None});
     let logo=h.shapes.iter().find_map(|shape|match &shape.shape{egui::Shape::Mesh(mesh)=>{let rect=mesh.calc_bounds();(rect.center().distance(center)<0.8&&(30.0..36.0).contains(&rect.width())).then_some(rect)},_=>None}).expect("圓環中心應顯示 Kiro 標識");
-    for corner in [logo.left_top(),logo.right_top(),logo.left_bottom(),logo.right_bottom()]{assert!(corner.distance(center)+0.5<inner,"標識應位於額度環內");}
+    for corner in [logo.left_top(),logo.right_top(),logo.left_bottom(),logo.right_bottom()]{assert!(corner.distance(center)+0.5<inner,"標識應位於用量環內");}
     let center_area=Rect::from_center_size(center,Vec2::splat(40.0));
     assert!(!h.shapes.iter().any(|shape|matches!(&shape.shape,egui::Shape::Text(t) if center_area.intersects(t.visual_bounding_rect()))),"圓環中心應只顯示 Kiro 標識");
-    let label=text("月度額度剩餘").expect("週期說明");let value=text("904.1 / 1000 點").expect("剩餘量與總額");
+    let label=text("月度用量剩餘").expect("週期說明");let value=text("904.1 / 1000 點").expect("剩餘量與總額");
     assert!(!label.intersects(value),"說明與數值不得重疊");
     assert!(h.shapes.iter().any(|shape|matches!(&shape.shape,egui::Shape::Text(text) if text.galley.text()=="Kiro · KIRO PRO")),"套餐名應顯示");
     if let Some(dest)=std::env::var_os("DAOZAI_KIRO_PREVIEW_DIR"){
@@ -2785,7 +2785,7 @@ fn kiro_credits_follow_the_ring_on_the_resident_bar(){
     h.app.quota.config.accounts.push(crate::quota::Account{id:"kiro".into(),provider:Provider::Kiro,alias:"Kiro".into(),source:"kiro.json".into(),slot:None,enabled:true,pinned:true});
     h.app.quota.config.selected="kiro".into();
     h.app.quota_event(Event{id:"kiro".into(),result:Ok(Snapshot{kiro:kiro_snapshot(904.09,1000.0).kiro,plan:"KIRO PRO".into(),at:chrono::Utc::now().timestamp(),
-        windows:vec![Window{label:"月度額度".into(),seconds:None,remaining:90.4,reset:None,amount:Some(Amount::new(904.09,1000.0))}],..Default::default()})});
+        windows:vec![Window{label:"月度用量".into(),seconds:None,remaining:90.4,reset:None,amount:Some(Amount::new(904.09,1000.0))}],..Default::default()})});
     for _ in 0..60{h.frame(vec![]);}
     assert_eq!(h.app.quota_bar_indices().len(),1,"點數的 Kiro 帳號應常駐");
     let slot=crate::bar_layout::quota_slot(0);
@@ -2797,7 +2797,7 @@ fn kiro_credits_follow_the_ring_on_the_resident_bar(){
     assert!(text.center().y<30.0,"點數應與圖示同一行");
     assert!((text.left()-ring-15.5).abs()<2.5,"點數緊跟環右側：ring={ring} text={:?}",text);
     h.click(text.center());
-    assert_eq!(h.app.page(),6,"點數字也能開啟額度頁");
+    assert_eq!(h.app.page(),6,"點數字也能開啟用量頁");
 }
 
 #[test]
@@ -2830,7 +2830,7 @@ fn kiro_resident_bar_preview(){
     let mut h=H::new();h.app.settings.pet=false;h.app.settings.show_battery=true;h.quota_accounts(1);
     h.app.quota.config.accounts.push(crate::quota::Account{id:"kiro".into(),provider:Provider::Kiro,alias:"Kiro".into(),source:"kiro.json".into(),slot:None,enabled:true,pinned:true});
     h.app.quota_event(Event{id:"kiro".into(),result:Ok(Snapshot{kiro:kiro_snapshot(904.09,1000.0).kiro,plan:"KIRO PRO".into(),at:chrono::Utc::now().timestamp(),
-        windows:vec![Window{label:"月度額度".into(),seconds:None,remaining:90.4,reset:None,amount:Some(Amount::new(904.09,1000.0))}],..Default::default()})});
+        windows:vec![Window{label:"月度用量".into(),seconds:None,remaining:90.4,reset:None,amount:Some(Amount::new(904.09,1000.0))}],..Default::default()})});
     let wb=h.app.quota.config.connect_workbuddy("preview".into(),"WorkBuddy".into());
     h.app.quota_event(Event{id:wb,result:crate::quota::parse(Provider::WorkBuddy,&serde_json::json!({"code":0,"data":{"Packages":[{"CycleRemainCapacity":"1970"}],"CreditGroups":[{"Kind":"plan_base","CycleRemainCapacity":"1970"}]}}))});
     let mut raster=crate::preview_raster::Raster::new(1280,380);
@@ -2877,8 +2877,8 @@ fn kiro_simulated_states_gallery(){
             }
             match scene{
                 "loading"=>{h.app.quota.busy.insert(id.clone());},
-                "expired"=>h.app.quota_event(Event{id:id.clone(),result:Err("Kiro 登入已過期，請開啟 Kiro 重新登入後重新整理額度".into())}),
-                "stale"=>{h.app.quota_event(Event{id:id.clone(),result:Err("無法連線 Kiro 額度服務，請檢查網路或代理".into())});assert_eq!(h.app.quota.rows[&id].as_ref().unwrap().at,at);assert!(h.app.quota.stale.contains_key(&id));},
+                "expired"=>h.app.quota_event(Event{id:id.clone(),result:Err("Kiro 登入已過期，請開啟 Kiro 重新登入後重新整理用量".into())}),
+                "stale"=>{h.app.quota_event(Event{id:id.clone(),result:Err("無法連線 Kiro 用量服務，請檢查網路或代理".into())});assert_eq!(h.app.quota.rows[&id].as_ref().unwrap().at,at);assert!(h.app.quota.stale.contains_key(&id));},
                 "identity"=>{
                     let account=h.app.quota.config.accounts[0].clone();let mut other=value.clone();other["userInfo"]["userId"]=serde_json::json!("simulation-user-b");let other=crate::quota::parse(Provider::Kiro,&other).unwrap();
                     let error=crate::quota::kiro::check_owner(&account,&other).unwrap_err();h.app.quota_event(Event{id:id.clone(),result:Err(error)});
@@ -2899,7 +2899,7 @@ fn kiro_simulated_states_gallery(){
                 for frame in 0..8{
                     let root=h.ctx.run(egui::RawInput::default(),|ctx|h.app.settings_ui(ctx,false));raster.update_textures(&root.textures_delta);let child=output.lock().unwrap().take().unwrap();raster.update_textures(&child.textures_delta);
                     if frame==7{
-                        if scene=="identity"{let count=child.shapes.iter().filter_map(|s|match &s.shape{egui::Shape::Text(t)=>Some(t.galley.text().matches("月度額度").count()),_=>None}).sum::<usize>();assert_eq!(count,1,"普通套餐只顯示一行月度額度");}
+                        if scene=="identity"{let count=child.shapes.iter().filter_map(|s|match &s.shape{egui::Shape::Text(t)=>Some(t.galley.text().matches("月度用量").count()),_=>None}).sum::<usize>();assert_eq!(count,1,"普通套餐只顯示一行月度用量");}
                         raster.buf.fill([0.20,0.24,0.32,1.0]);raster.draw(&h.ctx.tessellate(child.shapes,child.pixels_per_point),child.pixels_per_point);let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);image::save_buffer(dest.join(format!("{theme}-{scene}.png")),&rgba,1035,930,image::ColorType::Rgba8).unwrap();}
                     raster.free_textures(&root.textures_delta);raster.free_textures(&child.textures_delta);
                 }
@@ -2973,8 +2973,8 @@ fn quota_update_status_is_visible_for_every_provider_and_keeps_failed_data(){
             shoot_feature(&mut h,&mut raster,&dest,&format!("quota-{}",provider.name()),90,Some(H::local(300.0,60.0)),"2026-11-07");
         }
         h.hover(H::local(300.0,60.0),1.0);
-        assert_eq!(h.app.expanded_height(),176.0,"{provider:?} 額度頁應採用同寬加高的佈局");
-        assert!((h.app.current_width()-PW).abs()<0.1,"{provider:?} 額度頁應保持原有寬度：{}",h.app.current_width());
+        assert_eq!(h.app.expanded_height(),176.0,"{provider:?} 用量頁應採用同寬加高的佈局");
+        assert!((h.app.current_width()-PW).abs()<0.1,"{provider:?} 用量頁應保持原有寬度：{}",h.app.current_width());
         let expected=if provider==Provider::Claude{format!("本地記錄 · {time}")}else if provider==Provider::DeepSeek{format!("CNY · {time} 更新")}else{format!("{time} 更新")};
         let status=h.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Text(t)if t.galley.text()==expected=>Some(t.visual_bounding_rect()),_=>None}).unwrap_or_else(||panic!("{provider:?} 缺少更新時間：{expected}"));
         assert!(status.bottom()+6.0<=H::local(0.0,h.app.expanded_height()-9.2).y,"{provider:?} 更新時間 {status:?} 應與分頁圓點留出間距");
@@ -2996,7 +2996,7 @@ fn quota_update_status_is_visible_for_every_provider_and_keeps_failed_data(){
 fn quota_page_navigation_tracks_the_taller_panel(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.quota_accounts(1);
     h.app.show_page(6);h.hover(H::local(300.0,60.0),0.8);
-    assert!((h.hit.height()-178.0).abs()<0.2,"額度頁新增的底部空間應屬於命中區域");
+    assert!((h.hit.height()-178.0).abs()<0.2,"用量頁新增的底部空間應屬於命中區域");
     let dot=h.shapes.iter().find_map(|shape|match &shape.shape{
         egui::Shape::Rect(rect) if (rect.rect.width()-4.0).abs()<0.1&&(rect.rect.height()-4.0).abs()<0.1&&(rect.rect.center().y-168.8).abs()<0.1=>Some(rect.rect.center()),_=>None,
     }).expect("分頁圓點應隨加高的面板下移");
@@ -3057,7 +3057,7 @@ fn quota_accounts_switch_independently_and_hide_with_the_page() {
     assert_eq!(crate::quota::Config::load().selected,"work");
     h.app.set_page_visible(6,false);assert!(h.app.quota_bar_indices().is_empty());assert_ne!(h.app.page,6);
     h.app.quota.config.accounts.retain(|a|a.id!="work");h.app.quota_event(crate::quota::Event{id:"work".into(),result:Ok(Default::default())});
-    assert!(h.app.quota.rows["work"].is_err(),"移除帳號後不得接收晚到的額度資料");
+    assert!(h.app.quota.rows["work"].is_err(),"移除帳號後不得接收晚到的用量資料");
 }
 
 #[test]
@@ -3527,7 +3527,7 @@ fn mascot_stays_beside_the_clock_and_all_resident_components(){
     for _ in 0..120 {h.frame(vec![]);}let width=h.app.current_width();
     h.app.settings.pet=true;for _ in 0..120 {h.frame(vec![]);}
     assert!((h.app.current_width()-width-44.0).abs()<0.1,"島仔應有獨立常駐位置");
-    assert_eq!(h.quota_centers().len(),5,"五個常駐帳號均顯示額度環");
+    assert_eq!(h.quota_centers().len(),5,"五個常駐帳號均顯示用量環");
     assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="09:41")),"島仔與時鐘共存");
     assert!(h.shapes.iter().filter(|s|matches!(&s.shape,egui::Shape::Path(p) if p.points.len()==13 && (p.stroke.width-3.6).abs()<0.01)).count()>=2,"沒有閒置或懸停也應顯示眼睛");
 }
@@ -6779,7 +6779,7 @@ fn skin_gallery(){
 }
 
 #[test]
-#[ignore = "按需匯出：帶 AI 額度與吉祥物的收起態，以及設定頁常駐排列預覽"]
+#[ignore = "按需匯出：帶 AI 用量與吉祥物的收起態，以及設定頁常駐排列預覽"]
 fn skin_gallery_resident(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let dest=std::path::PathBuf::from(std::env::var_os("DAOZAI_SKIN_PREVIEW_DIR").expect("需指定預覽目錄"));
@@ -6983,7 +6983,7 @@ fn quota_cards_expose_names_colors_settings_and_connection(){
 }
 
 #[test]
-#[ignore = "按需匯出卡片式 AI 額度設定頁"]
+#[ignore = "按需匯出卡片式 AI 用量設定頁"]
 fn quota_cards_settings_gallery(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let dest=std::path::PathBuf::from(std::env::var_os("DAOZAI_DEEPSEEK_PREVIEW_DIR").expect("需指定預覽目錄"));
     for (name,width,light,dialog) in [("dark",690.0,false,false),("light",690.0,true,false),("wide",900.0,false,false),("connect",690.0,false,true),("narrow",600.0,false,false)]{
@@ -7164,7 +7164,7 @@ fn side_dock_stacks_ai_quota_and_opens_the_account(){
     let items=h.app.quota_side_items();
     assert_eq!(items.len(),h.app.quota.config.pinned_indices().len());
     let order:Vec<_>=items.iter().map(|(i,_)|h.app.quota.config.accounts[*i].provider).collect();
-    assert!(items.iter().any(|(i,_)|h.app.quota.config.accounts[*i].id==wb),"WorkBuddy 應在豎向額度裡");
+    assert!(items.iter().any(|(i,_)|h.app.quota.config.accounts[*i].id==wb),"WorkBuddy 應在豎向用量裡");
     // 膠囊變長以容納額度，仍完整留在畫布內並豎直居中。
     let out=side_frame(&mut h,away);
     assert!(out.hit.height()>32.0+38.0*2.0,"{:?} {order:?}",out.hit);
@@ -8236,7 +8236,7 @@ fn claude_local_only_settings_show_notice_without_manual_reset_controls(){
             for phrase in ["手動設定重置時間","儲存時間","清除手動時間","預設預選","手動填寫"]{
                 assert!(!h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text().contains(phrase))),"已撤回的手動時間入口及提示不應顯示：{phrase}");
             }
-            assert_eq!(h.app.quota.rows[&account.id].as_ref().unwrap().windows,snapshot.windows,"撤回輸入功能不能影響額度資料");
+            assert_eq!(h.app.quota.rows[&account.id].as_ref().unwrap().windows,snapshot.windows,"撤回輸入功能不能影響用量資料");
             let name=format!("{}-{}",if connection{"connection"}else{"account"},if dark{"dark"}else{"light"});capture(&h,&mut raster,&name);
         }
         assert!(h.app.quota.gemini_connecting.is_none()&&h.app.quota.workbuddy_connecting.is_none()&&h.app.quota.login.is_none());
@@ -8492,7 +8492,7 @@ fn quota_acceptance_monthly_limit_is_visible_on_the_card() {
     let snapshot=plans::parse(plans::PlanProvider::OpenCodeGo,&serde_json::json!({"usage":{"rolling":{"percent":20},"weekly":{"percent":30},"monthly":{"percent":100}}})).unwrap();
     h.app.quota.config.accounts=vec![Account{id:"preview".into(),provider:Provider::OpenCodeGo,alias:"OpenCode Go".into(),source:Default::default(),slot:None,enabled:true,pinned:false}];
     h.app.quota.config.selected="preview".into();h.app.quota.rows.insert("preview".into(),Ok(snapshot));h.app.show_page(6);h.hover(H::local(230.0,65.0),1.0);
-    assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text().contains("本月"))),"月額度已經用完，但卡片沒有直接顯示本月限制");
+    assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text().contains("本月"))),"月用量已經用完，但卡片沒有直接顯示本月限制");
 }
 
 #[test]
@@ -8514,7 +8514,7 @@ fn quota_acceptance_relay_subscription_exhausted_week_is_visible() {
     let snapshot=relay::parse_sub2api(&serde_json::json!({"mode":"unrestricted","isValid":true,"unit":"USD","remaining":0,"subscription":{"daily_limit_usd":10,"daily_usage_usd":2,"weekly_limit_usd":20,"weekly_usage_usd":20}})).unwrap();
     h.app.quota.config.accounts=vec![Account{id:"relay".into(),provider:Provider::Sub2Api,alias:"工作中轉".into(),source:"https://relay.example".into(),slot:None,enabled:true,pinned:false}];h.app.quota.config.selected="relay".into();h.app.quota.rows.insert("relay".into(),Ok(snapshot));h.app.show_page(6);h.hover(H::local(230.0,65.0),1.0);
     assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text().contains("每週"))),"卡片必須顯示已耗盡的套餐週期");
-    assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="0%")),"套餐剩餘額度應顯示百分比");
+    assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="0%")),"套餐剩餘用量應顯示百分比");
 }
 
 #[test]
@@ -8709,7 +8709,7 @@ fn quota_acceptance_period_colors_match_the_drawn_rings() {
         for (i,color) in expected.into_iter().enumerate(){
             let center=egui::pos2(159.0,79.0+i as f32*23.0);
             let dot=output.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Circle(c)if(c.radius-2.5).abs()<0.01&&c.center.distance(center)<0.01=>Some(c.fill),_=>None}).expect("應顯示週期色點");
-            assert_eq!(dot,color,"週期色點應對應實際圓環，未畫入圓環的工具額度使用灰色");
+            assert_eq!(dot,color,"週期色點應對應實際圓環，未畫入圓環的工具用量使用灰色");
         }
     }
 }
@@ -8837,7 +8837,7 @@ fn background_services_follow_the_module_switch(){
 
 #[test]
 fn every_module_settings_tab_maps_to_its_page(){
-    let titles=["常規","音樂與歌詞","專注","健康提醒","待辦","置物","通知","信箱","日程","關於","頁面管理","AI 額度","天氣"];
+    let titles=["常規","音樂與歌詞","專注","健康提醒","待辦","置物","通知","信箱","日程","關於","頁面管理","AI 用量","天氣"];
     let mut pages:Vec<_>=(0..titles.len()).filter_map(crate::extras::settings_tab_module).collect();
     for tab in 0..titles.len() {
         if let Some(page)=crate::extras::settings_tab_module(tab) {assert!(crate::app::PAGE_NAMES[page].chars().next()==titles[tab].chars().next(),"{} ↔ {}",titles[tab],crate::app::PAGE_NAMES[page]);}
@@ -9156,6 +9156,46 @@ fn liquid_glass_and_settings_controls_persist_and_render_without_clipping() {
                 _ => None,
             }).unwrap_or_else(|| panic!("設定分頁 {tab} 缺少文字 {label}"));
             assert!(found.0.contains_rect(found.1), "設定分頁 {tab} 文字 {label} 被裁切：{:?} vs {:?}", found.0, found.1);
+        }
+    }
+}
+
+#[test]
+#[ignore="按需用本機 ai-quota 設定與快取匯出 Antigravity / Codex 用量畫面，不發出網路請求"]
+fn quota_local_accounts_gallery(){
+    use crate::quota::{Config,Event,Snapshot};
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
+    let dest=std::path::PathBuf::from(std::env::var_os("DAOZAI_QUOTA_PREVIEW_DIR").expect("需指定預覽目錄"));std::fs::create_dir_all(&dest).unwrap();
+    let config=Config::load();assert!(!config.accounts.is_empty(),"本機尚未設定用量帳號");
+    let cache:serde_json::Value=serde_json::from_slice(&std::fs::read(crate::model::config_dir().join("ai-quota-cache.json")).unwrap()).unwrap();
+    let mut scenes:Vec<Option<String>>=config.accounts.iter().map(|a|Some(a.id.clone())).collect();scenes.push(None);
+    for scene in scenes{
+        let mut h=H::new();h.app.settings.skin=crate::model::Skin::Classic;h.app.settings.pet=false;
+        h.app.quota.config=config.clone();if let Some(id)=&scene{h.app.quota.config.selected=id.clone();}
+        for a in &config.accounts{let snapshot:Snapshot=serde_json::from_value(cache[&a.id]["snapshot"].clone()).expect("快取中應有該帳號用量");h.app.quota_event(Event{id:a.id.clone(),result:Ok(snapshot)});}
+        let Some(id)=scene else{
+            h.app.settings.settings_theme=crate::settings_theme::SettingsTheme::Dark;h.app.settings_tab=11;h.app.open_settings();h.ctx.set_embed_viewports(false);
+            let size=egui::vec2(690.0,620.0);let ppp=1.5;let output=std::sync::Arc::new(Mutex::new(None));let capture=output.clone();
+            egui::Context::set_immediate_viewport_renderer(move|ctx,mut viewport|{let id=viewport.ids.this;let raw=egui::RawInput{viewport_id:id,screen_rect:Some(Rect::from_min_size(Pos2::ZERO,size)),viewports:std::iter::once((id,egui::ViewportInfo{native_pixels_per_point:Some(ppp),..Default::default()})).collect(),..Default::default()};*capture.lock().unwrap()=Some(ctx.run(raw,|ctx|(viewport.viewport_ui_cb)(ctx)));});
+            let mut raster=crate::preview_raster::Raster::new(1035,930);
+            for frame in 0..8{
+                let root=h.ctx.run(egui::RawInput::default(),|ctx|h.app.settings_ui(ctx,false));raster.update_textures(&root.textures_delta);let child=output.lock().unwrap().take().unwrap();raster.update_textures(&child.textures_delta);
+                if frame==7{raster.buf.fill([0.20,0.24,0.32,1.0]);raster.draw(&h.ctx.tessellate(child.shapes,child.pixels_per_point),child.pixels_per_point);let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);image::save_buffer(dest.join("settings.png"),&rgba,1035,930,image::ColorType::Rgba8).unwrap();}
+                raster.free_textures(&root.textures_delta);raster.free_textures(&child.textures_delta);
+            }
+            continue;
+        };
+        let name=config.accounts.iter().find(|a|a.id==id).unwrap().provider.name().to_lowercase();
+        h.app.show_page(6);let mut raster=feature_raster();
+        for frame in 0..75{
+            h.t+=1.0/60.0;let cursor=Some(H::local(300.0,60.0));
+            let env=Env{t:h.t,clock:"20:10:00".into(),today:"2026-11-27".into(),date:"11月27日 週五".into(),cursor,bt_ready:true,..Default::default()};
+            let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(crate::app::CANVAS_W,WIN_H))),time:Some(h.t),events:vec![egui::Event::PointerMoved(cursor.unwrap())],viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(2.0),..Default::default()})).collect(),..Default::default()};
+            let output=h.ctx.run(raw,|ctx|{egui::CentralPanel::default().frame(egui::Frame::NONE).show(ctx,|ui|{h.app.frame(ui,Rect::from_min_size(ui.max_rect().min,Vec2::new(WIN_W,WIN_H)),&env);});});raster.update_textures(&output.textures_delta);
+            if frame==74{
+                raster.buf.fill([0.20,0.24,0.32,1.0]);raster.draw(&h.ctx.tessellate(output.shapes,output.pixels_per_point),output.pixels_per_point);let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);
+                let image=image::RgbaImage::from_raw(raster.w as u32,raster.h as u32,rgba).unwrap();image::imageops::crop_imm(&image,200,0,880,380).to_image().save(dest.join(format!("island-{name}.png"))).unwrap();
+            }raster.free_textures(&output.textures_delta);
         }
     }
 }

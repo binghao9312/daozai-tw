@@ -78,7 +78,7 @@ fn desktop_record(path:&Path,account:Option<&Account>,verified_cache:&Path)->Res
             a.cached_snapshot(&serde_json::from_slice(&raw).ok()?)
         }).ok_or("請在 Claude 桌面版開啟用量頁面，等待當前帳號產生新記錄")?;
     }
-    if snapshot.windows.is_empty(){return Err("Claude 本地記錄暫無可用額度".into());}
+    if snapshot.windows.is_empty(){return Err("Claude 本地記錄暫無可用用量".into());}
     if desktop_identity(path)?!=(owner,login_stamp){return Err("Claude 帳號配置已變化，請重新整理重試".into());}
     Ok((account_slot,snapshot))
 }
@@ -107,7 +107,7 @@ pub(super) fn fetch(account:&Account)->Result<Snapshot,String>{
                 snapshot.windows.push(Window{label:label.into(),seconds:Some(seconds),remaining:(100.0-used) as f32,reset,amount:None});
             }
         }
-        if snapshot.windows.is_empty(){return Err(if collector_connected(&path){"尚無有效的 Claude Code 本地額度，等待下一次使用".into()}else{COLLECTOR_LOST.into()});}
+        if snapshot.windows.is_empty(){return Err(if collector_connected(&path){"尚無有效的 Claude Code 本地用量，等待下一次使用".into()}else{COLLECTOR_LOST.into()});}
         (slot,snapshot)
     };
     if account.slot.as_deref()!=Some(slot.as_str()){return Err("Claude 本地帳號已變化，請重新連線".into());}
@@ -117,7 +117,7 @@ pub(super) fn fetch(account:&Account)->Result<Snapshot,String>{
         snapshot.drop_expired_windows(chrono::Utc::now().timestamp());
         if snapshot.windows.is_empty(){
             let at=chrono::DateTime::from_timestamp(snapshot.at,0).map(|t|t.with_timezone(&chrono::Local).format("%m-%d %H:%M").to_string()).unwrap_or_default();
-            return Err(format!("本地記錄停在 {at}，已超過額度視窗長度；請開啟 Claude 桌面版的用量頁面，等待它產生新記錄"));
+            return Err(format!("本地記錄停在 {at}，已超過用量視窗長度；請開啟 Claude 桌面版的用量頁面，等待它產生新記錄"));
         }
     }
     snapshot.windows.sort_by_key(|w|w.seconds);Ok(snapshot)
@@ -224,7 +224,7 @@ mod tests {
         assert_eq!(snapshot.windows.iter().map(|w|w.label.as_str()).collect::<Vec<_>>(),["本週"],"18 小時前的 5 小時視窗早已重置，不能再顯示；一週視窗仍然有效");
         write(json!({"fh":26}));
         let error=fetch(&saved).unwrap_err();
-        assert!(error.contains("已超過額度視窗長度")&&error.contains("桌面版"),"{error}");
+        assert!(error.contains("已超過用量視窗長度")&&error.contains("桌面版"),"{error}");
         let _=fs::remove_dir_all(dir);
     }
     #[test]
@@ -238,7 +238,7 @@ mod tests {
         // 退出只儲存視窗狀態，帳號標識沒有變化。
         fs::write(&path,json!({"lastKnownAccountUuid":"owner","windowBounds":{"width":1200}}).to_string()).unwrap();
         let (_,after)=desktop_record(&path,Some(&saved),&cache).expect("已繫結帳號退出後仍應顯示自己的歷史記錄");assert_eq!((after.at,&after.windows),(before.at,&before.windows));assert_eq!(fs::read_to_string(dir.join(HISTORY)).unwrap(),history);
-        let (_,restored)=desktop_record(&path,Some(&saved.clone()),&cache).unwrap();assert_eq!((restored.at,&restored.windows),(before.at,&before.windows),"島仔重新啟動後也應保留歷史額度");
+        let (_,restored)=desktop_record(&path,Some(&saved.clone()),&cache).unwrap();assert_eq!((restored.at,&restored.windows),(before.at,&before.windows),"島仔重新啟動後也應保留歷史用量");
         fs::write(&path,json!({"lastKnownAccountUuid":"different-owner"}).to_string()).unwrap();assert!(fetch(&saved).is_err(),"真正切換帳號後不能繼續讀取當前來源的歷史");let _=fs::remove_dir_all(dir);
     }
     #[test]

@@ -145,7 +145,7 @@ impl Shell {
         app.render_compat_running=running_compat;
         #[cfg(feature="record")] let quota_demo=std::env::var("DAOZAI_QUOTA_DEMO").is_ok();
         #[cfg(not(feature="record"))] let quota_demo=false;
-        diagnostics::startup("初始化額度配置");
+        diagnostics::startup("初始化用量配置");
         if !quota_demo{app.quota_initialize();}
         diagnostics::startup("啟動剪貼簿記錄");
         if std::env::args().any(|arg|arg=="--settings"){app.open_settings();}
@@ -898,7 +898,7 @@ mod quota_sig_tests {
             assert!(!quota_sig_matches(&known,changed.enabled,&changed));
             assert_ne!(quota_sig(changed.enabled,&changed),known,"兩種判斷必須一致");
         }
-        assert!(!quota_sig_matches(&known,false,&config),"關閉 AI 額度模組後應停止查詢");
+        assert!(!quota_sig_matches(&known,false,&config),"關閉 AI 用量模組後應停止查詢");
     }
 }
 

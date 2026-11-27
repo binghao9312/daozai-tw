@@ -11,7 +11,7 @@ mod browser;
 const ENDPOINT:&str="https://gemini.google.com/_/BardChatUi/graphql/schemas/GEMINI_WEB_GRAPHQL/executeQuery";
 const SIGNATURE:&str="2/dWbCvkVB0X16r9NPnxifeOAAqdCqMf0xeWvau9yPy7g=";
 const LOGIN_ERROR:&str="Gemini 登入已失效，請重新連線瀏覽器帳號";
-const PARSE_ERROR:&str="Gemini 額度介面已變化，暫時無法讀取";
+const PARSE_ERROR:&str="Gemini 用量介面已變化，暫時無法讀取";
 
 pub fn parse(value:&Value)->Result<Snapshot,String>{
     let data=value.as_array().ok_or(PARSE_ERROR)?.iter().filter_map(|v|v.get("data")).find(|d|d.get("viewer").is_some()).ok_or(PARSE_ERROR)?;
@@ -23,7 +23,7 @@ pub fn parse(value:&Value)->Result<Snapshot,String>{
         let used=pool["percentageUsed"].as_f64().filter(|n|n.is_finite() && *n>=0.0)?;
         Some(Window{label:label.into(),seconds:Some(seconds),remaining:(100.0-used*100.0).clamp(0.0,100.0) as f32,reset:super::reset(&pool["gxu"]["windowRefreshesAt"]),amount:None})
     }).collect::<Vec<_>>();
-    if windows.is_empty(){return Err("此 Google 帳號暫未提供 Gemini 訂閱額度".into());}
+    if windows.is_empty(){return Err("此 Google 帳號暫未提供 Gemini 訂閱用量".into());}
     Ok(Snapshot{kiro:None,relay:None,credits:None,wallet:None,plan:if usage["subscriptionTier"]=="TIER1"{"AI Pro"}else{""}.into(),windows,extra:vec![],at:chrono::Utc::now().timestamp()})
 }
 fn decode(raw:&str)->Result<Snapshot,String>{
@@ -60,13 +60,13 @@ fn request(agent:&ureq::Agent,url:&str,session:&Session)->Result<Snapshot,(Strin
     let response=agent.get(&current).set("Cookie",&session.cookie).set("Accept","application/json").set("Referer","https://gemini.google.com/usage").set("User-Agent","Mozilla/5.0 Daozai").call().map_err(|e|match e{
         ureq::Error::Status(401|403,_)=>(LOGIN_ERROR.into(),0),
         ureq::Error::Status(429,r)=>("Gemini 請求過於頻繁，稍後自動重試".into(),r.header("Retry-After").and_then(|s|s.parse().ok()).unwrap_or(180).clamp(30,3600)),
-        ureq::Error::Status(n,_)=>(format!("Gemini 額度服務暫不可用（{n}）"),60),
+        ureq::Error::Status(n,_)=>(format!("Gemini 用量服務暫不可用（{n}）"),60),
         _=>("無法連線 Gemini，請檢查網路或代理".into(),30)
     })?;
     if (300..400).contains(&response.status()){
         current=response.header("Location").and_then(|to|redirect_target(&current,to)).ok_or_else(||(LOGIN_ERROR.into(),0))?;continue;
     }
-    let mut body=String::new();response.into_reader().take(1024*1024).read_to_string(&mut body).map_err(|_|("讀取 Gemini 額度失敗".into(),30))?;
+    let mut body=String::new();response.into_reader().take(1024*1024).read_to_string(&mut body).map_err(|_|("讀取 Gemini 用量失敗".into(),30))?;
     return decode(&body).map_err(|e|(e,60));
     }
     Err((LOGIN_ERROR.into(),0))
@@ -158,7 +158,7 @@ mod tests {
         let _g=crate::ui_tests::ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
         let config=super::super::Config::load();let a=config.accounts.iter().find(|a|a.enabled&&a.provider==super::super::Provider::Gemini).expect("需要已有 Gemini 帳號");
         let snapshot=fetch(&super::super::http_agent(),a).unwrap();assert!(!snapshot.windows.is_empty());
-        println!("已有 Gemini 加密會話讀取成功，返回 {} 個額度週期",snapshot.windows.len());
+        println!("已有 Gemini 加密會話讀取成功，返回 {} 個用量週期",snapshot.windows.len());
     }
     #[cfg(windows)] #[test]
     #[ignore="使用指定隔離目錄驗證捕獲會話，寫入隔離帳號配置"]

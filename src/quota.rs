@@ -24,6 +24,8 @@ pub(crate) mod relay;
 pub(crate) mod api;
 #[path="kiro_quota.rs"]
 pub(crate) mod kiro;
+#[path="antigravity_quota.rs"]
+pub(crate) mod antigravity;
 #[path="native_auth.rs"]
 mod native_auth;
 
@@ -36,10 +38,10 @@ impl Discovery {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Provider { #[default] Codex, Claude, Kimi, GrokBot, Gemini, ZCode, WorkBuddy, DeepSeek, OpenCodeGo, MiniMax, Glm, NewApi, OneApi, Sub2Api, Kiro, Doubao, RelayGeneral, RelayCustom }
+pub enum Provider { #[default] Codex, Claude, Kimi, GrokBot, Gemini, ZCode, WorkBuddy, DeepSeek, OpenCodeGo, MiniMax, Glm, NewApi, OneApi, Sub2Api, Kiro, Doubao, Antigravity, RelayGeneral, RelayCustom }
 impl Provider {
-    pub const ALL: [Self; 18] = [Self::Codex, Self::Claude, Self::Kimi, Self::GrokBot, Self::Gemini, Self::ZCode, Self::WorkBuddy, Self::DeepSeek, Self::OpenCodeGo, Self::MiniMax, Self::Glm, Self::NewApi, Self::OneApi, Self::Sub2Api, Self::Kiro, Self::Doubao, Self::RelayGeneral, Self::RelayCustom];
-    pub fn name(self) -> &'static str { match self {Self::Codex=>"Codex",Self::Claude=>"Claude",Self::Kimi=>"Kimi",Self::GrokBot=>"Grok Bot",Self::Gemini=>"Gemini",Self::ZCode=>"ZCode",Self::WorkBuddy=>"WorkBuddy",Self::DeepSeek=>"DeepSeek",Self::OpenCodeGo=>"OpenCode Go",Self::MiniMax=>"MiniMax",Self::Glm=>"GLM",Self::NewApi=>"New API",Self::OneApi=>"One API",Self::Sub2Api=>"Sub2API",Self::Kiro=>"Kiro",Self::Doubao=>"豆包",Self::RelayGeneral=>"通用餘額",Self::RelayCustom=>"自定義查詢"} }
+    pub const ALL: [Self; 19] = [Self::Codex, Self::Claude, Self::Kimi, Self::GrokBot, Self::Gemini, Self::ZCode, Self::WorkBuddy, Self::DeepSeek, Self::OpenCodeGo, Self::MiniMax, Self::Glm, Self::NewApi, Self::OneApi, Self::Sub2Api, Self::Kiro, Self::Doubao, Self::Antigravity, Self::RelayGeneral, Self::RelayCustom];
+    pub fn name(self) -> &'static str { match self {Self::Codex=>"Codex",Self::Claude=>"Claude",Self::Kimi=>"Kimi",Self::GrokBot=>"Grok Bot",Self::Gemini=>"Gemini",Self::ZCode=>"ZCode",Self::WorkBuddy=>"WorkBuddy",Self::DeepSeek=>"DeepSeek",Self::OpenCodeGo=>"OpenCode Go",Self::MiniMax=>"MiniMax",Self::Glm=>"GLM",Self::NewApi=>"New API",Self::OneApi=>"One API",Self::Sub2Api=>"Sub2API",Self::Kiro=>"Kiro",Self::Doubao=>"豆包",Self::Antigravity=>"Antigravity",Self::RelayGeneral=>"通用餘額",Self::RelayCustom=>"自定義查詢"} }
     pub fn api_key(self)->bool{matches!(self,Self::OpenCodeGo|Self::MiniMax|Self::Glm)||self.relay()}
     pub fn relay(self)->bool{matches!(self,Self::NewApi|Self::OneApi|Self::Sub2Api|Self::RelayGeneral|Self::RelayCustom)}
     pub fn balance(self)->bool{matches!(self,Self::WorkBuddy|Self::DeepSeek)||self.relay()}
@@ -74,14 +76,15 @@ impl Config {
     fn json(&self)->Value {let colors:serde_json::Map<String,Value>=self.colors.iter().map(|(id,color)|(id.clone(),json!(color.key()))).collect();json!({"enabled":self.enabled,"compact":self.compact,"selected":self.selected,"colors":colors,"accounts":self.accounts.iter().map(|a|json!({"id":a.id,"provider":a.provider.name(),"alias":a.alias,"source":a.source,"slot":a.slot,"enabled":a.enabled,"pinned":a.pinned})).collect::<Vec<_>>()})}
     pub fn save(&self) {let _=self.save_checked();}
     pub(crate) fn save_checked(&self)->Result<(),String>{
-        let dir=crate::model::config_dir();fs::create_dir_all(&dir).map_err(|_|"無法建立額度配置目錄")?;
-        let raw=serde_json::to_vec_pretty(&self.json()).map_err(|_|"無法生成額度配置")?;
-        crate::model::atomic_write(&dir.join("ai-quota.json"),&raw).map_err(|_|"無法儲存額度配置，原帳號未變更".into())
+        let dir=crate::model::config_dir();fs::create_dir_all(&dir).map_err(|_|"無法建立用量配置目錄")?;
+        let raw=serde_json::to_vec_pretty(&self.json()).map_err(|_|"無法生成用量配置")?;
+        crate::model::atomic_write(&dir.join("ai-quota.json"),&raw).map_err(|_|"無法儲存用量配置，原帳號未變更".into())
     }
     pub fn add(&mut self,provider:Provider,alias:String,source:PathBuf)->Result<(),String>{
         if provider.api_key(){return Err("請使用 API Key 連線，無需登入 JSON".into());}
         if provider==Provider::ZCode{return zcode::add(self,&source,&alias);}
         if provider==Provider::Kiro{return kiro::add(self,&source,&alias);}
+        if provider==Provider::Antigravity{return antigravity::add(self,&source,&alias);}
         if provider==Provider::WorkBuddy{return Err("請使用瀏覽器連線 WorkBuddy".into());}
         if provider==Provider::DeepSeek{return Err("請使用 API Key 連線 DeepSeek".into());}
         if provider==Provider::Gemini{return Err("請使用瀏覽器或 Cookie 連線 Gemini 網頁帳號".into());}
@@ -166,6 +169,7 @@ impl Config {
                 if claude::is_desktop(&path){if let Err(error)=self.import_claude(&path,""){notes.push(error);}}
             }
         }
+        if let Some(path)=antigravity::path(){if !self.accounts.iter().any(|a|a.provider==Provider::Antigravity){if let Err(error)=antigravity::add(self,&path,""){notes.push(error);}}}
         if let Some(path)=grok::native_path(){if let Err(error)=self.import_grok(&path,""){notes.push(error);}}
         notes.sort();notes.dedup();Discovery{added:self.accounts.len()-before,notes}
     }
@@ -262,26 +266,27 @@ impl Account {
 }
 fn number(v:&Value)->Option<f64>{v.as_f64().or_else(||v.as_str()?.parse().ok()).filter(|n|n.is_finite())}
 fn reset(v:&Value)->Option<i64>{v.as_i64().filter(|n|*n>0).or_else(||chrono::DateTime::parse_from_rfc3339(v.as_str()?).ok().map(|d|d.timestamp()))}
-fn cadence(seconds:Option<i64>)->String{match seconds{Some(18000)=>"5 小時".into(),Some(604800)=>"本週".into(),Some(86400)=>"今日".into(),Some(s)if s>0 && s%86400==0=>format!("{} 天",s/86400),Some(s)if s>0 && s%3600==0=>format!("{} 小時",s/3600),Some(s)if s>0=>format!("{} 分鐘",s/60),_=>"額度週期".into()}}
+fn cadence(seconds:Option<i64>)->String{match seconds{Some(18000)=>"5 小時".into(),Some(604800)=>"本週".into(),Some(86400)=>"今日".into(),Some(s)if s>0 && s%86400==0=>format!("{} 天",s/86400),Some(s)if s>0 && s%3600==0=>format!("{} 小時",s/3600),Some(s)if s>0=>format!("{} 分鐘",s/60),_=>"用量週期".into()}}
 fn codex_window(v:&Value)->Option<Window>{
     let used=number(&v["used_percent"])?;let seconds=v["limit_window_seconds"].as_i64().filter(|s|*s>0);
     Some(Window{label:cadence(seconds),seconds,remaining:(100.0-used).clamp(0.0,100.0) as f32,reset:reset(&v["reset_at"]),amount:None})
 }
 pub fn parse(provider:Provider,v:&Value)->Result<Snapshot,String>{
-    if provider.api_key(){return Err("請使用對應服務的地區及協議解析額度".into());}
+    if provider.api_key(){return Err("請使用對應服務的地區及協議解析用量".into());}
     if provider==Provider::WorkBuddy{return workbuddy::parse(v);}
     if provider==Provider::DeepSeek{return deepseek::parse(v);}
     if provider==Provider::GrokBot{return grok::parse(v);}
     if provider==Provider::Gemini{return gemini::parse(v);}
     if provider==Provider::Kiro{return kiro::parse(v);}
+    if provider==Provider::Antigravity{return antigravity::parse(v);}
     if provider==Provider::Doubao{return doubao::parse(v);}
     let mut s=Snapshot{plan:v["plan_type"].as_str().unwrap_or_default().into(),at:chrono::Utc::now().timestamp(),..Default::default()};
     match provider {
         Provider::Codex=>{
-            let rate=&v["rate_limit"];if !rate.is_object(){return Err("服務沒有返回額度訊息".into());}
-            for key in ["primary_window","secondary_window"]{if !rate[key].is_null(){let w=codex_window(&rate[key]).ok_or("額度欄位不完整，暫時無法判斷週期")?;s.windows.push(w);}}
+            let rate=&v["rate_limit"];if !rate.is_object(){return Err("服務沒有返回用量訊息".into());}
+            for key in ["primary_window","secondary_window"]{if !rate[key].is_null(){let w=codex_window(&rate[key]).ok_or("用量欄位不完整，暫時無法判斷週期")?;s.windows.push(w);}}
             for a in v["additional_rate_limits"].as_array().into_iter().flatten(){
-                for key in ["primary_window","secondary_window"]{if let Some(mut w)=codex_window(&a["rate_limit"][key]){let label=a["limit_name"].as_str().or_else(||a["limit_id"].as_str()).unwrap_or("額外額度");w.label=format!("{label} · {}",w.label);s.extra.push(w);}}
+                for key in ["primary_window","secondary_window"]{if let Some(mut w)=codex_window(&a["rate_limit"][key]){let label=a["limit_name"].as_str().or_else(||a["limit_id"].as_str()).unwrap_or("額外用量");w.label=format!("{label} · {}",w.label);s.extra.push(w);}}
             }
         }
         Provider::Claude=>{
@@ -289,21 +294,21 @@ pub fn parse(provider:Provider,v:&Value)->Result<Snapshot,String>{
         }
         Provider::Kimi=>{
             if let Some(usages)=v["usages"].as_object(){
-                for (key,label,seconds) in [("limit_5h","5 小時",Some(18000)),("limit_7d","本週",Some(604800)),("limit_month_total","本月總額度",None),("limit_month_code","本月程式設計",None)]{
+                for (key,label,seconds) in [("limit_5h","5 小時",Some(18000)),("limit_7d","本週",Some(604800)),("limit_month_total","本月總用量",None),("limit_month_code","本月程式設計",None)]{
                     let Some(entry)=usages.get(key) else{continue;};
                     let Some(used)=number(&entry["used_ratio"]).filter(|n|(0.0..=1.0).contains(n)) else{continue;};
                     s.windows.push(Window{label:label.into(),seconds,remaining:((1.0-used)*100.0) as f32,reset:reset(&entry["reset_time"]),amount:None});
                 }
                 if !s.windows.is_empty(){return Ok(s);}
             }
-            if v.as_object().is_some_and(|o|o.is_empty()){return Err("Kimi 已登入，官網暫未返回週期額度".into());}
+            if v.as_object().is_some_and(|o|o.is_empty()){return Err("Kimi 已登入，官網暫未返回週期用量".into());}
             let section=|v:&Value,seconds:Option<i64>|->Option<Window>{let limit=number(&v["limit"])?;if limit<=0.0{return None;}let remaining=number(&v["remaining"]).or_else(||Some(limit-number(&v["used"])?))?;Some(Window{label:cadence(seconds),seconds,remaining:(remaining/limit*100.0).clamp(0.0,100.0) as f32,reset:reset(&v["resetTime"]),amount:None})};
             if let Some(w)=section(&v["usage"],Some(604800)){s.windows.push(w);}
             for limit in v["limits"].as_array().into_iter().flatten(){let duration=limit["window"]["duration"].as_i64();let unit=limit["window"]["timeUnit"].as_str().unwrap_or_default();let factor=match unit{"TIME_UNIT_MINUTE"=>Some(60),"TIME_UNIT_HOUR"=>Some(3600),"TIME_UNIT_DAY"=>Some(86400),"TIME_UNIT_SECOND"=>Some(1),_=>None};let seconds=duration.zip(factor).and_then(|(d,f)|d.checked_mul(f));if let Some(w)=section(&limit["detail"],seconds){if !s.windows.iter().any(|old|old.seconds==w.seconds){s.windows.push(w);}}}
         }
         _=>unreachable!(),
     }
-    if s.windows.is_empty(){return Err("服務未提供週期額度，暫不繪製進度".into());}
+    if s.windows.is_empty(){return Err("服務未提供週期用量，暫不繪製進度".into());}
     s.windows.sort_by_key(|w|w.seconds.unwrap_or(i64::MAX));Ok(s)
 }
 
@@ -336,7 +341,7 @@ pub struct Event {pub id:String,pub result:Result<Snapshot,String>}
 #[derive(Default)]
 struct Pending {accounts:Option<Vec<Account>>,running:bool,cooldowns:HashMap<(String,Option<String>,PathBuf),(Instant,String)>}
 type PendingAccounts = std::sync::Arc<std::sync::Mutex<Pending>>;
-fn service_group(provider:Provider)->usize{match provider{Provider::DeepSeek=>1,Provider::WorkBuddy=>2,Provider::OpenCodeGo=>3,Provider::MiniMax=>4,Provider::Glm=>5,Provider::NewApi|Provider::RelayGeneral|Provider::RelayCustom=>6,Provider::OneApi=>7,Provider::Sub2Api=>8,Provider::Kiro=>9,_=>0}}
+fn service_group(provider:Provider)->usize{match provider{Provider::DeepSeek=>1,Provider::WorkBuddy=>2,Provider::OpenCodeGo=>3,Provider::MiniMax=>4,Provider::Glm=>5,Provider::NewApi|Provider::RelayGeneral|Provider::RelayCustom=>6,Provider::OneApi=>7,Provider::Sub2Api=>8,Provider::Kiro=>9,Provider::Antigravity=>10,_=>0}}
 struct Worker {pending:PendingAccounts,wake:mpsc::SyncSender<()>}
 pub struct Service {
     workers:HashMap<usize,Worker>,
@@ -347,7 +352,7 @@ impl Service {
     pub fn start()->Self{let(results,rx)=mpsc::channel();Self{workers:HashMap::new(),results,rx}}
     pub fn refresh(&mut self,accounts:Vec<Account>)->bool{self.refresh_with(accounts,fetch)}
     fn refresh_with(&mut self,accounts:Vec<Account>,run:impl Fn(&ureq::Agent,&Account)->Result<Snapshot,(String,u64)>+Clone+Send+'static)->bool{
-        let mut groups:Vec<Vec<Account>>=(0..10).map(|_|Vec::new()).collect();
+        let mut groups:Vec<Vec<Account>>=(0..11).map(|_|Vec::new()).collect();
         for account in accounts.into_iter().filter(|account|account.enabled){groups[service_group(account.provider)].push(account);}
         for (group,accounts) in groups.into_iter().enumerate(){
             if let Some(worker)=self.workers.get(&group){
@@ -435,22 +440,23 @@ fn fetch(agent:&ureq::Agent,account:&Account)->Result<Snapshot,(String,u64)>{
     if account.provider==Provider::GrokBot{return grok::fetch(agent,account);}
     if account.provider==Provider::Gemini{return gemini::fetch(agent,account);}
     if account.provider==Provider::Kiro{return kiro::fetch(agent,account);}
+    if account.provider==Provider::Antigravity{return antigravity::fetch(account);}
     if account.provider==Provider::Doubao{return doubao::fetch(agent,account);}
     let auth=account_credentials(account).map_err(|e|(e,0))?;
     let url=match account.provider{Provider::Codex=>"https://chatgpt.com/backend-api/wham/usage",Provider::Kimi=>"https://api.kimi.com/coding/v1/usages",_=>unreachable!()};
     let mut req=agent.get(url).set("Authorization",&format!("Bearer {}",auth.token)).set("Accept","application/json").set("User-Agent","codex-cli/Daozai");
     if account.provider==Provider::Codex{if let Some(id)=&auth.account_id{req=req.set("ChatGPT-Account-Id",id);}}
-    let response=req.call().map_err(|e|match e{ureq::Error::Status(401|403,_)=>("登入已失效或許可權不足，請在對應工具中重新登入".into(),0),ureq::Error::Status(429,r)=>("請求過於頻繁，稍後自動重試".into(),r.header("Retry-After").and_then(|s|s.parse().ok()).unwrap_or(180).clamp(30,3600)),ureq::Error::Status(n,_)=>(format!("額度服務暫不可用（{n}）"),60),_=>("無法連線額度服務，請檢查網路或代理".into(),30)})?;
-    let mut body=String::new();response.into_reader().take(1024*1024).read_to_string(&mut body).map_err(|_|("讀取額度響應失敗".into(),30))?;
-    if auth.stamp!=fs::metadata(&account.source).and_then(|m|m.modified()).ok(){return Err(("登入訊息已變化，請重新整理額度".into(),0));}
-    let value=serde_json::from_str(&body).map_err(|_|("服務沒有返回有效的額度資料".into(),60))?;
+    let response=req.call().map_err(|e|match e{ureq::Error::Status(401|403,_)=>("登入已失效或許可權不足，請在對應工具中重新登入".into(),0),ureq::Error::Status(429,r)=>("請求過於頻繁，稍後自動重試".into(),r.header("Retry-After").and_then(|s|s.parse().ok()).unwrap_or(180).clamp(30,3600)),ureq::Error::Status(n,_)=>(format!("用量服務暫不可用（{n}）"),60),_=>("無法連線用量服務，請檢查網路或代理".into(),30)})?;
+    let mut body=String::new();response.into_reader().take(1024*1024).read_to_string(&mut body).map_err(|_|("讀取用量響應失敗".into(),30))?;
+    if auth.stamp!=fs::metadata(&account.source).and_then(|m|m.modified()).ok(){return Err(("登入訊息已變化，請重新整理用量".into(),0));}
+    let value=serde_json::from_str(&body).map_err(|_|("服務沒有返回有效的用量資料".into(),60))?;
     parse(account.provider,&value).map_err(|e|(e,60))
 }
 
 #[cfg(test)] mod tests {
     use super::*;
     #[test] fn lightweight_quota_startup_has_no_unused_workers(){
-        let mut service=Service::start();assert!(service.workers.is_empty(),"未啟用額度來源時不應建立後臺執行緒");
+        let mut service=Service::start();assert!(service.workers.is_empty(),"未啟用用量來源時不應建立後臺執行緒");
         assert!(service.refresh(vec![]));assert!(service.workers.is_empty());
     }
     #[test] fn api_cache_is_bound_to_endpoint_region_and_credential(){
@@ -574,14 +580,14 @@ fn fetch(agent:&ureq::Agent,account:&Account)->Result<Snapshot,(String,u64)>{
         let _=fs::remove_dir_all(dir);
     }
     #[test]
-    #[ignore="按需只讀核驗本機識別與 Claude 本地額度，不儲存配置或續期憑據"]
+    #[ignore="按需只讀核驗本機識別與 Claude 本地用量，不儲存配置或續期憑據"]
     fn native_account_read_only_probe(){
         let mut config=Config::load();let before=config.accounts.len();let report=config.discover();
         println!("discovery_added={} notes={:?}",report.added,report.notes);
         for provider in Provider::ALL{println!("provider={} accounts={}",provider.name(),config.accounts.iter().filter(|a|a.provider==provider).count());}
         let agent=http_agent();
         for account in config.accounts.iter().filter(|a|a.provider==Provider::Claude&&a.slot.is_some()){
-            let snapshot=fetch(&agent,account).expect("Claude 桌面版本地額度應可只讀獲取");
+            let snapshot=fetch(&agent,account).expect("Claude 桌面版本地用量應可只讀獲取");
             println!("claude_windows={:?}",snapshot.windows.iter().map(|w|(&w.label,w.remaining)).collect::<Vec<_>>());
         }
         for account in config.accounts.iter().skip(before){
