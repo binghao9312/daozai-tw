@@ -606,7 +606,7 @@ impl App {
     pub(crate) fn quota_settings(&mut self,ui:&mut egui::Ui){
         let before=self.quota.config.clone();
         settings_card(ui,|ui|{
-            setting_row(ui,"開啟 AI 用量","每 3 分鐘自動更新",&mut self.quota.config.enabled);
+            setting_row(ui,"開啟 AI Usage","每 3 分鐘自動更新",&mut self.quota.config.enabled);
             ui.separator();
             setting_row(ui,"收起時顯示常駐帳號","WorkBuddy 積分在前，DeepSeek 餘額在最後",&mut self.quota.config.compact);
         });

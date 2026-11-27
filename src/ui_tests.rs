@@ -6779,7 +6779,7 @@ fn skin_gallery(){
 }
 
 #[test]
-#[ignore = "按需匯出：帶 AI 用量與吉祥物的收起態，以及設定頁常駐排列預覽"]
+#[ignore = "按需匯出：帶 AI Usage 與吉祥物的收起態，以及設定頁常駐排列預覽"]
 fn skin_gallery_resident(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let dest=std::path::PathBuf::from(std::env::var_os("DAOZAI_SKIN_PREVIEW_DIR").expect("需指定預覽目錄"));
@@ -6983,7 +6983,7 @@ fn quota_cards_expose_names_colors_settings_and_connection(){
 }
 
 #[test]
-#[ignore = "按需匯出卡片式 AI 用量設定頁"]
+#[ignore = "按需匯出卡片式 AI Usage 設定頁"]
 fn quota_cards_settings_gallery(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let dest=std::path::PathBuf::from(std::env::var_os("DAOZAI_DEEPSEEK_PREVIEW_DIR").expect("需指定預覽目錄"));
     for (name,width,light,dialog) in [("dark",690.0,false,false),("light",690.0,true,false),("wide",900.0,false,false),("connect",690.0,false,true),("narrow",600.0,false,false)]{
@@ -8837,7 +8837,7 @@ fn background_services_follow_the_module_switch(){
 
 #[test]
 fn every_module_settings_tab_maps_to_its_page(){
-    let titles=["常規","音樂與歌詞","專注","健康提醒","待辦","置物","通知","信箱","日程","關於","頁面管理","AI 用量","天氣"];
+    let titles=["常規","音樂與歌詞","專注","健康提醒","待辦","置物","通知","信箱","日程","關於","頁面管理","AI Usage","天氣"];
     let mut pages:Vec<_>=(0..titles.len()).filter_map(crate::extras::settings_tab_module).collect();
     for tab in 0..titles.len() {
         if let Some(page)=crate::extras::settings_tab_module(tab) {assert!(crate::app::PAGE_NAMES[page].chars().next()==titles[tab].chars().next(),"{} ↔ {}",titles[tab],crate::app::PAGE_NAMES[page]);}

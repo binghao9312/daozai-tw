@@ -898,7 +898,7 @@ mod quota_sig_tests {
             assert!(!quota_sig_matches(&known,changed.enabled,&changed));
             assert_ne!(quota_sig(changed.enabled,&changed),known,"兩種判斷必須一致");
         }
-        assert!(!quota_sig_matches(&known,false,&config),"關閉 AI 用量模組後應停止查詢");
+        assert!(!quota_sig_matches(&known,false,&config),"關閉 AI Usage 模組後應停止查詢");
     }
 }
 
