@@ -58,6 +58,41 @@ pub fn parse(v:&Value)->Result<Snapshot,String>{
     Ok(Snapshot{kiro:None,relay:None,credits:None,wallet:None,plan:String::new(),windows,extra:groups.into_iter().flatten().collect(),at:chrono::Utc::now().timestamp()})
 }
 
+pub(crate) struct Group<'a> {
+    pub name: &'a str,
+    pub windows: Vec<&'a Window>,
+}
+
+pub(crate) fn groups<'a>(snapshot: &'a Snapshot) -> Vec<Group<'a>> {
+    let mut out: Vec<Group<'a>> = Vec::new();
+    for w in snapshot.windows.iter().chain(snapshot.extra.iter()) {
+        let name = w.label.split_once(" · ").map(|(head, _)| head).unwrap_or("");
+        if let Some(group) = out.iter_mut().find(|g| g.name == name) {
+            group.windows.push(w);
+        } else {
+            out.push(Group { name, windows: vec![w] });
+        }
+    }
+    for group in &mut out {
+        group.windows.sort_by_key(|w| w.seconds.unwrap_or(i64::MAX));
+        group.windows.truncate(2);
+    }
+    out.sort_by_key(|g| match g.name {
+        "Gemini" => 0,
+        "Claude / GPT" => 1,
+        _ => 2,
+    });
+    out
+}
+
+pub(crate) fn select_groups(groups: &[Group<'_>], display: super::AntigravityDisplay) -> Vec<usize> {
+    match display {
+        super::AntigravityDisplay::Both => (0..groups.len()).collect(),
+        super::AntigravityDisplay::Gemini => vec![groups.iter().position(|g| g.name == "Gemini").unwrap_or(0)],
+        super::AntigravityDisplay::ClaudeGpt => vec![groups.iter().position(|g| g.name == "Claude / GPT").unwrap_or(0)],
+    }
+}
+
 fn run(agy:&Path)->Result<Vec<u8>,(String,u64)>{
     let mut command=Command::new(agy);
     command.args(["-p","/usage","--output-format","json","--print-timeout","45s"]).current_dir(std::env::temp_dir()).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
@@ -147,6 +182,10 @@ pub fn fetch(account:&Account)->Result<Snapshot,(String,u64)>{
     #[test] fn antigravity_tightest_group_takes_the_rings(){
         let s=parse(&usage(0.99,0.4,"2026-11-28T00:00:00Z")).unwrap();
         assert!(s.windows.iter().all(|w|w.label.starts_with("Claude / GPT")));assert_eq!(s.windows[1].remaining,40.0);assert!(s.extra.iter().all(|w|w.label.starts_with("Gemini")));
+        let grouped=groups(&s);
+        assert_eq!(grouped.len(),2);
+        assert_eq!(grouped[0].name,"Gemini");assert_eq!(grouped[0].windows[0].label,"Gemini · 5 小時");assert_eq!(grouped[0].windows[1].label,"Gemini · 本週");
+        assert_eq!(grouped[1].name,"Claude / GPT");assert_eq!(grouped[1].windows[0].label,"Claude / GPT · 5 小時");assert_eq!(grouped[1].windows[1].label,"Claude / GPT · 本週");
     }
     #[test] fn antigravity_rejects_non_command_or_empty_output(){
         assert!(parse(&json!({"status":"SUCCESS","response":"hello","num_turns":1})).is_err());

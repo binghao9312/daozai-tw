@@ -17,7 +17,7 @@ impl crate::app::App {
             });
         });
         ui.add_space(12.0);
-        let indices=self.quota_bar_indices();let count=indices.len();
+        let count=self.quota_bar_slots().len();
         let weather_snapshot=self.weather_pill().cloned();
         let mut layout=preview_layout(&order,count);
         for (position,extra) in self.quota_balance_layout(ui.ctx()){layout.balance_tail(position,extra);}

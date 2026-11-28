@@ -22,8 +22,8 @@ pub const SIDE_HALF_EXTENT: f32 = 150.0;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum SideItem {
     Clock, Weather, Battery, Music, Focus, Bell,
-    /// AI 額度：帳號下標（None 為「+N」）與高度。
-    Quota(usize, f32),
+    /// AI 額度：槽位與高度。
+    Quota(crate::quota_ui::BarSlot, f32),
 }
 
 impl SideItem {
@@ -141,7 +141,7 @@ impl App {
                     c.circle(cx, mid - 5.0, 3.0, color);
                     c.text(cx, mid + 9.0, &format!("{minutes}′"), size::TINY, W::Semibold, theme::WHITE, H::Center);
                 }
-                SideItem::Quota(index, h) => self.draw_quota_side(c, cx, mid, h, index),
+                SideItem::Quota(slot, h) => self.draw_quota_side(c, cx, mid, h, slot),
                 SideItem::Bell => {
                     paint::bell(&c.scaled(cx, mid, 1.1), cx, mid, theme::WHITE, paint::bell_swing(self.t - self.notification_bell_at));
                     c.circle(cx + 4.0, mid - 4.5, 2.0, Color32::from_rgb(255, 72, 72));
