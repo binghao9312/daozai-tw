@@ -55,11 +55,19 @@ impl Accent {
     pub fn label(self)->&'static str{match self{Self::Brand=>"跟隨廠商",Self::Violet=>"藍紫",Self::Orange=>"暖橙",Self::Blue=>"湛藍",Self::Cyan=>"青藍",Self::Pink=>"玫紅",Self::Gold=>"金黃",Self::Green=>"翠綠"}}
     fn parse(key:&str)->Self{Self::ALL.into_iter().find(|c|c.key()==key).unwrap_or_default()}
 }
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum AntigravityDisplay { #[default] Both, Gemini, ClaudeGpt }
+impl AntigravityDisplay {
+    pub const ALL:[Self;3]=[Self::Both,Self::Gemini,Self::ClaudeGpt];
+    pub fn key(self)->&'static str{match self{Self::Both=>"both",Self::Gemini=>"gemini",Self::ClaudeGpt=>"claude_gpt"}}
+    pub fn label(self)->&'static str{match self{Self::Both=>"都呈現",Self::Gemini=>"Gemini",Self::ClaudeGpt=>"Claude / GPT"}}
+    fn parse(key:&str)->Self{Self::ALL.into_iter().find(|v|v.key()==key).unwrap_or_default()}
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Account {pub id:String, pub provider:Provider, pub alias:String, pub source:PathBuf, pub slot:Option<String>, pub enabled:bool, pub pinned:bool}
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Config {pub enabled:bool, pub compact:bool, pub selected:String, pub accounts:Vec<Account>, pub colors:HashMap<String,Accent>}
-impl Default for Config {fn default()->Self {Self{enabled:true,compact:true,selected:String::new(),accounts:vec![],colors:HashMap::new()}}}
+pub struct Config {pub enabled:bool, pub compact:bool, pub selected:String, pub accounts:Vec<Account>, pub colors:HashMap<String,Accent>, pub antigravity_rings:HashMap<String,AntigravityDisplay>}
+impl Default for Config {fn default()->Self {Self{enabled:true,compact:true,selected:String::new(),accounts:vec![],colors:HashMap::new(),antigravity_rings:HashMap::new()}}}
 impl Config {
     pub fn load()->Self {
         let path=crate::model::config_dir().join("ai-quota.json");
@@ -71,9 +79,15 @@ impl Config {
             id:a["id"].as_str()?.into(),provider:Provider::parse(a["provider"].as_str()?)?,alias:a["alias"].as_str()?.into(),source:PathBuf::from(a["source"].as_str()?),slot:a["slot"].as_str().map(str::to_owned),enabled:a["enabled"].as_bool().unwrap_or(true),pinned:a["pinned"].as_bool().unwrap_or(false)
         })).collect();
         let colors=v["colors"].as_object().into_iter().flatten().filter_map(|(id,value)|{let color=Accent::parse(value.as_str()?);(color!=Accent::Brand).then(||(id.clone(),color))}).collect();
-        Self{enabled:v["enabled"].as_bool().unwrap_or(true),compact:v["compact"].as_bool().unwrap_or(true),selected:v["selected"].as_str().unwrap_or_default().into(),accounts,colors}
+        let antigravity_rings=v["antigravity_rings"].as_object().into_iter().flatten().filter_map(|(id,value)|{let display=AntigravityDisplay::parse(value.as_str()?);(display!=AntigravityDisplay::default()).then(||(id.clone(),display))}).collect();
+        Self{enabled:v["enabled"].as_bool().unwrap_or(true),compact:v["compact"].as_bool().unwrap_or(true),selected:v["selected"].as_str().unwrap_or_default().into(),accounts,colors,antigravity_rings}
     }
-    fn json(&self)->Value {let colors:serde_json::Map<String,Value>=self.colors.iter().map(|(id,color)|(id.clone(),json!(color.key()))).collect();json!({"enabled":self.enabled,"compact":self.compact,"selected":self.selected,"colors":colors,"accounts":self.accounts.iter().map(|a|json!({"id":a.id,"provider":a.provider.name(),"alias":a.alias,"source":a.source,"slot":a.slot,"enabled":a.enabled,"pinned":a.pinned})).collect::<Vec<_>>()})}
+    fn json(&self)->Value {
+        let colors:serde_json::Map<String,Value>=self.colors.iter().map(|(id,color)|(id.clone(),json!(color.key()))).collect();
+        let antigravity_rings:serde_json::Map<String,Value>=self.antigravity_rings.iter().map(|(id,display)|(id.clone(),json!(display.key()))).collect();
+        json!({"enabled":self.enabled,"compact":self.compact,"selected":self.selected,"colors":colors,"antigravity_rings":antigravity_rings,"accounts":self.accounts.iter().map(|a|json!({"id":a.id,"provider":a.provider.name(),"alias":a.alias,"source":a.source,"slot":a.slot,"enabled":a.enabled,"pinned":a.pinned})).collect::<Vec<_>>()})
+    }
+    pub fn antigravity_display(&self,id:&str)->AntigravityDisplay{self.antigravity_rings.get(id).copied().unwrap_or_default()}
     pub fn save(&self) {let _=self.save_checked();}
     pub(crate) fn save_checked(&self)->Result<(),String>{
         let dir=crate::model::config_dir();fs::create_dir_all(&dir).map_err(|_|"無法建立用量配置目錄")?;
@@ -649,4 +663,15 @@ fn fetch(agent:&ureq::Agent,account:&Account)->Result<Snapshot,(String,u64)>{
     }
     #[test] fn claude_null_window_and_kimi_string_numbers(){let c=parse(Provider::Claude,&json!({"five_hour":null,"seven_day":{"utilization":60,"resets_at":"2030-01-01T12:00:00Z"}})).unwrap();assert_eq!(c.rings().len(),1);assert!(c.windows[0].reset.is_some());let k=parse(Provider::Kimi,&json!({"usage":{"limit":"100","remaining":"70"},"limits":[{"window":{"duration":300,"timeUnit":"TIME_UNIT_MINUTE"},"detail":{"limit":"20","used":"5"}}]})).unwrap();assert_eq!(k.rings().len(),2);assert_eq!(k.rings()[0].remaining,75.0);}
     #[test] fn multi_account_config_keeps_sources_and_selection_separate(){let mut c=Config::default();for n in 1..=2{c.accounts.push(Account{id:n.to_string(),provider:Provider::Codex,alias:format!("帳號 {n}"),source:PathBuf::from(format!("profile-{n}/auth.json")),slot:None,enabled:true,pinned:true});}c.selected="2".into();let raw=c.json();assert_eq!(Config::from_json(&raw),c);assert_eq!(c.selected_index(),Some(1));assert_eq!(c.pinned_indices(),vec![0,1]);assert!(!raw.to_string().contains("access_token"));}
+    #[test] fn antigravity_display_preference_persists_and_defaults_to_both(){
+        let mut c=Config::default();
+        assert_eq!(c.antigravity_display("agy"),AntigravityDisplay::Both);
+        c.antigravity_rings.insert("agy".into(),AntigravityDisplay::Gemini);
+        let restored=Config::from_json(&c.json());
+        assert_eq!(restored,c);
+        assert_eq!(restored.antigravity_display("agy"),AntigravityDisplay::Gemini);
+        let mut legacy=c.json();
+        legacy["antigravity_rings"]=json!({"agy":"invalid"});
+        assert_eq!(Config::from_json(&legacy).antigravity_display("agy"),AntigravityDisplay::Both);
+    }
 }

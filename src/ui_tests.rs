@@ -7163,8 +7163,8 @@ fn side_dock_stacks_ai_quota_and_opens_the_account(){
     for _ in 0..60 {side_frame(&mut h,away);}
     let items=h.app.quota_side_items();
     assert_eq!(items.len(),h.app.quota.config.pinned_indices().len());
-    let order:Vec<_>=items.iter().map(|(i,_)|h.app.quota.config.accounts[*i].provider).collect();
-    assert!(items.iter().any(|(i,_)|h.app.quota.config.accounts[*i].id==wb),"WorkBuddy 應在豎向用量裡");
+    let order:Vec<_>=items.iter().map(|(slot,_)|h.app.quota.config.accounts[slot.account].provider).collect();
+    assert!(items.iter().any(|(slot,_)|h.app.quota.config.accounts[slot.account].id==wb),"WorkBuddy 應在豎向用量裡");
     // 膠囊變長以容納額度，仍完整留在畫布內並豎直居中。
     let out=side_frame(&mut h,away);
     assert!(out.hit.height()>32.0+38.0*2.0,"{:?} {order:?}",out.hit);
@@ -7174,7 +7174,7 @@ fn side_dock_stacks_ai_quota_and_opens_the_account(){
     let total=h.app.side_bar_len()-14.0;
     let mut y=top+(h.app.h.pos-total)/2.0;
     for item in h.app.side_items() {
-        let height=match item {crate::side_dock::SideItem::Quota(i,hh) if h.app.quota.config.accounts[i].id==wb=>{y+=hh/2.0;break;},crate::side_dock::SideItem::Quota(_,hh)=>hh,crate::side_dock::SideItem::Clock=>32.0,crate::side_dock::SideItem::Weather=>40.0,crate::side_dock::SideItem::Battery=>20.0,crate::side_dock::SideItem::Music=>18.0,crate::side_dock::SideItem::Focus|crate::side_dock::SideItem::Bell=>22.0};
+        let height=match item {crate::side_dock::SideItem::Quota(slot,hh) if h.app.quota.config.accounts[slot.account].id==wb=>{y+=hh/2.0;break;},crate::side_dock::SideItem::Quota(_,hh)=>hh,crate::side_dock::SideItem::Clock=>32.0,crate::side_dock::SideItem::Weather=>40.0,crate::side_dock::SideItem::Battery=>20.0,crate::side_dock::SideItem::Music=>18.0,crate::side_dock::SideItem::Focus|crate::side_dock::SideItem::Bell=>22.0};
         y+=height;
     }
     let click=Pos2::new(18.0,y);
@@ -8711,6 +8711,156 @@ fn quota_acceptance_period_colors_match_the_drawn_rings() {
             let dot=output.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Circle(c)if(c.radius-2.5).abs()<0.01&&c.center.distance(center)<0.01=>Some(c.fill),_=>None}).expect("應顯示週期色點");
             assert_eq!(dot,color,"週期色點應對應實際圓環，未畫入圓環的工具額度使用灰色");
         }
+    }
+}
+
+fn antigravity_test_harness(id: &str, display: crate::quota::AntigravityDisplay) -> H {
+    use crate::quota::{Account, AntigravityDisplay, Event, Provider};
+    let mut h = H::new();
+    h.app.settings.pet = false;
+    h.app.quota.config.accounts = vec![Account {
+        id: id.into(),
+        provider: Provider::Antigravity,
+        alias: "Antigravity".into(),
+        source: Default::default(),
+        slot: None,
+        enabled: true,
+        pinned: true,
+    }];
+    h.app.quota.config.selected = id.into();
+    if display != AntigravityDisplay::Both {
+        h.app.quota.config.antigravity_rings.insert(id.into(), display);
+    }
+    let payload = serde_json::json!({
+        "conversation_id": "",
+        "status": "SUCCESS",
+        "num_turns": 0,
+        "command": {
+            "name": "usage",
+            "data": {
+                "groups": [
+                    {
+                        "name": "Gemini Models",
+                        "buckets": [
+                            {"id": "gemini-5h", "window": "5h", "remaining_fraction": 0.83, "reset_time": "2030-01-01T15:19:00Z"},
+                            {"id": "gemini-weekly", "window": "weekly", "remaining_fraction": 0.70, "reset_time": "2030-01-06T23:29:00Z"}
+                        ]
+                    },
+                    {
+                        "name": "Claude and GPT models",
+                        "buckets": [
+                            {"id": "3p-5h", "window": "5h", "remaining_fraction": 1.0, "reset_time": "1970-01-01T00:00:00Z"},
+                            {"id": "3p-weekly", "window": "weekly", "remaining_fraction": 0.0, "reset_time": "2030-01-05T02:15:00Z"}
+                        ]
+                    }
+                ]
+            }
+        }
+    });
+    let mut snapshot = crate::quota::parse(Provider::Antigravity, &payload).unwrap();
+    snapshot.at = chrono::Utc::now().timestamp() - 60;
+    h.app.quota_event(Event { id: id.into(), result: Ok(snapshot) });
+    h
+}
+
+#[test]
+fn antigravity_groups_display_separately_and_quick_bar_selection_controls_rings() {
+    use crate::quota::AntigravityDisplay;
+    let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let id = "agy-test";
+    let mut h = antigravity_test_harness(id, AntigravityDisplay::Both);
+
+    assert_eq!(h.app.quota.config.antigravity_display(id), AntigravityDisplay::Both);
+    assert_eq!(h.app.quota_bar_slots().len(), 2);
+    assert_eq!(h.app.quota_side_items().len(), 2);
+    for _ in 0..60 { h.frame(vec![]); }
+    assert!(h.shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Text(t) if t.galley.text() == "G")), "快速欄都呈現模式應畫出 Gemini 角標");
+    assert!(h.shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Text(t) if t.galley.text() == "C")), "快速欄都呈現模式應畫出 Claude / GPT 角標");
+
+    h.app.show_page(6);
+    h.hover(H::local(300.0, 60.0), 1.0);
+    for label in ["Gemini · 5 小時", "Gemini · 本週", "Claude / GPT · 5 小時", "Claude / GPT · 本週", "83%", "70%", "100%", "0%"] {
+        let found = h.shapes.iter().find_map(|s| match &s.shape {
+            egui::Shape::Text(t) if t.galley.text() == label => Some((s.clip_rect, t.visual_bounding_rect())),
+            _ => None,
+        }).unwrap_or_else(|| panic!("AI Usage 面板應顯示 {label}"));
+        assert!(found.0.contains_rect(found.1), "{label} 不應被裁切");
+    }
+
+    h.app.quota.config.antigravity_rings.insert(id.into(), AntigravityDisplay::Gemini);
+    assert_eq!(h.app.quota_bar_slots().len(), 1);
+    assert_eq!(h.app.quota_bar_slots()[0].group, Some(0));
+    assert_eq!(h.app.quota_side_items().len(), 1);
+
+    h.app.quota.config.antigravity_rings.insert(id.into(), AntigravityDisplay::ClaudeGpt);
+    assert_eq!(h.app.quota_bar_slots().len(), 1);
+    assert_eq!(h.app.quota_bar_slots()[0].group, Some(1));
+    assert_eq!(h.app.quota_side_items().len(), 1);
+
+    let raw = egui::RawInput {
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(640.0, 720.0))),
+        ..Default::default()
+    };
+    let settings_out = h.ctx.run(raw, |ctx| {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            h.app.quota_settings(ui);
+        });
+    });
+    for expected in ["Gemini · 5 小時  剩餘 83%", "Gemini · 本週  剩餘 70%", "Claude / GPT · 5 小時  剩餘 100%", "Claude / GPT · 本週  剩餘 0%", "快速欄", "都呈現", "Gemini", "Claude / GPT"] {
+        assert!(
+            settings_out.shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Text(t) if t.galley.text() == expected)),
+            "設定頁應顯示 {expected}"
+        );
+    }
+}
+
+#[test]
+#[ignore = "按需匯出 Antigravity 分組與快速欄顯示畫面"]
+fn antigravity_ui_gallery() {
+    use crate::quota::AntigravityDisplay;
+    let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dest = std::path::PathBuf::from(std::env::var_os("DAOZAI_AGY_PREVIEW_DIR").expect("需指定預覽目錄"));
+    std::fs::create_dir_all(&dest).unwrap();
+    for (name, display, open) in [("quickbar-both", AntigravityDisplay::Both, false), ("panel-both", AntigravityDisplay::Both, true), ("panel-gemini", AntigravityDisplay::Gemini, true)] {
+        let mut h = antigravity_test_harness("agy-preview", display);
+        if open { h.app.show_page(6); }
+        let mut raster = feature_raster();
+        shoot_feature(&mut h, &mut raster, &dest, name, 60, open.then(|| H::local(300.0, 60.0)), "2026-11-28");
+    }
+    let mut h = antigravity_test_harness("agy-preview", AntigravityDisplay::Both);
+    h.app.settings.settings_theme = crate::settings_theme::SettingsTheme::Dark;
+    h.app.settings_tab = 11;
+    h.app.open_settings();
+    h.ctx.set_embed_viewports(false);
+    let size = egui::vec2(690.0, 620.0);
+    let ppp = 1.5;
+    let output = std::sync::Arc::new(Mutex::new(None));
+    let capture = output.clone();
+    egui::Context::set_immediate_viewport_renderer(move |ctx, mut viewport| {
+        let vid = viewport.ids.this;
+        let raw = egui::RawInput {
+            viewport_id: vid,
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, size)),
+            viewports: std::iter::once((vid, egui::ViewportInfo { native_pixels_per_point: Some(ppp), ..Default::default() })).collect(),
+            ..Default::default()
+        };
+        *capture.lock().unwrap() = Some(ctx.run(raw, |ctx| (viewport.viewport_ui_cb)(ctx)));
+    });
+    let mut raster = crate::preview_raster::Raster::new(1035, 930);
+    for frame in 0..8 {
+        let root = h.ctx.run(egui::RawInput::default(), |ctx| h.app.settings_ui(ctx, false));
+        raster.update_textures(&root.textures_delta);
+        let child = output.lock().unwrap().take().unwrap();
+        raster.update_textures(&child.textures_delta);
+        if frame == 7 {
+            raster.buf.fill([0.20, 0.24, 0.32, 1.0]);
+            raster.draw(&h.ctx.tessellate(child.shapes, child.pixels_per_point), child.pixels_per_point);
+            let mut rgba = Vec::new();
+            raster.to_rgba8(&mut rgba);
+            image::save_buffer(dest.join("settings.png"), &rgba, 1035, 930, image::ColorType::Rgba8).unwrap();
+        }
+        raster.free_textures(&root.textures_delta);
+        raster.free_textures(&child.textures_delta);
     }
 }
 
