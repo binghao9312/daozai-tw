@@ -8715,6 +8715,101 @@ fn quota_acceptance_period_colors_match_the_drawn_rings() {
 }
 
 #[test]
+fn antigravity_groups_display_separately_and_quick_bar_selection_controls_rings() {
+    use crate::quota::{Account, AntigravityDisplay, Event, Provider};
+    let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut h = H::new();
+    h.app.settings.pet = false;
+    let id = "agy-test";
+    h.app.quota.config.accounts = vec![Account {
+        id: id.into(),
+        provider: Provider::Antigravity,
+        alias: "Antigravity".into(),
+        source: Default::default(),
+        slot: None,
+        enabled: true,
+        pinned: true,
+    }];
+    h.app.quota.config.selected = id.into();
+    let payload = serde_json::json!({
+        "conversation_id": "",
+        "status": "SUCCESS",
+        "num_turns": 0,
+        "command": {
+            "name": "usage",
+            "data": {
+                "groups": [
+                    {
+                        "name": "Gemini Models",
+                        "buckets": [
+                            {"id": "gemini-5h", "window": "5h", "remaining_fraction": 0.83, "reset_time": "2030-01-01T15:19:00Z"},
+                            {"id": "gemini-weekly", "window": "weekly", "remaining_fraction": 0.70, "reset_time": "2030-01-06T23:29:00Z"}
+                        ]
+                    },
+                    {
+                        "name": "Claude and GPT models",
+                        "buckets": [
+                            {"id": "3p-5h", "window": "5h", "remaining_fraction": 1.0, "reset_time": "1970-01-01T00:00:00Z"},
+                            {"id": "3p-weekly", "window": "weekly", "remaining_fraction": 0.0, "reset_time": "2030-01-05T02:15:00Z"}
+                        ]
+                    }
+                ]
+            }
+        }
+    });
+    let mut snapshot = crate::quota::parse(Provider::Antigravity, &payload).unwrap();
+    snapshot.at = chrono::Utc::now().timestamp() - 60;
+    h.app.quota_event(Event { id: id.into(), result: Ok(snapshot) });
+
+    // 預設「都呈現」：常駐快速欄應有兩個圓環槽位，分別帶 G / C 角標，側邊停靠也同步展開為兩項。
+    assert_eq!(h.app.quota.config.antigravity_display(id), AntigravityDisplay::Both);
+    assert_eq!(h.app.quota_bar_slots().len(), 2);
+    assert_eq!(h.app.quota_side_items().len(), 2);
+    for _ in 0..60 { h.frame(vec![]); }
+    assert!(h.shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Text(t) if t.galley.text() == "G")));
+    assert!(h.shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Text(t) if t.galley.text() == "C")));
+
+    // 展開後的 AI Usage 面板應同時列出四個週期項目且不超出面板範圍。
+    h.app.show_page(6);
+    h.hover(H::local(300.0, 60.0), 1.0);
+    for label in ["Gemini · 5 小時", "Gemini · 本週", "Claude / GPT · 5 小時", "Claude / GPT · 本週", "83%", "70%", "100%", "0%"] {
+        let found = h.shapes.iter().find_map(|s| match &s.shape {
+            egui::Shape::Text(t) if t.galley.text() == label => Some((s.clip_rect, t.visual_bounding_rect())),
+            _ => None,
+        }).unwrap_or_else(|| panic!("AI Usage 面板應顯示 {label}"));
+        assert!(found.0.contains_rect(found.1), "{label} 不應被裁切");
+    }
+
+    // 切換為只顯示 Gemini 或只顯示 Claude / GPT，快速欄槽位應隨之變為 1 個並選中對應模型組。
+    h.app.quota.config.antigravity_rings.insert(id.into(), AntigravityDisplay::Gemini);
+    assert_eq!(h.app.quota_bar_slots().len(), 1);
+    assert_eq!(h.app.quota_bar_slots()[0].group, Some(0));
+    assert_eq!(h.app.quota_side_items().len(), 1);
+
+    h.app.quota.config.antigravity_rings.insert(id.into(), AntigravityDisplay::ClaudeGpt);
+    assert_eq!(h.app.quota_bar_slots().len(), 1);
+    assert_eq!(h.app.quota_bar_slots()[0].group, Some(1));
+    assert_eq!(h.app.quota_side_items().len(), 1);
+
+    // 設定頁應將 Gemini 與 Claude / GPT 各自的進度條與「快速欄」選擇按鈕一起呈現。
+    let raw = egui::RawInput {
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(640.0, 720.0))),
+        ..Default::default()
+    };
+    let settings_out = h.ctx.run(raw, |ctx| {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            h.app.quota_settings(ui);
+        });
+    });
+    for expected in ["Gemini · 5 小時  剩餘 83%", "Gemini · 本週  剩餘 70%", "Claude / GPT · 5 小時  剩餘 100%", "Claude / GPT · 本週  剩餘 0%", "快速欄", "都呈現", "Gemini", "Claude / GPT"] {
+        assert!(
+            settings_out.shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Text(t) if t.galley.text() == expected)),
+            "設定頁應顯示 {expected}"
+        );
+    }
+}
+
+#[test]
 #[ignore="按需匯出套餐、中轉、深淺主題和連線視窗的實際介面"]
 fn quota_acceptance_gallery() {
     use crate::quota::{Provider,Snapshot,Account,plans,relay};

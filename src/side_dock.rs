@@ -120,6 +120,7 @@ impl App {
         let fitted=c.scaled(cx,height/2.0,((SIDE_H-24.0)/(total+14.0)).min(1.0));
         let c=&fitted;
         let mut y = (height - total) / 2.0;
+        let mut quota_occurrence = std::collections::HashMap::new();
         for item in items {
             let h = item.height(self.settings.clock_seconds);
             let mid = y + h / 2.0;
@@ -141,7 +142,10 @@ impl App {
                     c.circle(cx, mid - 5.0, 3.0, color);
                     c.text(cx, mid + 9.0, &format!("{minutes}′"), size::TINY, W::Semibold, theme::WHITE, H::Center);
                 }
-                SideItem::Quota(index, h) => self.draw_quota_side(c, cx, mid, h, index),
+                SideItem::Quota(index, h) => {
+                    let sub = *quota_occurrence.entry(index).and_modify(|n| *n += 1).or_insert(0);
+                    self.draw_quota_side_slot(c, cx, mid, h, index, sub);
+                }
                 SideItem::Bell => {
                     paint::bell(&c.scaled(cx, mid, 1.1), cx, mid, theme::WHITE, paint::bell_swing(self.t - self.notification_bell_at));
                     c.circle(cx + 4.0, mid - 4.5, 2.0, Color32::from_rgb(255, 72, 72));
